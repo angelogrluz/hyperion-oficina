@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { includesSearch, lineAmounts, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
+import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
 import { formatEUR, formatQty } from "@/lib/format";
 import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
 
@@ -354,21 +354,31 @@ export function DocumentEditor({
     });
   }
 
-  function addDraft(draft: { description: string; ref: string; quantity: string; unitPrice: string }) {
+  function addDraft(draft: {
+    description: string;
+    ref: string;
+    quantity: string;
+    unitPrice: string;
+    unitCost?: string;
+    vatRate?: string;
+    articleId?: string | null;
+  }) {
     touch();
-    const article = articles.find((item) => item.ref.toLowerCase() === draft.ref.trim().toLowerCase());
+    const article = draft.articleId
+      ? articles.find((item) => item.id === draft.articleId)
+      : articles.find((item) => item.ref.toLowerCase() === draft.ref.trim().toLowerCase());
     setLines((current) => [
       ...current,
       article
         ? {
             key: crypto.randomUUID(),
             kind: "peca" as const,
-            description: draft.description || article.description,
+            description: normalizeArticleDescription(draft.description || article.description),
             quantity: draft.quantity || "1",
-            unitPrice: draft.unitPrice || num(salePrice(article.costPrice, article.marginPercent)),
-            unitCost: num(article.costPrice),
+            unitPrice: draft.unitPrice || num(salePrice(article.costPrice, defaultMargin({ family: article.family, ref: article.ref }))),
+            unitCost: draft.unitCost || num(article.costPrice),
             discount: "0",
-            vatRate: num(article.vatRate),
+            vatRate: draft.vatRate || num(article.vatRate),
             note: "",
             articleId: article.id,
             ref: article.ref,
@@ -379,9 +389,9 @@ export function DocumentEditor({
             description: draft.description,
             quantity: draft.quantity || "1",
             unitPrice: draft.unitPrice || num(labourRate),
-            unitCost: "0",
+            unitCost: draft.unitCost || "0",
             discount: "0",
-            vatRate: "23",
+            vatRate: draft.vatRate || "23",
             note: "",
             articleId: null,
             ref: draft.ref,

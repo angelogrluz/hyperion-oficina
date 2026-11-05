@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { CarSide, carColor } from "@/components/car-side";
 import { useSetSheetSidebar } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { lineAmounts, parseDecimal, round2 } from "@/lib/domain";
+import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
 import type { EditorArticle, EditorClient } from "@/components/document-editor";
 
@@ -100,7 +101,15 @@ export function FolhaView({
   onDateIn: (value: string) => void;
   onLine: (key: string, patch: Partial<SheetLine>) => void;
   onRemove: (key: string) => void;
-  onAdd: (draft: { description: string; ref: string; quantity: string; unitPrice: string }) => void;
+  onAdd: (draft: {
+    description: string;
+    ref: string;
+    quantity: string;
+    unitPrice: string;
+    unitCost?: string;
+    vatRate?: string;
+    articleId?: string | null;
+  }) => void;
   onPlate: (value: string) => void;
   onBrand: (value: string) => void;
   onModel: (value: string) => void;
@@ -124,6 +133,62 @@ export function FolhaView({
   const [docs, setDocs] = useState("Não");
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
+  const [suggestField, setSuggestField] = useState<"ref" | "description" | null>(null);
+  const [highlight, setHighlight] = useState(0);
+  const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
+  const suggestQuery = suggestField === "ref" ? draft.ref : suggestField === "description" ? draft.description : "";
+  const matches = useMemo(() => {
+    const query = suggestQuery.trim();
+    if (query.length < 1) return [];
+    return articles
+      .filter((article) => includesSearch(`${article.ref} ${article.description} ${article.family ?? ""}`, query))
+      .slice(0, 8);
+  }, [articles, suggestQuery]);
+
+  function placeSuggest(field: "ref" | "description", element: HTMLInputElement) {
+    const rect = element.getBoundingClientRect();
+    setSuggestField(field);
+    setSuggestBox({ top: rect.bottom + 4, left: rect.left, width: Math.max(320, rect.width) });
+  }
+
+  function chooseArticle(article: EditorArticle) {
+    const margin = defaultMargin({ family: article.family, ref: article.ref });
+    onAdd({
+      description: normalizeArticleDescription(article.description),
+      ref: article.ref,
+      quantity: draft.quantity || "1",
+      unitPrice: moneyInput(salePrice(article.costPrice, margin)),
+      unitCost: moneyInput(article.costPrice),
+      vatRate: moneyInput(article.vatRate),
+      articleId: article.id,
+    });
+    setDraft({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
+    setSuggestField(null);
+  }
+
+  function addFreeLine() {
+    if (!draft.description.trim() && !draft.ref.trim()) return;
+    onAdd(draft);
+    setDraft({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
+    setSuggestField(null);
+  }
+
+  function onSuggestKey(event: KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" && matches.length) {
+      event.preventDefault();
+      setHighlight((current) => (current + 1) % matches.length);
+    } else if (event.key === "ArrowUp" && matches.length) {
+      event.preventDefault();
+      setHighlight((current) => (current - 1 + matches.length) % matches.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const chosen = matches[highlight] ?? matches[0];
+      if (chosen) chooseArticle(chosen);
+      else addFreeLine();
+    } else if (event.key === "Escape") {
+      setSuggestField(null);
+    }
+  }
 
   const setSidebar = useSetSheetSidebar();
   const onClientRef = useRef(onClient);
@@ -295,9 +360,27 @@ export function FolhaView({
                   ))}
                   <tr className="border-t border-[#d5ebed]">
                     <td className="px-1 py-1 text-[#4d6d73]">Novo</td>
-                    <td className="px-1 py-1"><Cell value={draft.description} disabled={locked} onChange={(value) => setDraft((current) => ({ ...current, description: value }))} /></td>
+                    <td className="px-1 py-1">
+                      <Cell
+                        value={draft.description}
+                        disabled={locked}
+                        label="Descrição"
+                        onFocus={(element) => { setHighlight(0); placeSuggest("description", element); }}
+                        onKeyDown={onSuggestKey}
+                        onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, description: value })); }}
+                      />
+                    </td>
                     <td />
-                    <td className="px-1 py-1"><Cell value={draft.ref} disabled={locked} onChange={(value) => setDraft((current) => ({ ...current, ref: value }))} /></td>
+                    <td className="px-1 py-1">
+                      <Cell
+                        value={draft.ref}
+                        disabled={locked}
+                        label="Referência"
+                        onFocus={(element) => { setHighlight(0); placeSuggest("ref", element); }}
+                        onKeyDown={onSuggestKey}
+                        onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, ref: value.toUpperCase() })); }}
+                      />
+                    </td>
                     <td className="bg-[#e7f7f8]" />
                     <td className="bg-[#e7f7f8]" />
                     <td className="w-10 bg-[#ffe6cc] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
@@ -308,10 +391,7 @@ export function FolhaView({
                         type="button"
                         className="text-[#0b8f9c]"
                         disabled={locked || !draft.description.trim()}
-                        onClick={() => {
-                          onAdd(draft);
-                          setDraft({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
-                        }}
+                        onClick={addFreeLine}
                       >
                         Adicionar linha
                       </button>
@@ -328,6 +408,39 @@ export function FolhaView({
                 </tfoot>
               </table>
             </div>
+            {suggestField && matches.length && suggestBox
+              ? createPortal(
+                  <ul
+                    role="listbox"
+                    aria-label="Artigos em stock"
+                    className="fixed z-50 max-h-64 overflow-auto rounded-lg border border-[#d5ebed] bg-white py-1 text-xs shadow-lg"
+                    style={{ top: suggestBox.top, left: suggestBox.left, width: suggestBox.width }}
+                  >
+                    {matches.map((article, index) => {
+                      const margin = defaultMargin({ family: article.family, ref: article.ref });
+                      return (
+                        <li key={article.id} role="option" aria-selected={index === highlight}>
+                          <button
+                            type="button"
+                            className={`flex w-full items-baseline justify-between gap-3 px-2 py-1.5 text-left ${index === highlight ? "bg-[#e7f7f8] text-[#0b5f68]" : ""}`}
+                            onMouseEnter={() => setHighlight(index)}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              chooseArticle(article);
+                            }}
+                          >
+                            <span>
+                              <span className="font-mono font-semibold">{article.ref}</span> {normalizeArticleDescription(article.description)}
+                            </span>
+                            <span className="shrink-0 text-[#4d6d73]">{article.family} · {margin}% · {formatEUR(salePrice(article.costPrice, margin))}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>,
+                  document.body,
+                )
+              : null}
           </>
         ) : null}
         {error ? <p className="px-3 pt-2 text-sm text-red-700" role="alert">{error}</p> : null}
@@ -403,15 +516,44 @@ function MiniSelect({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
-function Cell({ value, disabled, align, narrow, onChange }: { value: string; disabled: boolean; align?: "right"; narrow?: boolean; onChange: (value: string) => void }) {
+function Cell({
+  value,
+  disabled,
+  align,
+  narrow,
+  label,
+  onFocus,
+  onKeyDown,
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  align?: "right";
+  narrow?: boolean;
+  label?: string;
+  onFocus?: (element: HTMLInputElement) => void;
+  onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onChange: (value: string) => void;
+}) {
   return (
     <input
       value={value}
       disabled={disabled}
-      onChange={(event) => onChange(event.target.value)}
+      aria-label={label}
+      aria-autocomplete={onKeyDown ? "list" : undefined}
+      onFocus={(event) => onFocus?.(event.currentTarget)}
+      onKeyDown={onKeyDown}
+      onChange={(event) => {
+        onChange(event.target.value);
+        onFocus?.(event.currentTarget);
+      }}
       className={`h-6 bg-transparent px-0.5 outline-none ${narrow ? "w-10 text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
     />
   );
+}
+
+function moneyInput(value: number) {
+  return String(round2(value)).replace(".", ",");
 }
 
 function Field({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
