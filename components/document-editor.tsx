@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { includesSearch, lineAmounts, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
+import { includesSearch, lineAmounts, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
 import { formatEUR, formatQty } from "@/lib/format";
 import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
 
@@ -278,34 +278,63 @@ export function DocumentEditor({
     }
     const nextStatus = statusOverride ?? status;
     if (statusOverride) setStatus(statusOverride);
-    const body = {
-      clientId,
-      vehicleId,
-      km: kmValue,
-      problem,
-      notes,
-      status: nextStatus,
-      lines: parsedLines,
-    };
     startTransition(async () => {
-      if (vehicleId) {
-        const formData = new FormData();
-        formData.set("clientId", clientId);
-        formData.set("plate", plate);
-        formData.set("brand", brand);
-        formData.set("model", model);
-        formData.set("version", version);
-        formData.set("year", year);
-        formData.set("vin", vin);
-        formData.set("engine", engine);
-        formData.set("km", String(kmValue));
-        formData.set("fuel", fuel);
-        const savedVehicle = await saveVehicle(vehicleId, formData);
+      let nextVehicleId = vehicleId;
+      const formData = new FormData();
+      formData.set("clientId", clientId);
+      formData.set("plate", plate);
+      formData.set("brand", brand);
+      formData.set("model", model);
+      formData.set("version", version);
+      formData.set("year", year || String(new Date().getFullYear()));
+      formData.set("vin", vin);
+      formData.set("engine", engine);
+      formData.set("km", String(kmValue));
+      formData.set("fuel", fuel || "Gasolina");
+      if (!nextVehicleId && plate.trim()) {
+        if (!clientId) {
+          setError("Escolha o cliente na barra lateral.");
+          return;
+        }
+        const created = await saveVehicle(null, formData);
+        if (!created.ok) {
+          setError(created.error);
+          return;
+        }
+        nextVehicleId = created.id;
+        setVehicleId(created.id);
+        setVehicleList((current) => [
+          ...current,
+          {
+            id: created.id,
+            clientId,
+            plate: created.plate,
+            brand: created.brand,
+            model: created.model,
+            version,
+            year: Number(year) || new Date().getFullYear(),
+            vin,
+            engine,
+            km: created.km,
+            fuel: fuel || "Gasolina",
+          },
+        ]);
+      } else if (nextVehicleId) {
+        const savedVehicle = await saveVehicle(nextVehicleId, formData);
         if (!savedVehicle.ok) {
           setError(savedVehicle.error);
           return;
         }
       }
+      const body = {
+        clientId,
+        vehicleId: nextVehicleId,
+        km: kmValue,
+        problem,
+        notes,
+        status: nextStatus,
+        lines: parsedLines,
+      };
       const result =
         mode === "order"
           ? await saveOrder(documentId ?? null, { ...body, dateIn, dateOut })
@@ -373,6 +402,15 @@ export function DocumentEditor({
           locked={locked}
           pending={pending}
           client={selectedClient}
+          clients={clientList}
+          clientId={clientId}
+          onClient={(id) => {
+            touch();
+            setClientId(id);
+            setVehicleId("");
+            fillVehicle(undefined);
+          }}
+          error={error}
           problem={problem}
           notes={notes}
           dateIn={dateIn}
@@ -405,9 +443,13 @@ export function DocumentEditor({
           onLookup={() => {
             startTransition(async () => {
               const result = await lookupPlate(plate);
-              if (!result.found || !("vehicle" in result) || !result.vehicle) return;
+              if (!result.found || !("vehicle" in result) || !result.vehicle) {
+                setError(result.message);
+                return;
+              }
               const found = result.vehicle;
               touch();
+              setError(null);
               setPlate(found.plate);
               setBrand(found.brand);
               setModel(found.model);
@@ -416,6 +458,11 @@ export function DocumentEditor({
               setFuel(found.fuel);
               setEngine(found.engine);
               setVin(found.vin ?? "");
+              const known = vehicleList.find((item) => item.plate === normalizePlate(found.plate));
+              if (known) {
+                setVehicleId(known.id);
+                setClientId(known.clientId);
+              }
             });
           }}
           onSave={save}

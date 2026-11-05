@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CarSide, carColor } from "@/components/car-side";
 import { useSetSheetSidebar } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,10 @@ export function FolhaView({
   locked,
   pending,
   client,
+  clients,
+  clientId,
+  onClient,
+  error,
   problem,
   notes,
   dateIn,
@@ -73,6 +77,10 @@ export function FolhaView({
   locked: boolean;
   pending: boolean;
   client?: EditorClient;
+  clients: EditorClient[];
+  clientId: string;
+  onClient: (id: string) => void;
+  error: string | null;
   problem: string;
   notes: string;
   dateIn: string;
@@ -118,10 +126,24 @@ export function FolhaView({
   const [draft, setDraft] = useState({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
 
   const setSidebar = useSetSheetSidebar();
+  const onClientRef = useRef(onClient);
+  onClientRef.current = onClient;
   useEffect(() => {
     setSidebar(
       <div className="grid gap-2 text-xs">
         <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
+        <select
+          aria-label="Cliente"
+          value={clientId}
+          disabled={locked}
+          onChange={(event) => onClientRef.current(event.target.value)}
+          className="h-8 rounded bg-white px-1 text-xs text-[#14343a]"
+        >
+          <option value="">Escolher cliente…</option>
+          {clients.map((item) => (
+            <option key={item.id} value={item.id}>{item.name}</option>
+          ))}
+        </select>
         <p className="text-sm font-semibold">{client?.name || "Sem cliente"}</p>
         <p>{client?.phone || "Sem telefone"}</p>
         <p className="break-all">{client?.email || "Sem e-mail"}</p>
@@ -135,7 +157,7 @@ export function FolhaView({
       </div>,
     );
     return () => setSidebar(null);
-  }, [setSidebar, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.notes, notes]);
+  }, [setSidebar, locked, clientId, clients, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.notes, notes]);
 
   const computed = lines.map((line) => {
     const quantity = parseDecimal(line.quantity) ?? 0;
@@ -227,12 +249,29 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] border-collapse text-[11px]">
+              <table className="w-full table-fixed border-collapse text-[11px]">
+                <colgroup>
+                  <col className="w-[4.5rem]" />
+                  <col />
+                  <col className="w-[5.5rem]" />
+                  <col className="w-14" />
+                  <col className="w-[4.5rem]" />
+                  <col className="w-14" />
+                  <col className="w-10" />
+                  <col className="w-12" />
+                  <col className="w-16" />
+                  <col className="w-[4.75rem]" />
+                  <col className="w-[4.75rem]" />
+                  <col className="w-6" />
+                  <col className="w-14" />
+                  <col className="w-6" />
+                </colgroup>
                 <thead className="bg-[#e7f7f8] text-[#0b5f68]">
                   <tr>
                     {["Família", "Descrição", "Obs. internas", "Ref.", "Liq. s/ desc.", "Custo", "Qtd.", "Marg.", "PVP Base", "PVP Cliente s/IVA", "PVP Cliente c/IVA", "A", "Dif."].map((label) => (
-                      <th key={label} className="px-1 py-1 text-left font-semibold whitespace-nowrap">{label}</th>
+                      <th key={label} className={`px-1 py-1 text-left font-semibold ${label === "Qtd." ? "w-10" : ""}`}>{label}</th>
                     ))}
+                    <th />
                   </tr>
                 </thead>
                 <tbody>
@@ -244,7 +283,7 @@ export function FolhaView({
                       <td className="px-1 py-0.5"><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
                       <td className="bg-[#e7f7f8] px-1 py-0.5 text-right tabular-nums">{formatEUR(row.gross)}</td>
                       <td className="bg-[#e7f7f8] px-1 py-0.5"><Cell value={row.line.unitCost} disabled={locked} align="right" onChange={(value) => onLine(row.line.key, { unitCost: value })} /></td>
-                      <td className="bg-[#ffe6cc] px-1 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
+                      <td className="w-10 bg-[#ffe6cc] px-0.5 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
                       <td className="px-1 py-0.5 text-right tabular-nums">{row.margin}%</td>
                       <td className="px-1 py-0.5"><Cell value={row.line.unitPrice} disabled={locked} align="right" onChange={(value) => onLine(row.line.key, { unitPrice: value })} /></td>
                       <td className="px-1 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
@@ -261,7 +300,7 @@ export function FolhaView({
                     <td className="px-1 py-1"><Cell value={draft.ref} disabled={locked} onChange={(value) => setDraft((current) => ({ ...current, ref: value }))} /></td>
                     <td className="bg-[#e7f7f8]" />
                     <td className="bg-[#e7f7f8]" />
-                    <td className="bg-[#ffe6cc] px-1 py-1"><Cell value={draft.quantity} disabled={locked} align="right" onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
+                    <td className="w-10 bg-[#ffe6cc] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
                     <td />
                     <td className="px-1 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td>
                     <td colSpan={4} className="px-1 text-right">
@@ -291,6 +330,7 @@ export function FolhaView({
             </div>
           </>
         ) : null}
+        {error ? <p className="px-3 pt-2 text-sm text-red-700" role="alert">{error}</p> : null}
         <div className="flex flex-wrap gap-2 border-t border-[#d5ebed] p-3">
           <Button type="button" variant="outline" className="h-8 text-xs" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
           <Button type="button" variant="outline" className="h-8 text-xs" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>
@@ -299,7 +339,18 @@ export function FolhaView({
         </div>
       </div>
       <aside className="rounded-xl border border-[#d5ebed] bg-white p-3 text-xs">
-        <p className="text-center font-mono text-lg font-semibold">{plate || "Sem matrícula"}</p>
+        <label className="block text-center">
+          <span className="text-[10px] tracking-wide text-[#4d6d73] uppercase">Matrícula</span>
+          <input
+            aria-label="Matrícula"
+            value={plate}
+            disabled={locked}
+            placeholder="AA-00-AA"
+            onChange={(event) => onPlate(event.target.value.toUpperCase())}
+            className="mt-1 h-10 w-full rounded-lg border border-[#0b8f9c] bg-white text-center font-mono text-lg font-semibold tracking-wide uppercase"
+          />
+        </label>
+        <Button type="button" variant="secondary" className="mt-2 h-8 w-full text-xs" disabled={locked} onClick={onLookup}>Procurar</Button>
         <CarSide color={carColor(plate || "x")} />
         <p className="mb-2 text-center text-[#4d6d73]">{brand} {model}</p>
         <Field label="N.º de chassi" value={vin} onChange={onVin} disabled={locked} />
@@ -314,10 +365,6 @@ export function FolhaView({
         <div className="grid grid-cols-2 gap-2">
           <Field label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
           <Field label="Kms saída" value={kmOut} onChange={setKmOut} disabled={locked} />
-        </div>
-        <div className="mt-2 flex gap-2">
-          <Input value={plate} disabled={locked} onChange={(event) => onPlate(event.target.value.toUpperCase())} className="h-7 font-mono text-xs uppercase" aria-label="Matrícula" />
-          <Button type="button" variant="secondary" className="h-7 text-xs" disabled={locked} onClick={onLookup}>Procurar</Button>
         </div>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <Field label="Próxima IPO" value="" onChange={() => undefined} disabled={locked} />
@@ -356,13 +403,13 @@ function MiniSelect({ label, value, onChange }: { label: string; value: string; 
   );
 }
 
-function Cell({ value, disabled, align, onChange }: { value: string; disabled: boolean; align?: "right"; onChange: (value: string) => void }) {
+function Cell({ value, disabled, align, narrow, onChange }: { value: string; disabled: boolean; align?: "right"; narrow?: boolean; onChange: (value: string) => void }) {
   return (
     <input
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className={`h-6 w-full bg-transparent px-1 outline-none ${align === "right" ? "text-right" : ""}`}
+      className={`h-6 bg-transparent px-0.5 outline-none ${narrow ? "w-10 text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
     />
   );
 }
