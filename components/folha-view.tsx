@@ -231,25 +231,29 @@ export function FolhaView({
   headerActions.current = { onDateIn, setPromiseQuote, setPromiseDelivery };
   useEffect(() => {
     setHeader(
-      <div className="grid h-11 w-full grid-cols-[minmax(140px,1fr)_minmax(180px,1.3fr)_minmax(220px,1.6fr)_minmax(220px,1.6fr)_auto] items-center gap-4 px-3 text-[11px] text-[#22272a]">
-        <div className="min-w-0 leading-tight">
-          <p className="text-[9px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
-          <p className="truncate text-[13px] font-semibold">{number ?? "Nova"}</p>
+      <div className="flex h-12 w-full items-stretch gap-px bg-[#e4e6ea] px-1 py-1 shadow-[0_1px_2px_rgba(34,39,42,.12)]">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 bg-[#f4f6f8] px-2">
+          <span className="text-[#00a9fd]" aria-hidden><DocIcon /></span>
+          <span className="text-[#00a9fd]" aria-hidden><DocIcon /></span>
+          <div className="min-w-0 leading-tight">
+            <p className="text-[9px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
+            <p className="truncate text-[12px] font-semibold">{number ?? "Nova"}</p>
+          </div>
         </div>
-        <label className="block min-w-0">
+        <label className="flex min-w-0 flex-1 flex-col justify-center bg-white px-2">
           <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Dia de chegada</span>
-          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="h-6 w-full border-0 border-b border-[#e1e2e5] bg-transparent px-0 text-[12px] outline-none" />
+          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="h-5 w-full border-0 bg-transparent px-0 text-[12px] outline-none" />
         </label>
-        <label className="block min-w-0">
+        <label className="flex min-w-0 flex-[1.3] flex-col justify-center bg-[#f7f8fa] px-2">
           <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Promessa de orçamento</span>
-          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="h-6 w-full border-0 border-b border-[#e1e2e5] bg-transparent px-0 text-[12px] outline-none" />
+          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="h-5 w-full border-0 bg-transparent px-0 text-[12px] outline-none" />
         </label>
-        <label className="block min-w-0">
+        <label className="flex min-w-0 flex-[1.3] flex-col justify-center bg-white px-2">
           <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Promessa de entrega</span>
-          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="h-6 w-full border-0 border-b border-[#e1e2e5] bg-transparent px-0 text-[12px] outline-none" />
+          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="h-5 w-full border-0 bg-transparent px-0 text-[12px] outline-none" />
         </label>
-        <div className="flex items-center gap-2 pl-2">
-          <button type="button" disabled title="Indisponível nesta versão" className="size-6 cursor-not-allowed rounded-full border border-[#e1e2e5] text-[10px] text-[#8d939c]">i</button>
+        <div className="flex items-center gap-2 bg-[#f4f6f8] px-2">
+          <button type="button" disabled title="Indisponível nesta versão" className="size-6 cursor-not-allowed rounded-full border border-[#e1e2e5] bg-white text-[10px] text-[#8d939c]">i</button>
           <span className="text-[12px] font-semibold whitespace-nowrap">{userName}</span>
         </div>
       </div>,
@@ -354,6 +358,7 @@ export function FolhaView({
                   <col style={{ width: "32px" }} />
                   <col style={{ width: "40px" }} />
                   <col style={{ width: "56px" }} />
+                  <col style={{ width: "40px" }} />
                   <col style={{ width: "68px" }} />
                   <col style={{ width: "60px" }} />
                   <col style={{ width: "24px" }} />
@@ -372,6 +377,7 @@ export function FolhaView({
                     <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Qtd.</th>
                     <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Marg.</th>
                     <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Base</th>
+                    <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Desc.%</th>
                     <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente s/IVA</th>
                     <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente</th>
                     <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">A</th>
@@ -388,12 +394,13 @@ export function FolhaView({
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.description} disabled={locked} onChange={(value) => onLine(row.line.key, { description: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.ref}><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5"><Cell value={moneyInput(row.unitCost)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitCost: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#f6b26b] px-0.5 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{pt2(row.margin)}%</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={moneyInput(row.unitPrice)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitPrice: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={row.line.discount} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { discount: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] text-white">●</span></td>
@@ -432,6 +439,7 @@ export function FolhaView({
                     <td className="bg-[#f6b26b] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
                     <td />
                     <td className="px-0.5 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td>
+                    <td />
                     <td className="bg-[#e1e2e5]" />
                     <td className="bg-[#e1e2e5]" />
                     <td />
@@ -440,7 +448,7 @@ export function FolhaView({
                 </tbody>
                 <tfoot>
                   <tr className="text-[11px] font-semibold text-[#22272a]">
-                    <td className="px-1 py-1" colSpan={10}>s/IVA {formatEUR(base)}</td>
+                    <td className="px-1 py-1" colSpan={11}>s/IVA {formatEUR(base)}</td>
                     <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
                     <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
                     <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
@@ -547,6 +555,15 @@ export function FolhaView({
         </div>
       </aside>
     </div>
+  );
+}
+
+function DocIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden>
+      <path fill="currentColor" d="M3 1.5h6.2L13 5.3V14.5H3z" />
+      <path fill="#fff" d="M9 1.8v3.4h3.2" />
+    </svg>
   );
 }
 
