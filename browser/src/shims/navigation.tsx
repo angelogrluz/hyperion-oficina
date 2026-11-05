@@ -16,7 +16,7 @@ export function useRouter() {
 
 export function useSearchParams() {
   const { search } = useLocation();
-  return [new URLSearchParams(search), () => undefined] as const;
+  return new URLSearchParams(search);
 }
 
 export function redirect(url: string): never {

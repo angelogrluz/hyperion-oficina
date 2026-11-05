@@ -15,7 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import { Logo } from "@/components/logo";
@@ -78,21 +78,31 @@ function ToolButton({
 
 function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: ShellTotals; extra?: ReactNode }) {
   const home = pathname === "/";
+  const estado = useSearchParams().get("estado") ?? "";
+  const item = (href: string, label: string, active: boolean) => (
+    <Link href={href} className={cn("rounded px-2 py-1 hover:bg-white/10", active && "bg-white/15 font-semibold text-white")}>{label}</Link>
+  );
   return (
     <>
-      <div className="px-3 py-3">
+      <div className="px-2 pt-3 pb-2">
         <Logo light />
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-1 text-[12px]">
         {extra ? <div className="px-1">{extra}</div> : home ? (
           <div className="grid gap-0.5">
-            <p className="px-2 py-1 text-[10px] tracking-wide text-white/50 uppercase">Indicadores das obras</p>
-            <Link href="/" className="rounded px-2 py-1 hover:bg-white/10">Ver tudo</Link>
-            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/50 uppercase">Estados do serviço</p>
-            <Link href="/?estado=aberta" className="rounded px-2 py-1 hover:bg-white/10">Por aprovar</Link>
-            <Link href="/?estado=em_curso" className="rounded px-2 py-1 hover:bg-white/10">Aprovado</Link>
-            <Link href="/?estado=hoje" className="rounded px-2 py-1 hover:bg-white/10">Para hoje</Link>
-            <Link href="/?estado=concluida" className="rounded px-2 py-1 hover:bg-white/10">Processo fechado</Link>
+            {item("/", "Ver tudo", estado === "")}
+            <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Selecionar todos</button>
+            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Indicadores das obras</p>
+            <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Em curso</button>
+            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Colaboradores</p>
+            <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Sem colaboradores</button>
+            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Estados do serviço</p>
+            {item("/?estado=aberta", "Por aprovar", estado === "aberta")}
+            {item("/?estado=em_curso", "Aprovado", estado === "em_curso")}
+            {item("/?estado=hoje", "Para hoje", estado === "hoje")}
+            {item("/?estado=concluida", "Processo fechado", estado === "concluida")}
+            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Atribuído a</p>
+            <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Sem atribuição</button>
           </div>
         ) : (
           <div className="px-2 py-2">
@@ -167,12 +177,15 @@ export function Shell({
 
   return (
     <SheetSidebarProvider>
-      {(sidebar) => (
+      {(sidebar, header) => (
     <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[#22272a]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-[210px] flex-col bg-[#22272a] text-white lg:flex">
         <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
       <div className="lg:pl-[210px]">
+        {header ? (
+          <header className="sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">{header}</header>
+        ) : (
         <header className="sticky top-0 z-40 flex h-11 items-center gap-0.5 border-b border-[#eaeaf2] bg-white px-1">
           <button type="button" className="grid size-10 place-items-center rounded-lg text-[#0b8f9c] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu />
@@ -238,6 +251,7 @@ export function Shell({
             ) : null}
           </div>
         </header>
+        )}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="left" className="w-72 bg-[#22272a] p-0 text-white">
             <SheetTitle className="sr-only">Menu</SheetTitle>

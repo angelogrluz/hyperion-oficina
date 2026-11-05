@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CarSide, carColor } from "@/components/car-side";
-import { useSetSheetSidebar } from "@/components/sheet-sidebar";
+import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -224,6 +224,34 @@ export function FolhaView({
     return () => setSidebar(null);
   }, [setSidebar, locked, clientId, clients, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.notes, notes]);
 
+  const setHeader = useSetSheetHeader();
+  const headerActions = useRef({ onDateIn, setPromiseQuote, setPromiseDelivery });
+  headerActions.current = { onDateIn, setPromiseQuote, setPromiseDelivery };
+  useEffect(() => {
+    setHeader(
+      <div className="grid items-end gap-2 px-3 py-1.5 text-[11px] text-[#22272a] md:grid-cols-[1.1fr_1fr_1.2fr_1.2fr_auto]">
+        <div>
+          <p className="text-[10px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
+          <p className="text-[13px] leading-tight font-semibold">{number ?? "Nova"}</p>
+        </div>
+        <label className="block">
+          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Dia de chegada</span>
+          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="mt-0.5 h-7 w-full rounded border border-[#e1e2e5] px-1 text-[12px]" />
+        </label>
+        <label className="block">
+          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Promessa de orçamento</span>
+          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="mt-0.5 h-7 w-full rounded border border-[#e1e2e5] px-1 text-[12px]" />
+        </label>
+        <label className="block">
+          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Promessa de entrega</span>
+          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="mt-0.5 h-7 w-full rounded border border-[#e1e2e5] px-1 text-[12px]" />
+        </label>
+        <div className="pb-1 text-right text-[12px] font-semibold">{userName}</div>
+      </div>,
+    );
+    return () => setHeader(null);
+  }, [setHeader, number, dateIn, promiseQuote, promiseDelivery, userName, locked]);
+
   const computed = lines.map((line) => {
     const quantity = parseDecimal(line.quantity) ?? 0;
     const unitPrice = parseDecimal(line.unitPrice) ?? 0;
@@ -250,25 +278,16 @@ export function FolhaView({
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
 
   return (
-    <div className="grid items-start gap-2 xl:grid-cols-[minmax(0,1fr)_232px]">
+    <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_248px]">
       <div className="min-w-0 bg-white text-[#22272a]">
-        <div className="grid gap-1 border-b border-[#eaeaf2] px-2 py-1 text-[11px] md:grid-cols-5">
-          <HeaderField label="Folha de Obra">{number ?? "Nova"}</HeaderField>
-          <HeaderField label="Dia de chegada">
-            <Input type="date" value={dateIn} disabled={locked} onChange={(event) => onDateIn(event.target.value)} className="h-7 text-xs" />
-          </HeaderField>
-          <HeaderField label="Promessa de orçamento">
-            <Input type="datetime-local" value={promiseQuote} disabled={locked} onChange={(event) => setPromiseQuote(event.target.value)} className="h-7 text-xs" />
-          </HeaderField>
-          <HeaderField label="Promessa de entrega">
-            <Input type="datetime-local" value={promiseDelivery} disabled={locked} onChange={(event) => setPromiseDelivery(event.target.value)} className="h-7 text-xs" />
-          </HeaderField>
-          <HeaderField label="Utilizador">{userName}</HeaderField>
+        <div className="px-2 pt-2">
+          <p className="text-[13px] font-semibold">Sintomas/Requisitos do Cliente</p>
+          <input disabled placeholder="Adicionar sintoma/requisito do cliente" title="Indisponível nesta versão" className="mt-1 h-8 w-full cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[12px] text-[#8d939c]" />
         </div>
-        <div className="flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
+        <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
           <label className="min-w-48 flex-1 text-[11px]">
             Observações do cliente
-            <Textarea value={problem} disabled={locked} onChange={(event) => onProblem(event.target.value)} className="mt-0.5 min-h-10 border-[#eaeaf2] text-[12px]" />
+            <Textarea value={problem} disabled={locked} onChange={(event) => onProblem(event.target.value)} className="mt-0.5 min-h-8 border-[#e1e2e5] text-[12px]" />
           </label>
           <MiniSelect label="Chave de segurança" value={keyBox} onChange={setKeyBox} />
           <MiniSelect label="Livro de manutenção" value={book} onChange={setBook} />
@@ -314,7 +333,7 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse text-[12px] text-[#22272a]">
+              <table className="w-full min-w-[980px] border-collapse text-[12px] text-[#22272a] [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap [&_td:nth-child(3)]:min-w-[240px] [&_td:nth-child(3)]:whitespace-normal">
                 <thead className="text-[11px] text-[#22272a]">
                   <tr>
                     <th className="bg-[#e1e2e5] px-1 py-1" />
@@ -435,57 +454,58 @@ export function FolhaView({
           </>
         ) : null}
         {error ? <p className="px-2 pt-2 text-[12px] text-red-700" role="alert">{error}</p> : null}
-        <div className="mt-6 flex items-center justify-between border-t border-[#eaeaf2] px-2 py-1 text-[11px] text-[#8d939c]">
-          <span>Atribuída ao balcão</span>
-          <span className="text-[#22272a]">{userName}</span>
+        <div className="fixed bottom-0 left-0 z-30 flex h-9 w-full items-center justify-between border-t border-[#eaeaf2] bg-white px-3 text-[12px] lg:left-[210px] lg:w-[calc(100%-210px)]">
+          <label className="flex items-center gap-2 text-[#8d939c]">
+            Atribuída a
+            <select disabled title="Indisponível nesta versão" className="h-6 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-1 text-[#22272a]">
+              <option>Balcão</option>
+            </select>
+          </label>
+          <span className="text-[#8d939c]">Estados do serviço · {userName}</span>
         </div>
       </div>
       <aside className="rounded border border-[#eaeaf2] bg-white p-2 text-[11px] text-[#22272a]">
         <label className="block text-center">
-          <span className="text-[10px] tracking-wide text-[#4d6d73] uppercase">Matrícula</span>
+          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Matrícula</span>
           <input
             aria-label="Matrícula"
             value={plate}
             disabled={locked}
             placeholder="AA-00-AA"
             onChange={(event) => onPlate(event.target.value.toUpperCase())}
-            className="mt-1 h-9 w-full rounded border border-[#00a9fd] bg-white text-center font-mono text-base font-semibold tracking-wide text-[#22272a] uppercase"
+            className="mt-0.5 h-8 w-full border-0 border-b-2 border-[#00a9fd] bg-transparent text-center font-mono text-[18px] font-bold tracking-wide uppercase outline-none"
           />
         </label>
-        <Button type="button" variant="secondary" className="mt-1 h-7 w-full text-[11px]" disabled={locked} onClick={onLookup}>Procurar</Button>
-        <CarSide color={carColor(plate || "x")} />
-        <p className="mb-2 text-center text-[#4d6d73]">{brand} {model}</p>
-        <Field label="N.º de chassi" value={vin} onChange={onVin} disabled={locked} />
-        <Field label="Tipo de viatura" value={version || model} onChange={onVersion} disabled={locked} />
-        <Field label="Ano de construção" value={year} onChange={onYear} disabled={locked} />
-        <Field label="Primeiro registo" value={year ? `01/${year}` : ""} onChange={() => undefined} disabled />
-        <Field label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
-        <Field label="Potência" value={engine} onChange={onEngine} disabled={locked} />
-        <Field label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
-        <Field label="Código do motor" value={engine} onChange={onEngine} disabled={locked} />
-        <Field label="Código de cor" value={brand.slice(0, 3).toUpperCase()} onChange={() => undefined} disabled />
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
-          <Field label="Kms saída" value={kmOut} onChange={setKmOut} disabled={locked} />
+        <button type="button" className="mt-1 h-6 w-full text-[11px] text-[#00a9fd]" disabled={locked} onClick={onLookup}>Procurar</button>
+        <CarSide color={carColor(plate || "x")} className="mx-auto h-12 w-36" />
+        <p className="mb-1 text-center text-[11px] text-[#8d939c]">{brand} {model}</p>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          <Spec label="N.º chassi" value={vin} onChange={onVin} disabled={locked} wide />
+          <Spec label="Tipo" value={version || model} onChange={onVersion} disabled={locked} />
+          <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
+          <Spec label="1.º registo" value={year ? `01/${year}` : ""} onChange={() => undefined} disabled />
+          <Spec label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
+          <Spec label="Potência" value={engine} onChange={onEngine} disabled={locked} />
+          <Spec label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
+          <Spec label="Cód. motor" value={engine} onChange={onEngine} disabled={locked} />
+          <Spec label="Cód. cor" value={brand.slice(0, 3).toUpperCase()} onChange={() => undefined} disabled />
+          <Spec label="Marca" value={brand} onChange={onBrand} disabled={locked} />
+          <Spec label="Modelo" value={model} onChange={onModel} disabled={locked} />
+          <Spec label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
+          <Spec label="Kms saída" value={kmOut} onChange={setKmOut} disabled={locked} />
+          <Spec label="Próxima IPO" value="" onChange={() => undefined} disabled />
+          <Spec label="Próx. revisão" value="" onChange={() => undefined} disabled />
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <Field label="Próxima IPO" value="" onChange={() => undefined} disabled={locked} />
-          <Field label="Próxima revisão" value="" onChange={() => undefined} disabled={locked} />
+        <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
+          <p className="text-[10px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
+          <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
         </div>
-        <div className="mt-3 rounded-lg bg-[#f4fbfb] p-2">
-          <p className="font-semibold text-[#0b8f9c]">Histórico</p>
-          <p className="mt-1 text-[#4d6d73]">{dateIn || "—"} · {formatEUR(pvp)}</p>
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          <Field label="Marca" value={brand} onChange={onBrand} disabled={locked} />
-          <Field label="Modelo" value={model} onChange={onModel} disabled={locked} />
-        </div>
-        <div className="mt-3 grid gap-1">
+        <div className="mt-2 grid grid-cols-2 gap-1">
           <Button type="button" variant="outline" className="h-8 border-[#00a9fd] text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
           <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>
-          <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
-          {canInvoice ? <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
         </div>
+        <Button type="button" className="mt-1 h-8 w-full bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
+        {canInvoice ? <Button type="button" className="mt-1 h-8 w-full bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
       </aside>
     </div>
   );
@@ -551,11 +571,11 @@ function moneyInput(value: number) {
   return String(round2(value)).replace(".", ",");
 }
 
-function Field({ label, value, onChange, disabled }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean }) {
+function Spec({ label, value, onChange, disabled, wide }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean }) {
   return (
-    <label className="mt-1 block">
-      <span className="text-[10px] tracking-wide text-[#4d6d73] uppercase">{label}</span>
-      <input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-7 w-full rounded border border-[#d5ebed] px-1.5" />
+    <label className={wide ? "col-span-2 block min-w-0" : "block min-w-0"}>
+      <span className="block text-[9px] tracking-wide text-[#8d939c] uppercase">{label}</span>
+      <input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-5 w-full border-0 border-b border-[#eaeaf2] bg-transparent px-0 text-[11px] outline-none disabled:text-[#22272a]" />
     </label>
   );
 }
