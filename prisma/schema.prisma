@@ -52,8 +52,10 @@ model Vehicle {
   plate        String        @unique
   brand        String
   model        String
+  version      String        @default("")
   year         Int
   vin          String        @default("")
+  engine       String        @default("")
   km           Int           @default(0)
   fuel         String
   clientId     String

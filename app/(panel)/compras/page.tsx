@@ -21,7 +21,7 @@ export default async function PurchasesPage() {
   return (
     <div>
       <PageHeader
-        title="Compras a fornecedores"
+        title="Compras a Fornecedores"
         description="Grelha rápida para lançar a fatura. Ao gravar, o stock sobe e o preço de custo é a média ponderada. Uma linha de óleo pode acrescentar a ECOLUB a 0,09 € por litro, com margem 0%."
       />
       <PurchaseGrid

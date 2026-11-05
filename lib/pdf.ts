@@ -8,8 +8,8 @@ const regularFont = path.join(process.cwd(), "assets/fonts/DejaVuSans.ttf");
 const boldFont = path.join(process.cwd(), "assets/fonts/DejaVuSans-Bold.ttf");
 
 function render(doc: PDFKit.PDFDocument, printable: PrintableDocument, workshop: WorkshopProfile) {
-  const pine = "#1f4d45";
-  const copper = "#c4622d";
+  const pine = "#0b8f9c";
+  const copper = "#0b8f9c";
   const ink = "#1c1916";
   const muted = "#5c574e";
   const line = "#e4ddd0";
@@ -55,7 +55,7 @@ function render(doc: PDFKit.PDFDocument, printable: PrintableDocument, workshop:
   doc.fillColor(ink).font("body").fontSize(10).text(printable.problem, left, 276, { width });
 
   let y = doc.y + 16;
-  doc.rect(left, y, width, 18).fill("#f3efe6");
+  doc.rect(left, y, width, 18).fill("#e7f7f8");
   doc.fillColor(muted).font("bold").fontSize(8);
   doc.text("DESCRIÇÃO", left + 8, y + 5, { width: 250 });
   doc.text("QTD", 310, y + 5, { width: 40, align: "right" });

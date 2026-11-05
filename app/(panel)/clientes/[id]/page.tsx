@@ -26,7 +26,10 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div>
-        <PageHeader title={client.name} description={`NIF ${client.nif}`} />
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <PageHeader title={client.name} description={`NIF ${client.nif}`} />
+          <Link href={`/ordens/nova?cliente=${client.id}`} className="inline-flex h-10 items-center rounded-lg bg-[#0b8f9c] px-4 text-sm font-medium text-white">Criar Nova Obra</Link>
+        </div>
         <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
           <SaveForm action={saveClient.bind(null, client.id)}>
             <ClientFields client={client} />

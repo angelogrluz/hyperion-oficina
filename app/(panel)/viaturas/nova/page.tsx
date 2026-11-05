@@ -13,7 +13,7 @@ export default async function NewVehiclePage({ searchParams }: { searchParams: P
     <div className="max-w-2xl">
       <PageHeader title="Nova viatura" description="A matrícula atual portuguesa, no formato AA-00-AA." />
       <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-        <SaveForm action={saveVehicle.bind(null, null)} next={(id) => `/viaturas/${id}`}>
+        <SaveForm action={saveVehicle.bind(null, null)} nextBase="/viaturas/">
           <VehicleFields clients={clients} clientId={cliente} />
         </SaveForm>
       </div>

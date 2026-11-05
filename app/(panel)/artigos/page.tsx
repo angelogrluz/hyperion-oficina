@@ -9,10 +9,30 @@ import { formatEUR, formatPercent, formatQty } from "@/lib/format";
 
 export const metadata = { title: "Artigos" };
 
-export default async function ArticlesPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const q = (await searchParams).q ?? "";
+const TABS = [
+  { id: "inventario", label: "Inventário" },
+  { id: "consumiveis", label: "Consumíveis" },
+  { id: "internos", label: "Internos" },
+  { id: "externos", label: "Externos" },
+  { id: "eco", label: "Eco Taxas" },
+  { id: "servicos", label: "Catálogo de Serviços" },
+];
+
+function inTab(family: string, tab: string) {
+  if (tab === "eco") return family === "Eco Taxa";
+  if (tab === "internos") return family === "Interno";
+  if (tab === "externos") return family === "Externo";
+  if (tab === "servicos") return family === "Serviço";
+  if (tab === "consumiveis") return ["Óleo", "Filtros", "Travões", "Ignição", "Produto"].includes(family);
+  return true;
+}
+
+export default async function ArticlesPage({ searchParams }: { searchParams: Promise<{ q?: string; separador?: string }> }) {
+  const params = await searchParams;
+  const q = params.q ?? "";
+  const tab = params.separador || "inventario";
   const articles = await prisma.article.findMany({ where: { active: true }, orderBy: { ref: "asc" } });
-  const visible = articles.filter((article) => includesSearch(`${article.ref} ${article.description} ${article.family}`, q));
+  const visible = articles.filter((article) => inTab(article.family, tab) && includesSearch(`${article.ref} ${article.description} ${article.family}`, q));
   return (
     <div>
       <PageHeader
@@ -20,6 +40,13 @@ export default async function ArticlesPage({ searchParams }: { searchParams: Pro
         description="O PVP calcula-se sozinho: custo × (1 + margem). Óleos a 30%, restantes a 40%, eco taxa a 0%."
         action={<Link href="/artigos/novo" className="inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground">Novo artigo</Link>}
       />
+      <div className="mb-3 flex flex-wrap gap-2">
+        {TABS.map((item) => (
+          <Link key={item.id} href={item.id === "inventario" ? "/artigos" : `/artigos?separador=${item.id}`} className={`rounded-full px-3 py-1 text-sm ${tab === item.id ? "bg-[#0b8f9c] text-white" : "bg-[#e7f7f8] text-[#0b5f68]"}`}>
+            {item.label}
+          </Link>
+        ))}
+      </div>
       <SearchBox placeholder="Referência, descrição ou família" defaultValue={q} />
       {visible.length === 0 ? <EmptyState title="Nenhum artigo encontrado." text="Crie um artigo ou lance-o numa compra a fornecedor." /> : (
         <TableShell>

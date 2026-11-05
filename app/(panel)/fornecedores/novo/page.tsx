@@ -10,7 +10,7 @@ export default function NewSupplierPage() {
     <div className="max-w-2xl">
       <PageHeader title="Novo fornecedor" description="O NIF é opcional, mas se o indicar tem de ser válido." />
       <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-        <SaveForm action={saveSupplier.bind(null, null)} next={(id) => `/fornecedores/${id}`}>
+        <SaveForm action={saveSupplier.bind(null, null)} nextBase="/fornecedores/">
           <SupplierFields />
         </SaveForm>
       </div>

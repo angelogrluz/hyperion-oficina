@@ -12,17 +12,17 @@ export default async function LoginPage({
   const params = await searchParams;
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
-      <section className="hidden flex-col justify-between bg-[#17211f] px-12 py-10 text-white lg:flex">
+      <section className="hidden flex-col justify-between bg-primary px-12 py-10 text-white lg:flex">
         <Logo light />
         <div>
           <Plate value="AB-19-CK" />
           <h1 className="mt-6 max-w-md text-4xl font-semibold tracking-tight">O balcão da oficina, sem papelada solta.</h1>
-          <p className="mt-4 max-w-md text-white/70">
+          <p className="mt-4 max-w-md text-white/90">
             Clientes, viaturas, ordens de reparação, orçamentos, stock e marcações. A faturação certificada fica para um
             fornecedor como a Moloni — aqui corre em simulação.
           </p>
         </div>
-        <p className="text-sm text-white/50">Hyperion Car Lab · Vila Nova de Gaia</p>
+        <p className="text-sm text-white/80">Hyperion Car Lab · Vila Nova de Gaia</p>
       </section>
       <section className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">

@@ -45,5 +45,7 @@ next-env.d.ts
 /data/*.db-*
 /data/*.db-journal
 /prisma/data
+/browser/dist
+/browser/pages-pack
 
 /lib/generated/prisma

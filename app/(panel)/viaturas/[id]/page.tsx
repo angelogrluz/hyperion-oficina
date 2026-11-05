@@ -24,7 +24,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div>
-        <PageHeader title={vehicle.plate} description={`${vehicle.brand} ${vehicle.model} · ${vehicle.client.name}`} />
+        <PageHeader title={vehicle.plate} description={`${vehicle.brand} ${vehicle.model}${vehicle.version ? ` ${vehicle.version}` : ""}${vehicle.engine ? ` · ${vehicle.engine}` : ""} · ${vehicle.client.name}`} />
         <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
           <SaveForm action={saveVehicle.bind(null, vehicle.id)}>
             <VehicleFields clients={clients} vehicle={vehicle} />

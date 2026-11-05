@@ -26,9 +26,9 @@ export const PAYMENT_METHODS = [
 ] as const;
 
 export const ORDER_STATUSES = [
-  { value: "aberta", label: "Aberta" },
-  { value: "em_curso", label: "Em curso" },
-  { value: "concluida", label: "Concluída" },
+  { value: "aberta", label: "Por Aprovar" },
+  { value: "em_curso", label: "Aprovado" },
+  { value: "concluida", label: "Processo fechado" },
   { value: "faturada", label: "Faturada" },
 ] as const;
 

@@ -31,7 +31,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
             {visible.map((vehicle) => (
               <tr key={vehicle.id} className="relative border-t border-border hover:bg-accent/40">
                 <Td><Link href={`/viaturas/${vehicle.id}`} className="after:absolute after:inset-0"><Plate value={vehicle.plate} /></Link></Td>
-                <Td>{vehicle.brand} {vehicle.model} · {vehicle.year}</Td>
+                <Td>{vehicle.brand} {vehicle.model}{vehicle.version ? ` ${vehicle.version}` : ""} · {vehicle.year}</Td>
                 <Td>{vehicle.client.name}</Td>
                 <Td>{vehicle.fuel}</Td>
                 <Td className="text-right tabular-nums">{formatQty(vehicle.km)}</Td>

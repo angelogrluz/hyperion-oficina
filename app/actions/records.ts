@@ -96,8 +96,10 @@ const vehicleSchema = z.object({
   plate: z.string().refine(isValidPlate, "A matrícula tem de estar no formato AA-00-AA."),
   brand: z.string().trim().min(1, "Indique a marca.").max(40),
   model: z.string().trim().min(1, "Indique o modelo.").max(60),
+  version: z.string().trim().max(80),
   year: z.coerce.number().int().min(1950, "Ano inválido.").max(new Date().getFullYear() + 1, "Ano inválido."),
   vin: z.string().refine(isValidVin, "O VIN, se preenchido, tem 17 caracteres (sem I, O ou Q)."),
+  engine: z.string().trim().max(80),
   km: z.coerce.number().int().min(0, "Os quilómetros não podem ser negativos.").max(2_000_000),
   fuel: z.string().refine((value) => (FUELS as readonly string[]).includes(value), "Escolha o combustível."),
 });
@@ -112,8 +114,10 @@ export async function saveVehicle(
     plate: normalizePlate(text(formData, "plate")),
     brand: text(formData, "brand"),
     model: text(formData, "model"),
+    version: text(formData, "version"),
     year: text(formData, "year"),
     vin: text(formData, "vin").toUpperCase(),
+    engine: text(formData, "engine"),
     km: text(formData, "km") || "0",
     fuel: text(formData, "fuel"),
   });

@@ -19,7 +19,7 @@ export function DocumentPaper({ doc, workshop }: { doc: PrintableDocument; works
           </p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-semibold tracking-[0.16em] text-[#c4622d] uppercase">{doc.title}</p>
+          <p className="text-xs font-semibold tracking-[0.16em] text-[#0b8f9c] uppercase">{doc.title}</p>
           <p className="mt-1 text-2xl font-semibold">{doc.number}</p>
           <p className="text-sm text-neutral-500">{doc.statusLabel}</p>
         </div>
@@ -27,14 +27,14 @@ export function DocumentPaper({ doc, workshop }: { doc: PrintableDocument; works
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <section className="rounded-lg border border-neutral-200 p-3">
-          <p className="text-[11px] font-semibold tracking-wide text-[#c4622d] uppercase">Cliente</p>
+          <p className="text-[11px] font-semibold tracking-wide text-[#0b8f9c] uppercase">Cliente</p>
           <p className="mt-1 font-medium">{doc.client.name}</p>
           <p className="text-sm text-neutral-600">NIF {doc.client.nif}</p>
           <p className="text-sm text-neutral-600">{doc.client.address || "Sem morada"}</p>
           <p className="text-sm text-neutral-600">{[doc.client.phone, doc.client.email].filter(Boolean).join(" · ")}</p>
         </section>
         <section className="rounded-lg border border-neutral-200 p-3">
-          <p className="text-[11px] font-semibold tracking-wide text-[#c4622d] uppercase">Viatura</p>
+          <p className="text-[11px] font-semibold tracking-wide text-[#0b8f9c] uppercase">Viatura</p>
           <p className="mt-1 font-mono font-semibold">{doc.vehicle.plate}</p>
           <p className="text-sm text-neutral-600">
             {doc.vehicle.brand} {doc.vehicle.model} · {doc.vehicle.year}
@@ -52,7 +52,7 @@ export function DocumentPaper({ doc, workshop }: { doc: PrintableDocument; works
         {doc.secondaryDateLabel}: {doc.secondaryDate}
       </p>
 
-      <h2 className="mt-4 text-xs font-semibold tracking-wide text-[#c4622d] uppercase">{doc.problemLabel}</h2>
+      <h2 className="mt-4 text-xs font-semibold tracking-wide text-[#0b8f9c] uppercase">{doc.problemLabel}</h2>
       <p className="mt-1 text-sm">{doc.problem}</p>
 
       <table className="mt-4 w-full border-collapse text-sm">

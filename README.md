@@ -46,6 +46,16 @@ INVOICE_PROVIDER="mock-moloni"
 
 `INVOICE_PROVIDER=moloni` seleciona o adaptador real, que recusa a emissão até existirem credenciais e a ligação certificada.
 
+`PLATE_PROVIDER=mock` (omissão) simula a consulta de matrícula. `PLATE_PROVIDER=matricula-api` reserva o adaptador pago e exige `PLATE_API_URL` e `PLATE_API_KEY`.
+
+## Site estático para GitHub Pages
+
+```bash
+npm run build:pages
+```
+
+Gera `browser/dist` com base `/hyperion-oficina/` e o zip `/opt/cursor/artifacts/hyperion-oficina.zip` (`index.html` na raiz e `.nojekyll`). Publique o conteúdo do zip em `https://angelogrluz.github.io/hyperion-oficina/`. Os dados ficam no IndexedDB deste browser. No menu do utilizador há **Repor dados de demonstração**. O mesmo login de demonstração funciona sem servidor. A versão Next.js com SQLite mantém-se com `npm run dev`.
+
 ## Docker
 
 ```bash
@@ -58,7 +68,7 @@ A base SQLite vive no volume `/app/data`. Sem volume, os dados desaparecem quand
 ## O que a versão 1 faz
 
 - **Clientes** com nome, NIF (dígito de controlo), telefone, e-mail e morada.
-- **Viaturas** com matrícula `AA-00-AA`, marca, modelo, ano, VIN, km e combustível, ligadas a um cliente.
+- **Viaturas** com matrícula `AA-00-AA`, marca, modelo, versão, ano, motor, combustível, VIN e km, ligadas a um cliente. O botão **Procurar** junto à matrícula preenche esses dados. A consulta está simulada (`PLATE_PROVIDER=mock`); o adaptador `matricula-api` fica reservado para uma API paga portuguesa (`PLATE_API_URL` e `PLATE_API_KEY`).
 - **Ordens de reparação** com entrada e saída, km, problema, mão de obra (horas × preço/hora) e peças. Estados: aberta, em curso, concluída, faturada. Impressão e PDF.
 - **Orçamentos** com a mesma estrutura, conversíveis numa ordem.
 - **Artigos**: referência e descrição em maiúsculas, família, custo, margem e PVP calculado. IVA 23%. Margem de 40%, 30% nos óleos e 0% na eco taxa.

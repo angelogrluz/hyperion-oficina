@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/documents";
+import { lookupPlate } from "@/app/actions/plates";
 import { saveClient, saveVehicle } from "@/app/actions/records";
 import { controlClass, Field, Select } from "@/components/field";
 import { Button } from "@/components/ui/button";
@@ -201,7 +202,7 @@ export function DocumentEditor({
     });
   }
 
-  function save() {
+  function save(statusOverride?: string) {
     const kmValue = Number(km);
     if (!Number.isInteger(kmValue) || kmValue < 0) {
       setError("Indique os quilómetros em número inteiro.");
@@ -212,13 +213,15 @@ export function DocumentEditor({
       setError("Há linhas com quantidade ou preço inválido.");
       return;
     }
+    const nextStatus = statusOverride ?? status;
+    if (statusOverride) setStatus(statusOverride);
     const body = {
       clientId,
       vehicleId,
       km: kmValue,
       problem,
       notes,
-      status,
+      status: nextStatus,
       lines: parsedLines,
     };
     startTransition(async () => {
@@ -480,12 +483,19 @@ export function DocumentEditor({
         </dl>
         {error ? <p className="mt-3 text-sm text-destructive" role="alert">{error}</p> : null}
         <div className="mt-4 grid gap-2">
+          {mode === "order" && !locked ? (
+            <div className="grid gap-2">
+              <Button type="button" variant="outline" className="h-10" disabled={pending} onClick={() => save("aberta")}>Por Aprovar</Button>
+              <Button type="button" variant="outline" className="h-10" disabled={pending} onClick={() => save("em_curso")}>Aprovado</Button>
+              <Button type="button" className="h-10" disabled={pending} onClick={() => save("concluida")}>Fechar Processo</Button>
+            </div>
+          ) : null}
           {locked ? null : (
-            <Button type="button" className="h-10" disabled={pending} onClick={save}>
+            <Button type="button" variant="secondary" className="h-10" disabled={pending} onClick={() => save()}>
               {pending ? "A guardar…" : "Guardar"}
             </Button>
           )}
-          {mode === "order" && savedStatus === "concluida" && !locked ? (
+          {mode === "order" && (savedStatus === "concluida" || status === "concluida") && !locked ? (
             <Button type="button" className="h-10" disabled={pending} onClick={() => setInvoiceOpen(true)}>
               Faturar
             </Button>
@@ -646,12 +656,21 @@ function QuickVehicle({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [plate, setPlate] = useState("");
+  const [brand, setBrand] = useState("");
+  const [model, setModel] = useState("");
+  const [version, setVersion] = useState("");
+  const [year, setYear] = useState("");
+  const [vin, setVin] = useState("");
+  const [engine, setEngine] = useState("");
+  const [fuel, setFuel] = useState("Gasolina");
+  const [note, setNote] = useState<string | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nova viatura</DialogTitle>
-          <DialogDescription>A matrícula fica no formato AA-00-AA.</DialogDescription>
+          <DialogDescription>A matrícula fica no formato AA-00-AA. A procura está em simulação.</DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-3 sm:grid-cols-2"
@@ -671,16 +690,53 @@ function QuickVehicle({
             });
           }}
         >
-          <Field label="Matrícula"><Input name="plate" required className="h-10 font-mono uppercase" /></Field>
-          <Field label="Marca"><Input name="brand" required className="h-10" /></Field>
-          <Field label="Modelo"><Input name="model" required className="h-10" /></Field>
-          <Field label="Ano"><Input name="year" required inputMode="numeric" className="h-10" /></Field>
-          <Field label="VIN"><Input name="vin" className="h-10 font-mono uppercase" /></Field>
+          <div className="sm:col-span-2">
+            <div className="flex gap-2">
+              <Field label="Matrícula" className="flex-1">
+                <Input name="plate" required value={plate} onChange={(event) => setPlate(event.target.value.toUpperCase())} className="h-10 font-mono uppercase" />
+              </Field>
+              <Button
+                type="button"
+                variant="secondary"
+                className="mt-6 h-10"
+                disabled={pending}
+                onClick={() => {
+                  startTransition(async () => {
+                    const result = await lookupPlate(plate);
+                    if (!result.found || !("vehicle" in result) || !result.vehicle) {
+                      setNote(result.message);
+                      return;
+                    }
+                    const found = result.vehicle;
+                    setPlate(found.plate);
+                    setBrand(found.brand);
+                    setModel(found.model);
+                    setVersion(found.version);
+                    setYear(String(found.year));
+                    setFuel(found.fuel);
+                    setEngine(found.engine);
+                    setVin(found.vin ?? "");
+                    setNote(result.message);
+                  });
+                }}
+              >
+                Procurar
+              </Button>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Consulta simulada, sem API paga.</p>
+            {note ? <p className="mt-1 text-xs text-[#0b5f68]">{note}</p> : null}
+          </div>
+          <Field label="Marca"><Input name="brand" required value={brand} onChange={(event) => setBrand(event.target.value)} className="h-10" /></Field>
+          <Field label="Modelo"><Input name="model" required value={model} onChange={(event) => setModel(event.target.value)} className="h-10" /></Field>
+          <Field label="Versão"><Input name="version" value={version} onChange={(event) => setVersion(event.target.value)} className="h-10" /></Field>
+          <Field label="Ano"><Input name="year" required value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" className="h-10" /></Field>
+          <Field label="Motor"><Input name="engine" value={engine} onChange={(event) => setEngine(event.target.value)} className="h-10" /></Field>
+          <Field label="VIN"><Input name="vin" value={vin} onChange={(event) => setVin(event.target.value.toUpperCase())} className="h-10 font-mono uppercase" /></Field>
           <Field label="Km"><Input name="km" defaultValue="0" inputMode="numeric" className="h-10" /></Field>
-          <Field label="Combustível" className="sm:col-span-2">
-            <select name="fuel" className={controlClass} defaultValue="Gasolina">
-              {FUELS.map((fuel) => (
-                <option key={fuel}>{fuel}</option>
+          <Field label="Combustível">
+            <select name="fuel" className={controlClass} value={fuel} onChange={(event) => setFuel(event.target.value)}>
+              {FUELS.map((item) => (
+                <option key={item}>{item}</option>
               ))}
             </select>
           </Field>

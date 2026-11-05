@@ -10,11 +10,13 @@ type SaveResult = { ok: true; id?: string } | { ok: false; error: string };
 export function SaveForm({
   action,
   next,
+  nextBase,
   children,
   submitLabel = "Guardar",
 }: {
   action: (formData: FormData) => Promise<SaveResult>;
   next?: (id: string) => string;
+  nextBase?: string;
   children: ReactNode;
   submitLabel?: string;
 }) {
@@ -36,7 +38,8 @@ export function SaveForm({
           }
           setError(null);
           toast.success("Guardado.");
-          if (next && result.id) router.push(next(result.id));
+          if (nextBase && result.id) router.push(`${nextBase}${result.id}`);
+          else if (next && result.id) router.push(next(result.id));
           else router.refresh();
         });
       }}

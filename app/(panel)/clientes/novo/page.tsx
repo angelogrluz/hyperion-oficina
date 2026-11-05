@@ -10,7 +10,7 @@ export default function NewClientPage() {
     <div className="max-w-2xl">
       <PageHeader title="Novo cliente" description="O NIF é validado com o dígito de controlo português." />
       <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
-        <SaveForm action={saveClient.bind(null, null)} next={(id) => `/clientes/${id}`}>
+        <SaveForm action={saveClient.bind(null, null)} nextBase="/clientes/">
           <ClientFields />
         </SaveForm>
       </div>
