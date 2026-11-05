@@ -24,6 +24,7 @@ const lineSchema = z.object({
   unitCost: z.number().min(0, "Custo inválido."),
   discountPercent: z.number().min(0).max(100).default(0),
   vatRate: z.number().min(0).max(100),
+  internalNote: z.string().max(200).default(""),
   articleId: z.string().nullable(),
 });
 
@@ -66,6 +67,7 @@ function lineCreate(lines: z.infer<typeof lineSchema>[]) {
     unitCost: line.kind === "mao_de_obra" ? 0 : round2(line.unitCost),
     discountPercent: round2(line.discountPercent),
     vatRate: line.vatRate,
+    internalNote: line.internalNote,
     articleId: line.kind === "peca" ? line.articleId : null,
     position,
   }));

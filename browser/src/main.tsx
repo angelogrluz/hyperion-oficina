@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import { Toaster } from "sonner";
-import { OrderListTable } from "@/components/order-list-table";
+import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/page-header";
@@ -15,8 +15,7 @@ import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
 import { salePrice } from "@/lib/domain";
 import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts } from "@/lib/format";
-import { orderTotal, shellTotals } from "@/lib/job-status";
-import { orderStatusLabel } from "@/lib/labels";
+import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
 import { saveClient, saveVehicle } from "./shims/records";
 import { readSnapshot, resetDemo, type Snapshot } from "./store";
@@ -68,28 +67,27 @@ function Frame({ children }: { children: ReactNode }) {
 function Home() {
   const snap = useSnap();
   if (!snap) return null;
-  const rows = snap.orders
+  const jobs = snap.orders
     .filter((order) => order.status !== "faturada")
     .map((order) => {
       const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
-      const client = snap.clients.find((item) => item.id === order.clientId);
       const lines = snap.lines.filter((line) => line.orderId === order.id);
+      const status = jobPresentation(order.status);
       return {
         id: order.id,
         href: `/ordens/${order.id}`,
-        number: order.number,
-        date: formatMediumDate(new Date(order.dateIn)),
         plate: vehicle?.plate ?? "",
-        vehicle: `${vehicle?.brand ?? ""} ${vehicle?.model ?? ""}`.trim(),
-        client: client?.name ?? "",
-        status: orderStatusLabel(order.status),
+        model: `${vehicle?.brand ?? ""} ${vehicle?.model ?? ""}`.trim(),
+        status: status.label,
+        approved: status.approved,
         total: orderTotal(lines),
+        date: formatMediumDate(new Date(order.dateIn)),
       };
     });
   return (
     <div>
       <SimulationBanner />
-      <div className="mt-3"><OrderListTable rows={rows} /></div>
+      <div className="mt-4"><JobBoard jobs={jobs} /></div>
     </div>
   );
 }
@@ -97,7 +95,15 @@ function Home() {
 function editorCatalog(snap: Snapshot) {
   return {
     labourRate: snap.workshop.labourRate,
-    clients: snap.clients.map((client) => ({ id: client.id, name: client.name, nif: client.nif })),
+    clients: snap.clients.map((client) => ({
+      id: client.id,
+      name: client.name,
+      nif: client.nif,
+      phone: client.phone,
+      email: client.email,
+      address: client.address,
+      notes: client.notes,
+    })),
     vehicles: snap.vehicles.map((vehicle) => ({
       id: vehicle.id,
       clientId: vehicle.clientId,
@@ -119,6 +125,7 @@ function editorCatalog(snap: Snapshot) {
       marginPercent: article.marginPercent,
       vatRate: article.vatRate,
       stockQty: article.stockQty,
+      family: article.family,
     })),
   };
 }
@@ -136,6 +143,7 @@ function linesFor(snap: Snapshot, orderId: string) {
       unitCost: String(line.unitCost).replace(".", ","),
       discount: String(line.discountPercent ?? 0).replace(".", ","),
       vatRate: String(line.vatRate).replace(".", ","),
+      note: "",
       articleId: line.articleId,
       ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? "",
     }));
@@ -156,6 +164,7 @@ function OrderScreen() {
       number={order.number}
       savedStatus={order.status}
       locked={order.status === "faturada"}
+      userName="Rita Almeida"
       labourRate={catalog.labourRate}
       clients={catalog.clients}
       vehicles={catalog.vehicles}
@@ -186,6 +195,7 @@ function NewOrder() {
       mode="order"
       savedStatus="aberta"
       locked={false}
+      userName="Rita Almeida"
       labourRate={catalog.labourRate}
       clients={catalog.clients}
       vehicles={catalog.vehicles}

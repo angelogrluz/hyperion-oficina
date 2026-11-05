@@ -10,7 +10,15 @@ export async function editorCatalog() {
   ]);
   return {
     labourRate: workshop?.labourRate ?? 45,
-    clients: clients.map((client) => ({ id: client.id, name: client.name, nif: client.nif })),
+    clients: clients.map((client) => ({
+      id: client.id,
+      name: client.name,
+      nif: client.nif,
+      phone: client.phone,
+      email: client.email,
+      address: client.address,
+      notes: client.notes,
+    })),
     vehicles: vehicles.map((vehicle) => ({
       id: vehicle.id,
       clientId: vehicle.clientId,
@@ -32,6 +40,7 @@ export async function editorCatalog() {
       marginPercent: article.marginPercent,
       vatRate: article.vatRate,
       stockQty: article.stockQty,
+      family: article.family,
     })),
     today: lisbonParts().iso,
   };
@@ -47,6 +56,7 @@ export function editorLines(
     unitCost: number;
     discountPercent?: number;
     vatRate: number;
+    internalNote?: string;
     articleId: string | null;
     article: { ref: string } | null;
   }>,
@@ -60,6 +70,7 @@ export function editorLines(
     unitCost: String(line.unitCost).replace(".", ","),
     discount: String(line.discountPercent ?? 0).replace(".", ","),
     vatRate: String(line.vatRate).replace(".", ","),
+    note: line.internalNote ?? "",
     articleId: line.articleId,
     ref: line.article?.ref ?? "",
   }));

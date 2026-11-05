@@ -164,6 +164,7 @@ model DocumentLine {
   unitCost        Float        @default(0)
   discountPercent Float        @default(0)
   vatRate         Float        @default(23)
+  internalNote    String       @default("")
   articleId   String?
   article     Article?     @relation(fields: [articleId], references: [id])
   orderId     String?

@@ -86,6 +86,7 @@ export type DocLine = {
   unitCost: number;
   discountPercent?: number;
   vatRate: number;
+  internalNote?: string;
   articleId: string | null;
   orderId: string | null;
   quoteId: string | null;
@@ -467,6 +468,7 @@ type IncomingLine = {
   unitCost: number;
   discountPercent?: number;
   vatRate: number;
+  internalNote?: string;
   articleId: string | null;
 };
 
@@ -481,6 +483,7 @@ function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string 
       unitCost: line.kind === "mao_de_obra" ? 0 : round2(line.unitCost),
       discountPercent: round2(line.discountPercent ?? 0),
       vatRate: line.vatRate,
+      internalNote: line.internalNote ?? "",
       articleId: line.kind === "peca" ? line.articleId : null,
       orderId: parent.orderId ?? null,
       quoteId: parent.quoteId ?? null,

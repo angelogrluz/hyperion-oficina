@@ -7,6 +7,7 @@ import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/
 import { lookupPlate } from "@/app/actions/plates";
 import { saveClient, saveVehicle } from "@/app/actions/records";
 import { controlClass, Field, Select } from "@/components/field";
+import { FolhaView } from "@/components/folha-view";
 import { LineGrid } from "@/components/line-grid";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { includesSearch, lineAmounts, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
 import { formatEUR, formatQty } from "@/lib/format";
-import { FUELS, ORDER_STATUSES, QUOTE_STATUSES } from "@/lib/labels";
+import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
 
 export type EditorArticle = {
   id: string;
@@ -31,9 +32,18 @@ export type EditorArticle = {
   marginPercent: number;
   vatRate: number;
   stockQty: number;
+  family?: string;
 };
 
-export type EditorClient = { id: string; name: string; nif: string };
+export type EditorClient = {
+  id: string;
+  name: string;
+  nif: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+};
 export type EditorVehicle = {
   id: string;
   clientId: string;
@@ -57,6 +67,7 @@ type Line = {
   unitCost: string;
   discount: string;
   vatRate: string;
+  note: string;
   articleId: string | null;
   ref: string;
 };
@@ -78,6 +89,8 @@ export function DocumentEditor({
   initial,
   invoice,
   orderHref,
+  userName = "Admin",
+  printHref,
 }: {
   mode: "order" | "quote";
   documentId?: string;
@@ -90,6 +103,8 @@ export function DocumentEditor({
   articles: EditorArticle[];
   invoice?: { number: string; provider: string } | null;
   orderHref?: string | null;
+  userName?: string;
+  printHref?: string;
   initial: {
     clientId: string;
     vehicleId: string;
@@ -175,6 +190,7 @@ export function DocumentEditor({
         unitCost: "0",
         discount: "0",
         vatRate: "23",
+        note: "",
         articleId: null,
         ref: "",
       },
@@ -194,6 +210,7 @@ export function DocumentEditor({
         unitCost: num(article.costPrice),
         discount: "0",
         vatRate: num(article.vatRate),
+        note: "",
         articleId: article.id,
         ref: article.ref,
       },
@@ -219,6 +236,7 @@ export function DocumentEditor({
         unitCost,
         discountPercent,
         vatRate,
+        internalNote: line.note ?? "",
         articleId: line.articleId,
       };
     });
@@ -307,10 +325,144 @@ export function DocumentEditor({
     });
   }
 
-  const statuses =
-    mode === "order"
-      ? ORDER_STATUSES.filter((item) => item.value !== "faturada" || status === "faturada")
-      : QUOTE_STATUSES.filter((item) => item.value !== "convertido" || status === "convertido");
+  function addDraft(draft: { description: string; ref: string; quantity: string; unitPrice: string }) {
+    touch();
+    const article = articles.find((item) => item.ref.toLowerCase() === draft.ref.trim().toLowerCase());
+    setLines((current) => [
+      ...current,
+      article
+        ? {
+            key: crypto.randomUUID(),
+            kind: "peca" as const,
+            description: draft.description || article.description,
+            quantity: draft.quantity || "1",
+            unitPrice: draft.unitPrice || num(salePrice(article.costPrice, article.marginPercent)),
+            unitCost: num(article.costPrice),
+            discount: "0",
+            vatRate: num(article.vatRate),
+            note: "",
+            articleId: article.id,
+            ref: article.ref,
+          }
+        : {
+            key: crypto.randomUUID(),
+            kind: (draft.ref.trim() ? "peca" : "mao_de_obra") as "peca" | "mao_de_obra",
+            description: draft.description,
+            quantity: draft.quantity || "1",
+            unitPrice: draft.unitPrice || num(labourRate),
+            unitCost: "0",
+            discount: "0",
+            vatRate: "23",
+            note: "",
+            articleId: null,
+            ref: draft.ref,
+          },
+    ]);
+  }
+
+  const selectedClient = clientList.find((item) => item.id === clientId);
+
+  const sheet = mode === "order";
+  if (sheet) {
+    return (
+      <>
+        <FolhaView
+          number={number}
+          userName={userName}
+          printHref={printHref}
+          locked={locked}
+          pending={pending}
+          client={selectedClient}
+          problem={problem}
+          notes={notes}
+          dateIn={dateIn}
+          lines={lines}
+          articles={articles}
+          plate={plate}
+          brand={brand}
+          model={model}
+          version={version}
+          year={year}
+          vin={vin}
+          engine={engine}
+          fuel={fuel}
+          km={km}
+          onProblem={(value) => { touch(); setProblem(value); }}
+          onNotes={(value) => { touch(); setNotes(value); }}
+          onDateIn={(value) => { touch(); setDateIn(value); }}
+          onLine={(key, patch) => updateLine(key, patch)}
+          onRemove={(key) => { touch(); setLines((current) => current.filter((item) => item.key !== key)); }}
+          onAdd={addDraft}
+          onPlate={(value) => { touch(); setPlate(value); }}
+          onBrand={(value) => { touch(); setBrand(value); }}
+          onModel={(value) => { touch(); setModel(value); }}
+          onVersion={(value) => { touch(); setVersion(value); }}
+          onYear={(value) => { touch(); setYear(value); }}
+          onVin={(value) => { touch(); setVin(value); }}
+          onEngine={(value) => { touch(); setEngine(value); }}
+          onFuel={(value) => { touch(); setFuel(value); }}
+          onKm={(value) => { touch(); setKm(value); }}
+          onLookup={() => {
+            startTransition(async () => {
+              const result = await lookupPlate(plate);
+              if (!result.found || !("vehicle" in result) || !result.vehicle) return;
+              const found = result.vehicle;
+              touch();
+              setPlate(found.plate);
+              setBrand(found.brand);
+              setModel(found.model);
+              setVersion(found.version);
+              setYear(String(found.year));
+              setFuel(found.fuel);
+              setEngine(found.engine);
+              setVin(found.vin ?? "");
+            });
+          }}
+          onSave={save}
+          onInvoice={() => setInvoiceOpen(true)}
+          canInvoice={(savedStatus === "concluida" || status === "concluida") && !locked}
+        />
+        <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Emitir fatura simulada</DialogTitle>
+              <DialogDescription>
+                O adaptador ativo é a Moloni em modo de simulação. O documento fica numerado, mas não tem validade fiscal nem é enviado à Autoridade Tributária.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
+              Total a comunicar: {formatEUR(totals.total)} ({formatEUR(totals.base)} + IVA).
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button>
+              <Button
+                type="button"
+                disabled={pending || !documentId}
+                onClick={() => {
+                  if (!documentId) return;
+                  startTransition(async () => {
+                    const result = await issueInvoice(documentId);
+                    if (!result.ok) {
+                      setError(result.error);
+                      setInvoiceOpen(false);
+                      return;
+                    }
+                    toast.success(`Documento simulado ${result.documentNumber}`);
+                    setInvoiceOpen(false);
+                    router.refresh();
+                  });
+                }}
+              >
+                {pending ? "A emitir…" : "Emitir simulação"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+
+  const statuses = QUOTE_STATUSES.filter((item) => item.value !== "convertido" || status === "convertido");
 
   const gridLines = lines.map((line) => ({
     key: line.key,
@@ -334,9 +486,7 @@ export function DocumentEditor({
       <div className="grid min-w-0 gap-4">
         {locked ? (
           <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-            {mode === "order"
-              ? `Ordem faturada${issued ? ` com o documento simulado ${issued}` : ""}. Já não pode ser alterada.`
-              : "Orçamento convertido numa ordem de reparação."}
+            Orçamento convertido numa ordem de reparação.
             {orderHref ? (
               <>
                 {" "}
@@ -376,18 +526,12 @@ export function DocumentEditor({
               Nova viatura
             </Button>
           </div>
-          <Field label={mode === "order" ? "Data de entrada" : "Data"}>
+          <Field label="Data">
             <Input type="date" className="h-10 bg-card" value={dateIn} disabled={locked} onChange={(event) => { touch(); setDateIn(event.target.value); }} />
           </Field>
-          {mode === "order" ? (
-            <Field label="Data de saída" hint="Se ficar vazia, a conclusão usa o dia de hoje.">
-              <Input type="date" className="h-10 bg-card" value={dateOut} disabled={locked} onChange={(event) => { touch(); setDateOut(event.target.value); }} />
-            </Field>
-          ) : (
-            <Field label="Válido até">
-              <Input type="date" className="h-10 bg-card" value={validUntil} disabled={locked} onChange={(event) => { touch(); setValidUntil(event.target.value); }} />
-            </Field>
-          )}
+          <Field label="Válido até">
+            <Input type="date" className="h-10 bg-card" value={validUntil} disabled={locked} onChange={(event) => { touch(); setValidUntil(event.target.value); }} />
+          </Field>
           <Field label="Estado">
             <Select value={status} disabled={locked} onChange={(event) => { touch(); setStatus(event.target.value); }}>
               {statuses.map((item) => (
@@ -397,7 +541,7 @@ export function DocumentEditor({
               ))}
             </Select>
           </Field>
-          <Field label={mode === "order" ? "Problema relatado" : "Trabalho a orçamentar"} className="md:col-span-2">
+          <Field label="Trabalho a orçamentar" className="md:col-span-2">
             <Textarea value={problem} disabled={locked} onChange={(event) => { touch(); setProblem(event.target.value); }} />
           </Field>
           <Field label="Notas internas" className="md:col-span-2">
@@ -553,7 +697,7 @@ export function DocumentEditor({
           </div>
         </section>
         <div className="rounded-xl border border-[#d5ebed] bg-white p-3">
-        <p className="text-sm text-muted-foreground">{number ?? (mode === "order" ? "Nova ordem" : "Novo orçamento")}</p>
+        <p className="text-sm text-muted-foreground">{number ?? "Novo orçamento"}</p>
         <dl className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between"><dt>Base s/ IVA</dt><dd className="tabular-nums">{formatEUR(totals.base)}</dd></div>
           <div className="flex justify-between"><dt>IVA</dt><dd className="tabular-nums">{formatEUR(totals.vat)}</dd></div>
@@ -562,30 +706,12 @@ export function DocumentEditor({
         </dl>
         {error ? <p className="mt-3 text-sm text-destructive" role="alert">{error}</p> : null}
         <div className="mt-4 grid gap-2">
-          {mode === "order" && !locked ? (
-            <div className="grid gap-2">
-              <Button type="button" variant="outline" className="h-10" disabled={pending} onClick={() => save("aberta")}>Por Aprovar</Button>
-              <Button type="button" variant="outline" className="h-10" disabled={pending} onClick={() => save("em_curso")}>Aprovado</Button>
-              <Button type="button" className="h-10" disabled={pending} onClick={() => save("concluida")}>Fechar Processo</Button>
-            </div>
-          ) : null}
           {locked ? null : (
             <Button type="button" variant="secondary" className="h-10" disabled={pending} onClick={() => save()}>
               {pending ? "A guardar…" : "Guardar"}
             </Button>
           )}
-          {mode === "order" && (savedStatus === "concluida" || status === "concluida") && !locked ? (
-            <Button type="button" className="h-10" disabled={pending} onClick={() => setInvoiceOpen(true)}>
-              Faturar
-            </Button>
-          ) : null}
-          {mode === "order" && savedStatus !== "concluida" && savedStatus !== "faturada" ? (
-            <p className="text-xs text-muted-foreground">Mude o estado para Concluída e guarde antes de faturar.</p>
-          ) : null}
-          {mode === "order" && dirty && savedStatus === "concluida" ? (
-            <p className="text-xs text-muted-foreground">Há alterações por guardar. A fatura usa a ordem tal como está gravada.</p>
-          ) : null}
-          {mode === "quote" && documentId && !locked && savedStatus !== "recusado" ? (
+          {documentId && !locked && savedStatus !== "recusado" ? (
             <Button
               type="button"
               variant="secondary"

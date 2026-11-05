@@ -1,0 +1,1 @@
+ALTER TABLE "DocumentLine" ADD COLUMN "internalNote" TEXT NOT NULL DEFAULT '';

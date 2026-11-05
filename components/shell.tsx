@@ -19,6 +19,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import { Logo } from "@/components/logo";
+import { SheetSidebarProvider } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -75,7 +76,7 @@ function ToolButton({
   );
 }
 
-function SidebarBody({ pathname, totals }: { pathname: string; totals: ShellTotals }) {
+function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: ShellTotals; extra?: ReactNode }) {
   const home = pathname === "/";
   return (
     <>
@@ -83,7 +84,7 @@ function SidebarBody({ pathname, totals }: { pathname: string; totals: ShellTota
         <Logo light />
       </div>
       <div className="flex-1 overflow-y-auto px-3 py-3 text-sm">
-        {home ? (
+        {extra ? <div className="px-2">{extra}</div> : home ? (
           <div className="grid gap-1">
             <p className="px-2 py-1 text-xs tracking-wide text-white/80 uppercase">Indicadores das obras</p>
             <Link href="/" className="rounded-lg px-2 py-2 hover:bg-white/15">Ver tudo</Link>
@@ -164,9 +165,11 @@ export function Shell({
   const [query, setQuery] = useState("");
 
   return (
+    <SheetSidebarProvider>
+      {(sidebar) => (
     <div className="min-h-screen bg-white text-[#14343a]">
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-[#0b8f9c] text-white lg:flex">
-        <SidebarBody pathname={pathname} totals={totals} />
+        <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
       <div className="lg:pl-56">
         <header className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-[#d5ebed] bg-white px-2">
@@ -238,12 +241,14 @@ export function Shell({
           <SheetContent side="left" className="w-72 bg-[#0b8f9c] p-0 text-white">
             <SheetTitle className="sr-only">Menu</SheetTitle>
             <div className="flex h-full flex-col">
-              <SidebarBody pathname={pathname} totals={totals} />
+              <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
             </div>
           </SheetContent>
         </Sheet>
         <main className="px-3 py-3 md:px-5 md:py-4">{children}</main>
       </div>
     </div>
+      )}
+    </SheetSidebarProvider>
   );
 }
