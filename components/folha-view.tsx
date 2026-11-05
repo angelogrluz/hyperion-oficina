@@ -197,19 +197,21 @@ export function FolhaView({
     setSidebar(
       <div className="grid gap-2 text-xs">
         <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
-        <select
-          aria-label="Cliente"
-          value={clientId}
-          disabled={locked}
-          onChange={(event) => onClientRef.current(event.target.value)}
-          className="h-8 rounded bg-white px-1 text-xs text-[#14343a]"
-        >
-          <option value="">Escolher cliente…</option>
-          {clients.map((item) => (
-            <option key={item.id} value={item.id}>{item.name}</option>
-          ))}
-        </select>
-        <p className="text-sm font-semibold">{client?.name || "Sem cliente"}</p>
+        {client ? null : (
+          <select
+            aria-label="Cliente"
+            value={clientId}
+            disabled={locked}
+            onChange={(event) => onClientRef.current(event.target.value)}
+            className="h-6 w-full rounded border-0 bg-white px-1 text-[11px] text-[#22272a]"
+          >
+            <option value="">Escolher cliente…</option>
+            {clients.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </select>
+        )}
+        <p className="text-[13px] leading-tight font-semibold">{client?.name || "Sem cliente"}</p>
         <p>{client?.phone || "Sem telefone"}</p>
         <p className="break-all">{client?.email || "Sem e-mail"}</p>
         <p>NIF {client?.nif || "—"}</p>
@@ -229,24 +231,27 @@ export function FolhaView({
   headerActions.current = { onDateIn, setPromiseQuote, setPromiseDelivery };
   useEffect(() => {
     setHeader(
-      <div className="grid items-end gap-2 px-3 py-1.5 text-[11px] text-[#22272a] md:grid-cols-[1.1fr_1fr_1.2fr_1.2fr_auto]">
-        <div>
-          <p className="text-[10px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
-          <p className="text-[13px] leading-tight font-semibold">{number ?? "Nova"}</p>
+      <div className="grid h-11 w-full grid-cols-[minmax(140px,1fr)_minmax(180px,1.3fr)_minmax(220px,1.6fr)_minmax(220px,1.6fr)_auto] items-center gap-4 px-3 text-[11px] text-[#22272a]">
+        <div className="min-w-0 leading-tight">
+          <p className="text-[9px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
+          <p className="truncate text-[13px] font-semibold">{number ?? "Nova"}</p>
         </div>
-        <label className="block">
-          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Dia de chegada</span>
-          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="mt-0.5 h-7 w-full rounded border border-[#e1e2e5] px-1 text-[12px]" />
+        <label className="block min-w-0">
+          <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Dia de chegada</span>
+          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="h-6 w-full border-0 border-b border-[#e1e2e5] bg-transparent px-0 text-[12px] outline-none" />
         </label>
-        <label className="block">
-          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Promessa de orçamento</span>
-          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="mt-0.5 h-7 w-full rounded border border-[#e1e2e5] px-1 text-[12px]" />
+        <label className="block min-w-0">
+          <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Promessa de orçamento</span>
+          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="h-6 w-full border-0 border-b border-[#e1e2e5] bg-transparent px-0 text-[12px] outline-none" />
         </label>
-        <label className="block">
-          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Promessa de entrega</span>
-          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="mt-0.5 h-7 w-full rounded border border-[#e1e2e5] px-1 text-[12px]" />
+        <label className="block min-w-0">
+          <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Promessa de entrega</span>
+          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="h-6 w-full border-0 border-b border-[#e1e2e5] bg-transparent px-0 text-[12px] outline-none" />
         </label>
-        <div className="pb-1 text-right text-[12px] font-semibold">{userName}</div>
+        <div className="flex items-center gap-2 pl-2">
+          <button type="button" disabled title="Indisponível nesta versão" className="size-6 cursor-not-allowed rounded-full border border-[#e1e2e5] text-[10px] text-[#8d939c]">i</button>
+          <span className="text-[12px] font-semibold whitespace-nowrap">{userName}</span>
+        </div>
       </div>,
     );
     return () => setHeader(null);
@@ -263,7 +268,10 @@ export function FolhaView({
     const family = line.kind === "mao_de_obra" ? "Serviço" : article?.family || "Produto";
     const netUnit = unitPrice * (1 - Math.min(100, Math.max(0, discountPercent)) / 100);
     const margin = netUnit > 0 ? round2(((netUnit - unitCost) / netUnit) * 100) : 0;
-    return { line, quantity, unitPrice, unitCost, amounts, family, margin, diff: round2(amounts.base - unitCost * quantity), gross: round2(quantity * unitPrice) };
+    const lucro = round2((unitPrice - unitCost) * quantity);
+    const stockArticle = articles.find((item) => item.id === line.articleId) ?? articles.find((item) => item.ref === line.ref);
+    const stock = stockArticle ? String(stockArticle.stockQty).replace(".", ",") : "—";
+    return { line, quantity, unitPrice, unitCost, amounts, family, margin, lucro, stock };
   });
   const visible = tab === "Consumíveis"
     ? computed.filter((row) => ["Óleo", "Filtros", "Eco Taxa"].includes(row.family))
@@ -273,7 +281,7 @@ export function FolhaView({
   const lucro = round2(computed.reduce((sum, row) => sum + row.amounts.margin, 0));
   const mo = round2(computed.filter((row) => row.line.kind === "mao_de_obra").reduce((sum, row) => sum + row.amounts.base, 0));
   const produtos = round2(computed.filter((row) => row.line.kind === "peca").reduce((sum, row) => sum + row.amounts.base, 0));
-  const desc = round2(computed.reduce((sum, row) => sum + (row.gross - row.amounts.base), 0));
+  const desc = round2(computed.reduce((sum, row) => sum + (row.quantity * row.unitPrice - row.amounts.base), 0));
   const iva = round2(computed.reduce((sum, row) => sum + row.amounts.vat, 0));
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
 
@@ -281,8 +289,8 @@ export function FolhaView({
     <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_248px]">
       <div className="min-w-0 bg-white text-[#22272a]">
         <div className="px-2 pt-2">
-          <p className="text-[13px] font-semibold">Sintomas/Requisitos do Cliente</p>
-          <input disabled placeholder="Adicionar sintoma/requisito do cliente" title="Indisponível nesta versão" className="mt-1 h-8 w-full cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[12px] text-[#8d939c]" />
+          <p className="text-[12px] font-semibold leading-none">Sintomas/Requisitos do Cliente</p>
+          <input disabled placeholder="Adicionar sintoma/requisito do cliente" title="Indisponível nesta versão" className="mt-1 h-6 w-full cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[11px] text-[#8d939c]" />
         </div>
         <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
           <label className="min-w-48 flex-1 text-[11px]">
@@ -333,44 +341,71 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[980px] border-collapse text-[12px] text-[#22272a] [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap [&_td:nth-child(3)]:min-w-[240px] [&_td:nth-child(3)]:whitespace-normal">
+              <table className="w-full min-w-[1080px] table-fixed border-collapse text-[12px] text-[#22272a]">
+                <colgroup>
+                  <col style={{ width: "24px" }} />
+                  <col style={{ width: "14px" }} />
+                  <col style={{ width: "52px" }} />
+                  <col />
+                  <col style={{ width: "72px" }} />
+                  <col style={{ width: "52px" }} />
+                  <col style={{ width: "64px" }} />
+                  <col style={{ width: "48px" }} />
+                  <col style={{ width: "32px" }} />
+                  <col style={{ width: "40px" }} />
+                  <col style={{ width: "56px" }} />
+                  <col style={{ width: "68px" }} />
+                  <col style={{ width: "60px" }} />
+                  <col style={{ width: "24px" }} />
+                  <col style={{ width: "36px" }} />
+                </colgroup>
                 <thead className="text-[11px] text-[#22272a]">
                   <tr>
-                    <th className="bg-[#e1e2e5] px-1 py-1" />
-                    {["Família", "Descrição", "Obs. internas", "Ref.", "Custo", "Qtd.", "Marg.", "PVP Base s/IVA", "Desc. %"].map((label) => (
-                      <th key={label} className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">{label}</th>
-                    ))}
-                    {["PVP Cliente s/IVA", "PVP Cliente c/IVA"].map((label) => (
-                      <th key={label} className="bg-[#b3b8c1] px-1 py-1 text-left font-semibold">{label}</th>
-                    ))}
-                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">A</th>
-                    <th className="bg-[#e1e2e5]" />
+                    <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">O</th>
+                    <th className="bg-[#e1e2e5] px-0.5 py-1" aria-label="Código de barras" />
+                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Família</th>
+                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Descrição</th>
+                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Obs. internas</th>
+                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Ref.</th>
+                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">Lucro s/desc.</th>
+                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">Custo</th>
+                    <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Qtd.</th>
+                    <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Marg.</th>
+                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Base</th>
+                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente s/IVA</th>
+                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente</th>
+                    <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">A</th>
+                    <th className="bg-[#e1e2e5] px-0.5 py-1 text-right font-semibold">Stock</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visible.map((row) => (
                     <tr key={row.line.key} className={row.line.kind === "peca" ? "bg-[#f5f6fa]" : "bg-white"}>
-                      <td className="border-b border-[#eaeaf2] px-1 text-center">
-                        <span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] leading-none text-white">×</span>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center">
+                        <button type="button" disabled={locked} onClick={() => onRemove(row.line.key)} aria-label="Tirar linha" className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] leading-none text-white">×</button>
                       </td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.description} disabled={locked} onChange={(value) => onLine(row.line.key, { description: value })} /></td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
-                      <td className="border-b border-[#eaeaf2] bg-[#f7f8fb] px-1 py-0.5"><Cell value={row.line.unitCost} disabled={locked} align="right" onChange={(value) => onLine(row.line.key, { unitCost: value })} /></td>
-                      <td className="w-10 border-b border-[#eaeaf2] bg-[#f3ebc7] px-0.5 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5 text-right tabular-nums">{row.margin}%</td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.unitPrice} disabled={locked} align="right" onChange={(value) => onLine(row.line.key, { unitPrice: value })} /></td>
-                      <td className="border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.discount} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { discount: value })} /></td>
-                      <td className="border-b border-[#eaeaf2] bg-[#e1e2e5] px-1 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
-                      <td className="border-b border-[#eaeaf2] bg-[#e1e2e5] px-1 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
-                      <td className="border-b border-[#eaeaf2] px-1 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] text-white">●</span></td>
-                      <td className="border-b border-[#eaeaf2] px-1"><button type="button" className="text-[#8d939c]" disabled={locked} onClick={() => onRemove(row.line.key)} aria-label="Tirar linha">×</button></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[8px] tracking-tighter" aria-hidden>||||</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.description} disabled={locked} onChange={(value) => onLine(row.line.key, { description: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5"><Cell value={moneyInput(row.unitCost)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitCost: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#f6b26b] px-0.5 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{pt2(row.margin)}%</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={moneyInput(row.unitPrice)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitPrice: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] text-white">●</span></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td>
                     </tr>
                   ))}
                   <tr className="border-t border-[#eaeaf2]">
-                    <td className="px-1 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#f5a623] text-[12px] leading-none text-white">+</span></td>
-                    <td className="px-1 py-1 text-[11px] text-[#8d939c]">Novo</td>
+                    <td className="px-0.5 text-center">
+                      <button type="button" className="inline-grid size-4 place-items-center rounded-full bg-[#f5a623] text-[12px] leading-none text-white" disabled={locked || (!draft.description.trim() && !draft.ref.trim())} onClick={addFreeLine} aria-label="Adicionar linha">+</button>
+                    </td>
+                    <td />
+                    <td className="px-1 text-[11px] text-[#8d939c]">Novo</td>
                     <td className="px-1 py-1">
                       <Cell
                         value={draft.description}
@@ -392,31 +427,31 @@ export function FolhaView({
                         onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, ref: value.toUpperCase() })); }}
                       />
                     </td>
-                    <td className="bg-[#f7f8fb]" />
-                    <td className="w-10 bg-[#f3ebc7] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
                     <td />
-                    <td className="px-1 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td>
-                    <td colSpan={4} className="px-1 text-right">
-                      <button
-                        type="button"
-                        className="text-[#0b8f9c]"
-                        disabled={locked || !draft.description.trim()}
-                        onClick={addFreeLine}
-                      >
-                        Adicionar linha
-                      </button>
-                    </td>
+                    <td className="bg-[#d7ebf8]" />
+                    <td className="bg-[#f6b26b] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
+                    <td />
+                    <td className="px-0.5 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td>
+                    <td className="bg-[#e1e2e5]" />
+                    <td className="bg-[#e1e2e5]" />
+                    <td />
+                    <td />
                   </tr>
                 </tbody>
                 <tfoot>
                   <tr className="text-[11px] font-semibold text-[#22272a]">
-                    <td className="px-1 py-1" colSpan={9}>s/IVA {formatEUR(base)}</td>
-                    <td className="bg-[#e1e2e5] px-1 py-1">IVA {formatEUR(iva)}</td>
-                    <td className="bg-[#e1e2e5] px-1 py-1 text-right">c/IVA {formatEUR(pvp)}</td>
+                    <td className="px-1 py-1" colSpan={10}>s/IVA {formatEUR(base)}</td>
+                    <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
+                    <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
+                    <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
                     <td colSpan={2} />
                   </tr>
                 </tfoot>
               </table>
+            </div>
+            <div className="flex items-center gap-2 px-2 py-1 text-[#8d939c]">
+              <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed text-[14px]">✎</button>
+              <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed text-[14px]">⤢</button>
             </div>
             {suggestField && matches.length && suggestBox
               ? createPortal(
@@ -454,14 +489,24 @@ export function FolhaView({
           </>
         ) : null}
         {error ? <p className="px-2 pt-2 text-[12px] text-red-700" role="alert">{error}</p> : null}
-        <div className="fixed bottom-0 left-0 z-30 flex h-9 w-full items-center justify-between border-t border-[#eaeaf2] bg-white px-3 text-[12px] lg:left-[210px] lg:w-[calc(100%-210px)]">
+        <div className="fixed bottom-0 left-0 z-30 flex h-10 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[12px] lg:left-[210px] lg:w-[calc(100%-210px)]">
           <label className="flex items-center gap-2 text-[#8d939c]">
             Atribuída a
             <select disabled title="Indisponível nesta versão" className="h-6 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-1 text-[#22272a]">
               <option>Balcão</option>
             </select>
           </label>
-          <span className="text-[#8d939c]">Estados do serviço · {userName}</span>
+          <input type="range" disabled value={40} title="Indisponível nesta versão" className="h-1 w-40 cursor-not-allowed accent-[#00a9fd]" />
+          <span className="text-[#22272a]">Aprovado</span>
+          <span className="ml-auto text-[#8d939c]">Estados do serviço</span>
+        </div>
+        <div className="fixed right-3 bottom-12 z-30 grid w-[220px] gap-1">
+          <div className="grid grid-cols-2 gap-1">
+            <Button type="button" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
+            <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>
+          </div>
+          <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
+          {canInvoice ? <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
         </div>
       </div>
       <aside className="rounded border border-[#eaeaf2] bg-white p-2 text-[11px] text-[#22272a]">
@@ -481,31 +526,25 @@ export function FolhaView({
         <p className="mb-1 text-center text-[11px] text-[#8d939c]">{brand} {model}</p>
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
           <Spec label="N.º chassi" value={vin} onChange={onVin} disabled={locked} wide />
-          <Spec label="Tipo" value={version || model} onChange={onVersion} disabled={locked} />
-          <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
-          <Spec label="1.º registo" value={year ? `01/${year}` : ""} onChange={() => undefined} disabled />
           <Spec label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
           <Spec label="Potência" value={engine} onChange={onEngine} disabled={locked} />
           <Spec label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
-          <Spec label="Cód. motor" value={engine} onChange={onEngine} disabled={locked} />
-          <Spec label="Cód. cor" value={brand.slice(0, 3).toUpperCase()} onChange={() => undefined} disabled />
+          <Spec label="Código Motor" value={engine} onChange={onEngine} disabled={locked} />
+          <Spec label="Óleo do Motor" value="" onChange={() => undefined} disabled />
+          <Spec label="Código Rádio" value="" onChange={() => undefined} disabled />
+          <Spec label="Código de Cor" value={brand.slice(0, 3).toUpperCase()} onChange={() => undefined} disabled />
+          <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
           <Spec label="Marca" value={brand} onChange={onBrand} disabled={locked} />
           <Spec label="Modelo" value={model} onChange={onModel} disabled={locked} />
           <Spec label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
           <Spec label="Kms saída" value={kmOut} onChange={setKmOut} disabled={locked} />
           <Spec label="Próxima IPO" value="" onChange={() => undefined} disabled />
-          <Spec label="Próx. revisão" value="" onChange={() => undefined} disabled />
+          <Spec label="Próxima revisão" value="" onChange={() => undefined} disabled />
         </div>
         <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
           <p className="text-[10px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
           <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-1">
-          <Button type="button" variant="outline" className="h-8 border-[#00a9fd] text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
-          <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>
-        </div>
-        <Button type="button" className="mt-1 h-8 w-full bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
-        {canInvoice ? <Button type="button" className="mt-1 h-8 w-full bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
       </aside>
     </div>
   );
@@ -562,13 +601,17 @@ function Cell({
         onChange(event.target.value);
         onFocus?.(event.currentTarget);
       }}
-      className={`h-6 bg-transparent px-0.5 outline-none ${narrow ? "w-10 text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
+      className={`box-border h-6 max-w-full min-w-0 bg-transparent px-0.5 outline-none ${narrow ? "w-full text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
     />
   );
 }
 
 function moneyInput(value: number) {
-  return String(round2(value)).replace(".", ",");
+  return pt2(value);
+}
+
+function pt2(value: number) {
+  return round2(value).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function Spec({ label, value, onChange, disabled, wide }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean }) {

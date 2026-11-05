@@ -20,7 +20,7 @@ export function JobBoard({ jobs }: { jobs: JobCard[] }) {
       {jobs.map((job) => {
         const [day, time] = splitStamp(job.date);
         return (
-          <Link key={job.id} href={job.href} className="flex h-[286px] w-[196px] flex-col items-center rounded-lg border border-[#e4e6ea] bg-white pt-3 text-center text-[#22272a] shadow-[0_1px_2px_rgba(34,39,42,.06)] hover:border-[#00a9fd]">
+          <Link key={job.id} href={job.href} className="flex h-[286px] w-[196px] flex-col items-center overflow-hidden rounded-2xl border border-[#e4e6ea] bg-white pt-3 text-center text-[#22272a] shadow-[0_6px_16px_rgba(34,39,42,.08)] hover:border-[#00a9fd]">
             <p className="px-2 text-[15px] leading-tight font-bold tracking-tight">{job.plate}</p>
             <p className="mt-0.5 max-w-full truncate px-3 text-[12px] leading-tight text-[#9aa0a8]">{job.model}</p>
             <div className="flex flex-1 items-center justify-center">

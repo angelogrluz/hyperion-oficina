@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Toaster } from "sonner";
 import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
@@ -149,8 +149,22 @@ function linesFor(snap: Snapshot, orderId: string) {
     }));
 }
 
+function syntheticLines() {
+  const row = (key: string, kind: "mao_de_obra" | "peca", description: string, quantity: string, unitPrice: string, unitCost: string, ref: string) => ({
+    key, kind, description, quantity, unitPrice, unitCost, discount: "0", vatRate: "23", note: "", articleId: null, ref,
+  });
+  return [
+    row("v1", "mao_de_obra", "DIAGNÓSTICO DE SUSPENSÃO", "0,50", "45,00", "0,00", ""),
+    row("v2", "peca", "FILTRO DE ÓLEO", "1,00", "8,84", "6,80", "FLT-OL"),
+    row("v3", "mao_de_obra", "SUBSTITUIÇÃO DE PASTILHAS", "0,50", "45,00", "0,00", ""),
+    row("v4", "peca", "PASTILHAS DIANTEIRAS", "1,00", "42,38", "28,50", "PST-FR"),
+    row("v5", "peca", "ÓLEO MOTOR 5W30", "4,00", "8,84", "6,80", "OLEO-5W30"),
+  ];
+}
+
 function OrderScreen() {
   const { id } = useParams();
+  const vitrine = new URLSearchParams(useLocation().search).get("vitrine") === "1" || sessionStorage.getItem("hyperion-vitrine") === "1";
   const snap = useSnap();
   if (!snap || !id) return null;
   const order = snap.orders.find((item) => item.id === id);
@@ -180,7 +194,7 @@ function OrderScreen() {
         problem: order.problem,
         notes: order.notes,
         status: order.status,
-        lines: linesFor(snap, order.id),
+        lines: vitrine ? syntheticLines() : linesFor(snap, order.id),
       }}
     />
   );
