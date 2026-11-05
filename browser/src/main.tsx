@@ -1,6 +1,7 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { usePathname } from "next/navigation";
 import { Toaster } from "sonner";
 import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
@@ -47,6 +48,8 @@ function ResetButton() {
 function Frame({ children }: { children: ReactNode }) {
   const session = readSession();
   const snap = useSnap();
+  const pathname = usePathname();
+  const onSheet = /^\/ordens\/.+/.test(pathname);
   if (!session) return <Navigate to="/entrar" replace />;
   if (!snap) return <p className="p-8 text-sm text-[#4d6d73]">A carregar a oficina…</p>;
   const totals = shellTotals(snap.orders.map((order) => ({
@@ -56,9 +59,11 @@ function Frame({ children }: { children: ReactNode }) {
   })));
   return (
     <Shell user={{ name: session.name, email: session.email }} totals={totals} footerExtra={<ResetButton />}>
-      <p className="mb-3 rounded-lg border border-[#d5ebed] bg-[#e7f7f8] px-3 py-2 text-sm text-[#0b5f68]">
-        Versão de teste no browser. Os dados ficam neste computador.
-      </p>
+      {onSheet ? null : (
+        <p className="mb-2 bg-[#e7f7f8] px-2 py-1 text-[12px] text-[#0b5f68]">
+          Versão de teste no browser. Os dados ficam neste computador.
+        </p>
+      )}
       {children}
     </Shell>
   );

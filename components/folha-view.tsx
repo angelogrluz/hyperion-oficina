@@ -286,7 +286,7 @@ export function FolhaView({
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
 
   return (
-    <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_248px]">
+    <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]">
       <div className="min-w-0 bg-white text-[#22272a]">
         <div className="px-2 pt-2">
           <p className="text-[12px] font-semibold leading-none">Sintomas/Requisitos do Cliente</p>
@@ -341,7 +341,7 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1080px] table-fixed border-collapse text-[12px] text-[#22272a]">
+              <table className="w-full table-fixed border-collapse text-[11px] text-[#22272a]">
                 <colgroup>
                   <col style={{ width: "24px" }} />
                   <col style={{ width: "14px" }} />
@@ -489,7 +489,7 @@ export function FolhaView({
           </>
         ) : null}
         {error ? <p className="px-2 pt-2 text-[12px] text-red-700" role="alert">{error}</p> : null}
-        <div className="fixed bottom-0 left-0 z-30 flex h-10 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[12px] lg:left-[210px] lg:w-[calc(100%-210px)]">
+        <div className="fixed bottom-0 left-0 z-30 flex h-9 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[11px] lg:left-[var(--rail)] lg:w-[calc(100%-var(--rail))]">
           <label className="flex items-center gap-2 text-[#8d939c]">
             Atribuída a
             <select disabled title="Indisponível nesta versão" className="h-6 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-1 text-[#22272a]">
@@ -498,9 +498,9 @@ export function FolhaView({
           </label>
           <input type="range" disabled value={40} title="Indisponível nesta versão" className="h-1 w-40 cursor-not-allowed accent-[#00a9fd]" />
           <span className="text-[#22272a]">Aprovado</span>
-          <span className="ml-auto text-[#8d939c]">Estados do serviço</span>
+          <span className="ml-auto truncate text-[#8d939c]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
-        <div className="fixed right-3 bottom-12 z-30 grid w-[220px] gap-1">
+        <div className="fixed right-2 bottom-11 z-30 grid w-[var(--sheet)] gap-1">
           <div className="grid grid-cols-2 gap-1">
             <Button type="button" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
             <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>

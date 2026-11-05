@@ -178,11 +178,11 @@ export function Shell({
   return (
     <SheetSidebarProvider>
       {(sidebar, header) => (
-    <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[#22272a]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[210px] flex-col bg-[#22272a] text-white lg:flex">
+    <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[#22272a] [--rail:clamp(150px,11.7vw,230px)]">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[var(--rail)] flex-col bg-[#22272a] text-white lg:flex">
         <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
-      <div className="lg:pl-[210px]">
+      <div className="lg:pl-[var(--rail)]">
         {header ? (
           <header className="sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">{header}</header>
         ) : (
