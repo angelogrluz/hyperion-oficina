@@ -58,6 +58,7 @@ type LineLike = {
   quantity: number;
   unitPrice: number;
   vatRate: number;
+  discountPercent?: number;
   article: { ref: string } | null;
 };
 
@@ -68,6 +69,7 @@ function toLines(lines: LineLike[]): PrintableLine[] {
       unitPrice: line.unitPrice,
       unitCost: 0,
       vatRate: line.vatRate,
+      discountPercent: line.discountPercent,
     });
     return {
       kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
@@ -89,6 +91,7 @@ function totals(lines: LineLike[]) {
       unitPrice: line.unitPrice,
       unitCost: 0,
       vatRate: line.vatRate,
+      discountPercent: line.discountPercent,
     })),
   );
   return { base: summed.base, vat: summed.vat, total: summed.total };

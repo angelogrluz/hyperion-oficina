@@ -59,6 +59,10 @@ test("totais de linha com IVA por linha", () => {
   ]);
   assert.equal(sum.base, 55);
   assert.equal(sum.margin, 49);
+  const discounted = lineAmounts({ quantity: 2, unitPrice: 10, unitCost: 6, vatRate: 23, discountPercent: 10 });
+  assert.equal(discounted.base, 18);
+  assert.equal(discounted.vat, 4.14);
+  assert.equal(discounted.total, 22.14);
 });
 
 test("a linha nova herda o cabeçalho e nunca a quantidade", () => {

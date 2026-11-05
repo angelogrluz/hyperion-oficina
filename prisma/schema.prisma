@@ -160,9 +160,10 @@ model DocumentLine {
   kind        String
   description String
   quantity    Float
-  unitPrice   Float
-  unitCost    Float        @default(0)
-  vatRate     Float        @default(23)
+  unitPrice       Float
+  unitCost        Float        @default(0)
+  discountPercent Float        @default(0)
+  vatRate         Float        @default(23)
   articleId   String?
   article     Article?     @relation(fields: [articleId], references: [id])
   orderId     String?

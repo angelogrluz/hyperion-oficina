@@ -84,6 +84,7 @@ export type DocLine = {
   quantity: number;
   unitPrice: number;
   unitCost: number;
+  discountPercent?: number;
   vatRate: number;
   articleId: string | null;
   orderId: string | null;
@@ -464,6 +465,7 @@ type IncomingLine = {
   quantity: number;
   unitPrice: number;
   unitCost: number;
+  discountPercent?: number;
   vatRate: number;
   articleId: string | null;
 };
@@ -477,6 +479,7 @@ function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string 
       quantity: line.quantity,
       unitPrice: round2(line.unitPrice),
       unitCost: line.kind === "mao_de_obra" ? 0 : round2(line.unitCost),
+      discountPercent: round2(line.discountPercent ?? 0),
       vatRate: line.vatRate,
       articleId: line.kind === "peca" ? line.articleId : null,
       orderId: parent.orderId ?? null,
@@ -648,6 +651,7 @@ export async function convertQuoteRecord(id: string) {
           quantity: line.quantity,
           unitPrice: line.unitPrice,
           unitCost: line.unitCost,
+          discountPercent: line.discountPercent ?? 0,
           vatRate: line.vatRate,
           articleId: line.articleId,
         })),

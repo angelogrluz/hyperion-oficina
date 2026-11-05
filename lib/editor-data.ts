@@ -17,7 +17,12 @@ export async function editorCatalog() {
       plate: vehicle.plate,
       brand: vehicle.brand,
       model: vehicle.model,
+      version: vehicle.version,
+      year: vehicle.year,
+      vin: vehicle.vin,
+      engine: vehicle.engine,
       km: vehicle.km,
+      fuel: vehicle.fuel,
     })),
     articles: articles.map((article) => ({
       id: article.id,
@@ -40,6 +45,7 @@ export function editorLines(
     quantity: number;
     unitPrice: number;
     unitCost: number;
+    discountPercent?: number;
     vatRate: number;
     articleId: string | null;
     article: { ref: string } | null;
@@ -52,6 +58,7 @@ export function editorLines(
     quantity: String(line.quantity).replace(".", ","),
     unitPrice: String(line.unitPrice).replace(".", ","),
     unitCost: String(line.unitCost).replace(".", ","),
+    discount: String(line.discountPercent ?? 0).replace(".", ","),
     vatRate: String(line.vatRate).replace(".", ","),
     articleId: line.articleId,
     ref: line.article?.ref ?? "",

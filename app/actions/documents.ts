@@ -22,6 +22,7 @@ const lineSchema = z.object({
   quantity: z.number().positive("A quantidade tem de ser superior a zero."),
   unitPrice: z.number().min(0, "Preço inválido."),
   unitCost: z.number().min(0, "Custo inválido."),
+  discountPercent: z.number().min(0).max(100).default(0),
   vatRate: z.number().min(0).max(100),
   articleId: z.string().nullable(),
 });
@@ -63,6 +64,7 @@ function lineCreate(lines: z.infer<typeof lineSchema>[]) {
     quantity: line.quantity,
     unitPrice: round2(line.unitPrice),
     unitCost: line.kind === "mao_de_obra" ? 0 : round2(line.unitCost),
+    discountPercent: round2(line.discountPercent),
     vatRate: line.vatRate,
     articleId: line.kind === "peca" ? line.articleId : null,
     position,
@@ -217,6 +219,7 @@ export async function convertQuote(id: string): Promise<Result<{ orderId: string
               quantity: line.quantity,
               unitPrice: line.unitPrice,
               unitCost: line.unitCost,
+              discountPercent: line.discountPercent,
               vatRate: line.vatRate,
               articleId: line.articleId,
               position: line.position,

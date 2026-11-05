@@ -33,6 +33,7 @@ type OrderLike = {
     quantity: number;
     unitPrice: number;
     vatRate: number;
+    discountPercent?: number;
     article: { ref: string } | null;
   }>;
 };
@@ -51,6 +52,7 @@ export function buildInvoiceDraft(input: {
       unitPrice: line.unitPrice,
       unitCost: 0,
       vatRate: line.vatRate,
+      discountPercent: line.discountPercent ?? 0,
     });
     return {
       kind: line.kind === "mao_de_obra" ? ("mao_de_obra" as const) : ("peca" as const),
@@ -70,6 +72,7 @@ export function buildInvoiceDraft(input: {
       unitPrice: line.unitPrice,
       unitCost: 0,
       vatRate: line.vatRate,
+      discountPercent: line.discountPercent ?? 0,
     })),
   );
 

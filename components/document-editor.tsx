@@ -7,6 +7,7 @@ import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/
 import { lookupPlate } from "@/app/actions/plates";
 import { saveClient, saveVehicle } from "@/app/actions/records";
 import { controlClass, Field, Select } from "@/components/field";
+import { LineGrid } from "@/components/line-grid";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -39,7 +40,12 @@ export type EditorVehicle = {
   plate: string;
   brand: string;
   model: string;
+  version: string;
+  year: number;
+  vin: string;
+  engine: string;
   km: number;
+  fuel: string;
 };
 
 type Line = {
@@ -49,6 +55,7 @@ type Line = {
   quantity: string;
   unitPrice: string;
   unitCost: string;
+  discount: string;
   vatRate: string;
   articleId: string | null;
   ref: string;
@@ -101,6 +108,16 @@ export function DocumentEditor({
   const [vehicleList, setVehicleList] = useState(vehicles);
   const [clientId, setClientId] = useState(initial.clientId);
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
+  const startingVehicle = vehicles.find((vehicle) => vehicle.id === initial.vehicleId);
+  const [plate, setPlate] = useState(startingVehicle?.plate ?? "");
+  const [brand, setBrand] = useState(startingVehicle?.brand ?? "");
+  const [model, setModel] = useState(startingVehicle?.model ?? "");
+  const [version, setVersion] = useState(startingVehicle?.version ?? "");
+  const [year, setYear] = useState(startingVehicle ? String(startingVehicle.year) : "");
+  const [vin, setVin] = useState(startingVehicle?.vin ?? "");
+  const [engine, setEngine] = useState(startingVehicle?.engine ?? "");
+  const [fuel, setFuel] = useState(startingVehicle?.fuel || "Gasolina");
+  const [plateNote, setPlateNote] = useState<string | null>(null);
   const [dateIn, setDateIn] = useState(initial.dateIn);
   const [dateOut, setDateOut] = useState(initial.dateOut);
   const [validUntil, setValidUntil] = useState(initial.validUntil);
@@ -131,6 +148,7 @@ export function DocumentEditor({
       quantity: parseDecimal(line.quantity) ?? 0,
       unitPrice: parseDecimal(line.unitPrice) ?? 0,
       unitCost: parseDecimal(line.unitCost) ?? 0,
+      discountPercent: parseDecimal(line.discount) ?? 0,
       vatRate: parseDecimal(line.vatRate) ?? 0,
     })),
   );
@@ -155,6 +173,7 @@ export function DocumentEditor({
         quantity: "1",
         unitPrice: num(labourRate),
         unitCost: "0",
+        discount: "0",
         vatRate: "23",
         articleId: null,
         ref: "",
@@ -173,6 +192,7 @@ export function DocumentEditor({
         quantity: "1",
         unitPrice: num(salePrice(article.costPrice, article.marginPercent)),
         unitCost: num(article.costPrice),
+        discount: "0",
         vatRate: num(article.vatRate),
         articleId: article.id,
         ref: article.ref,
@@ -186,8 +206,9 @@ export function DocumentEditor({
       const quantity = parseDecimal(line.quantity);
       const unitPrice = parseDecimal(line.unitPrice);
       const unitCost = parseDecimal(line.unitCost);
+      const discountPercent = parseDecimal(line.discount) ?? 0;
       const vatRate = parseDecimal(line.vatRate);
-      if (!line.description.trim() || quantity === null || unitPrice === null || unitCost === null || vatRate === null) {
+      if (!line.description.trim() || quantity === null || unitPrice === null || unitCost === null || vatRate === null || discountPercent < 0 || discountPercent > 100) {
         return null;
       }
       return {
@@ -196,10 +217,34 @@ export function DocumentEditor({
         quantity,
         unitPrice,
         unitCost,
+        discountPercent,
         vatRate,
         articleId: line.articleId,
       };
     });
+  }
+
+  function fillVehicle(vehicle: EditorVehicle | undefined) {
+    if (!vehicle) {
+      setPlate("");
+      setBrand("");
+      setModel("");
+      setVersion("");
+      setYear("");
+      setVin("");
+      setEngine("");
+      setFuel("Gasolina");
+      return;
+    }
+    setPlate(vehicle.plate);
+    setBrand(vehicle.brand);
+    setModel(vehicle.model);
+    setVersion(vehicle.version);
+    setYear(String(vehicle.year));
+    setVin(vehicle.vin);
+    setEngine(vehicle.engine);
+    setFuel(vehicle.fuel || "Gasolina");
+    setKm(String(vehicle.km));
   }
 
   function save(statusOverride?: string) {
@@ -225,6 +270,24 @@ export function DocumentEditor({
       lines: parsedLines,
     };
     startTransition(async () => {
+      if (vehicleId) {
+        const formData = new FormData();
+        formData.set("clientId", clientId);
+        formData.set("plate", plate);
+        formData.set("brand", brand);
+        formData.set("model", model);
+        formData.set("version", version);
+        formData.set("year", year);
+        formData.set("vin", vin);
+        formData.set("engine", engine);
+        formData.set("km", String(kmValue));
+        formData.set("fuel", fuel);
+        const savedVehicle = await saveVehicle(vehicleId, formData);
+        if (!savedVehicle.ok) {
+          setError(savedVehicle.error);
+          return;
+        }
+      }
       const result =
         mode === "order"
           ? await saveOrder(documentId ?? null, { ...body, dateIn, dateOut })
@@ -249,9 +312,26 @@ export function DocumentEditor({
       ? ORDER_STATUSES.filter((item) => item.value !== "faturada" || status === "faturada")
       : QUOTE_STATUSES.filter((item) => item.value !== "convertido" || status === "convertido");
 
+  const gridLines = lines.map((line) => ({
+    key: line.key,
+    ref: line.ref,
+    description: line.description,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    discount: line.discount,
+    vatRate: line.vatRate,
+    total: lineAmounts({
+      quantity: parseDecimal(line.quantity) ?? 0,
+      unitPrice: parseDecimal(line.unitPrice) ?? 0,
+      unitCost: parseDecimal(line.unitCost) ?? 0,
+      discountPercent: parseDecimal(line.discount) ?? 0,
+      vatRate: parseDecimal(line.vatRate) ?? 0,
+    }).total,
+  }));
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-      <div className="grid gap-4">
+    <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="grid min-w-0 gap-4">
         {locked ? (
           <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
             {mode === "order"
@@ -277,32 +357,13 @@ export function DocumentEditor({
                 touch();
                 setClientId(event.target.value);
                 setVehicleId("");
+                fillVehicle(undefined);
               }}
             >
               <option value="">Escolher…</option>
               {clientList.map((client) => (
                 <option key={client.id} value={client.id}>
                   {client.name} · {client.nif}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Viatura">
-            <Select
-              value={vehicleId}
-              disabled={locked || !clientId}
-              onChange={(event) => {
-                touch();
-                const next = event.target.value;
-                setVehicleId(next);
-                const vehicle = ownedVehicles.find((item) => item.id === next);
-                if (vehicle) setKm(String(vehicle.km));
-              }}
-            >
-              <option value="">{clientId ? "Escolher…" : "Escolha primeiro o cliente"}</option>
-              {ownedVehicles.map((vehicle) => (
-                <option key={vehicle.id} value={vehicle.id}>
-                  {vehicle.plate} · {vehicle.brand} {vehicle.model}
                 </option>
               ))}
             </Select>
@@ -327,9 +388,6 @@ export function DocumentEditor({
               <Input type="date" className="h-10 bg-card" value={validUntil} disabled={locked} onChange={(event) => { touch(); setValidUntil(event.target.value); }} />
             </Field>
           )}
-          <Field label="Quilómetros">
-            <Input className="h-10 bg-card" inputMode="numeric" value={km} disabled={locked} onChange={(event) => { touch(); setKm(event.target.value); }} />
-          </Field>
           <Field label="Estado">
             <Select value={status} disabled={locked} onChange={(event) => { touch(); setStatus(event.target.value); }}>
               {statuses.map((item) => (
@@ -356,87 +414,35 @@ export function DocumentEditor({
               </Button>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
-              <thead>
-                <tr className="text-left text-xs tracking-wide text-muted-foreground uppercase">
-                  <th className="px-3 py-2 font-medium">Descrição</th>
-                  <th className="px-3 py-2 font-medium">Qtd</th>
-                  <th className="px-3 py-2 font-medium">Preço s/ IVA</th>
-                  <th className="px-3 py-2 font-medium">IVA</th>
-                  <th className="px-3 py-2 text-right font-medium">Total</th>
-                  <th className="px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {lines.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-muted-foreground">
-                      Ainda sem linhas. Acrescente mão de obra ou uma peça.
-                    </td>
-                  </tr>
-                ) : (
-                  lines.map((line) => {
-                    const amounts = lineAmounts({
-                      quantity: parseDecimal(line.quantity) ?? 0,
-                      unitPrice: parseDecimal(line.unitPrice) ?? 0,
-                      unitCost: parseDecimal(line.unitCost) ?? 0,
-                      vatRate: parseDecimal(line.vatRate) ?? 0,
-                    });
-                    return (
-                      <tr key={line.key} className="border-t">
-                        <td className="px-3 py-2">
-                          <p className="mb-1 text-xs text-muted-foreground">
-                            {line.kind === "mao_de_obra" ? "Mão de obra" : line.ref || "Peça"}
-                          </p>
-                          <Input
-                            value={line.description}
-                            disabled={locked}
-                            className="h-10 bg-background"
-                            onChange={(event) => updateLine(line.key, { description: event.target.value })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            value={line.quantity}
-                            disabled={locked}
-                            inputMode="decimal"
-                            className="h-10 w-20 bg-background"
-                            aria-label={line.kind === "mao_de_obra" ? "Horas" : "Quantidade"}
-                            onChange={(event) => updateLine(line.key, { quantity: event.target.value })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            value={line.unitPrice}
-                            disabled={locked}
-                            inputMode="decimal"
-                            className="h-10 w-28 bg-background"
-                            onChange={(event) => updateLine(line.key, { unitPrice: event.target.value })}
-                          />
-                        </td>
-                        <td className="px-3 py-2">
-                          <Input
-                            value={line.vatRate}
-                            disabled={locked}
-                            inputMode="decimal"
-                            className="h-10 w-16 bg-background"
-                            onChange={(event) => updateLine(line.key, { vatRate: event.target.value })}
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-right tabular-nums">{formatEUR(amounts.total)}</td>
-                        <td className="px-3 py-2 text-right">
-                          <Button type="button" variant="ghost" disabled={locked} onClick={() => { touch(); setLines((current) => current.filter((item) => item.key !== line.key)); }}>
-                            Tirar
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+          <LineGrid
+            lines={gridLines}
+            locked={locked}
+            onRemove={(key) => {
+              touch();
+              setLines((current) => current.filter((item) => item.key !== key));
+            }}
+            onChange={(key, patch) => {
+              if (patch.ref !== undefined) {
+                const article = articles.find((item) => item.ref.toLowerCase() === patch.ref!.trim().toLowerCase());
+                if (article) {
+                  updateLine(key, {
+                    ref: article.ref,
+                    description: article.description,
+                    unitPrice: num(salePrice(article.costPrice, article.marginPercent)),
+                    unitCost: num(article.costPrice),
+                    vatRate: num(article.vatRate),
+                    articleId: article.id,
+                    kind: "peca",
+                  });
+                  return;
+                }
+                updateLine(key, { ref: patch.ref, articleId: null, kind: patch.ref.trim() ? "peca" : "mao_de_obra" });
+              }
+              const rest = { ...patch };
+              delete rest.ref;
+              if (Object.keys(rest).length > 0) updateLine(key, rest);
+            }}
+          />
           <div className="border-t px-4 py-3">
             <Field label="Adicionar peça do stock">
               <Input
@@ -473,7 +479,80 @@ export function DocumentEditor({
         </div>
       </div>
 
-      <aside className="h-fit rounded-xl bg-card p-4 ring-1 ring-foreground/10 lg:sticky lg:top-6">
+      <aside className="grid gap-3 xl:sticky xl:top-16">
+        <section className="rounded-xl border border-[#d5ebed] bg-white p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-[#0b8f9c]">Viatura</h2>
+            <Button type="button" variant="outline" className="h-7 px-2 text-xs" disabled={locked || !clientId} onClick={() => setVehicleOpen(true)}>Nova</Button>
+          </div>
+          <Field label="Viatura do cliente">
+            <Select
+              value={vehicleId}
+              disabled={locked || !clientId}
+              onChange={(event) => {
+                touch();
+                const next = event.target.value;
+                setVehicleId(next);
+                fillVehicle(vehicleList.find((item) => item.id === next));
+                setPlateNote(null);
+              }}
+            >
+              <option value="">{clientId ? "Escolher…" : "Escolha primeiro o cliente"}</option>
+              {ownedVehicles.map((vehicle) => (
+                <option key={vehicle.id} value={vehicle.id}>{vehicle.plate} · {vehicle.brand} {vehicle.model}</option>
+              ))}
+            </Select>
+          </Field>
+          <div className="mt-2 flex items-end gap-2">
+            <Field label="Matrícula" className="flex-1">
+              <Input value={plate} disabled={locked} onChange={(event) => { touch(); setPlate(event.target.value.toUpperCase()); }} className="h-8 font-mono uppercase" />
+            </Field>
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-8"
+              disabled={locked || pending}
+              onClick={() => {
+                startTransition(async () => {
+                  const result = await lookupPlate(plate);
+                  if (!result.found || !("vehicle" in result) || !result.vehicle) {
+                    setPlateNote(result.message);
+                    return;
+                  }
+                  const found = result.vehicle;
+                  touch();
+                  setPlate(found.plate);
+                  setBrand(found.brand);
+                  setModel(found.model);
+                  setVersion(found.version);
+                  setYear(String(found.year));
+                  setFuel(found.fuel);
+                  setEngine(found.engine);
+                  setVin(found.vin ?? "");
+                  setPlateNote(result.message);
+                });
+              }}
+            >
+              Procurar
+            </Button>
+          </div>
+          {plateNote ? <p className="mt-1 text-xs text-[#0b5f68]">{plateNote}</p> : <p className="mt-1 text-xs text-[#4d6d73]">Consulta simulada.</p>}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <Field label="Marca"><Input value={brand} disabled={locked} onChange={(event) => { touch(); setBrand(event.target.value); }} className="h-8" /></Field>
+            <Field label="Modelo"><Input value={model} disabled={locked} onChange={(event) => { touch(); setModel(event.target.value); }} className="h-8" /></Field>
+            <Field label="Versão" className="col-span-2"><Input value={version} disabled={locked} onChange={(event) => { touch(); setVersion(event.target.value); }} className="h-8" /></Field>
+            <Field label="Ano"><Input value={year} disabled={locked} inputMode="numeric" onChange={(event) => { touch(); setYear(event.target.value); }} className="h-8" /></Field>
+            <Field label="Combustível">
+              <Select value={fuel} disabled={locked} onChange={(event) => { touch(); setFuel(event.target.value); }}>
+                {FUELS.map((item) => <option key={item}>{item}</option>)}
+              </Select>
+            </Field>
+            <Field label="Motor" className="col-span-2"><Input value={engine} disabled={locked} onChange={(event) => { touch(); setEngine(event.target.value); }} className="h-8" /></Field>
+            <Field label="N.º de chassi / VIN" className="col-span-2"><Input value={vin} disabled={locked} onChange={(event) => { touch(); setVin(event.target.value.toUpperCase()); }} className="h-8 font-mono uppercase" /></Field>
+            <Field label="Quilómetros" className="col-span-2"><Input value={km} disabled={locked} inputMode="numeric" onChange={(event) => { touch(); setKm(event.target.value); }} className="h-8" /></Field>
+          </div>
+        </section>
+        <div className="rounded-xl border border-[#d5ebed] bg-white p-3">
         <p className="text-sm text-muted-foreground">{number ?? (mode === "order" ? "Nova ordem" : "Novo orçamento")}</p>
         <dl className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between"><dt>Base s/ IVA</dt><dd className="tabular-nums">{formatEUR(totals.base)}</dd></div>
@@ -528,6 +607,7 @@ export function DocumentEditor({
             </Button>
           ) : null}
         </div>
+        </div>
       </aside>
 
       <QuickClient
@@ -547,7 +627,7 @@ export function DocumentEditor({
         onCreated={(vehicle) => {
           setVehicleList((current) => [...current, vehicle]);
           setVehicleId(vehicle.id);
-          setKm(String(vehicle.km));
+          fillVehicle(vehicle);
           touch();
         }}
       />
@@ -684,7 +764,19 @@ function QuickVehicle({
                 setError(result.error);
                 return;
               }
-              onCreated(result);
+              onCreated({
+                id: result.id,
+                clientId,
+                plate: result.plate,
+                brand: result.brand,
+                model: result.model,
+                version,
+                year: Number(year) || new Date().getFullYear(),
+                vin,
+                engine,
+                km: result.km,
+                fuel,
+              });
               setError(null);
               onOpenChange(false);
             });

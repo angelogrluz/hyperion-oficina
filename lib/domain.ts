@@ -123,6 +123,7 @@ export type MoneyLine = {
   unitPrice: number;
   unitCost: number;
   vatRate: number;
+  discountPercent?: number;
 };
 
 export type LineTotals = {
@@ -133,13 +134,15 @@ export type LineTotals = {
 };
 
 export function lineAmounts(line: MoneyLine): LineTotals {
-  const base = round2(line.quantity * line.unitPrice);
+  const discount = Math.min(100, Math.max(0, line.discountPercent ?? 0));
+  const netUnit = line.unitPrice * (1 - discount / 100);
+  const base = round2(line.quantity * netUnit);
   const vat = round2(base * (line.vatRate / 100));
   return {
     base,
     vat,
     total: round2(base + vat),
-    margin: round2((line.unitPrice - line.unitCost) * line.quantity),
+    margin: round2((netUnit - line.unitCost) * line.quantity),
   };
 }
 
