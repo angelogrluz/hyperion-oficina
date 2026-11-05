@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hyperion Car Lab</title>
+    <script>
+      (function () {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect.indexOf(location.origin) === 0) {
+          history.replaceState(null, "", redirect);
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/hyperion-oficina/assets/index-BfKTO3--.js"></script>
+    <link rel="stylesheet" crossorigin href="/hyperion-oficina/assets/index-Dw5tAQLU.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
