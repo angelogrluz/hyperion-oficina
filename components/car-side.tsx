@@ -8,7 +8,7 @@ export function carColor(seed: string) {
 
 export function CarSide({ color }: { color: string }) {
   return (
-    <svg viewBox="0 0 180 64" className="h-14 w-full" aria-hidden>
+    <svg viewBox="0 0 180 64" className="mx-auto h-11 w-[86%]" aria-hidden>
       <ellipse cx="90" cy="56" rx="62" ry="4" fill="#d5ebed" />
       <path
         fill={color}

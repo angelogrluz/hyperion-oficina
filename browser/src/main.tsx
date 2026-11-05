@@ -14,7 +14,7 @@ import { TableShell, Td, Th } from "@/components/table-shell";
 import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
 import { salePrice } from "@/lib/domain";
-import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts } from "@/lib/format";
+import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } from "@/lib/format";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
 import { saveClient, saveVehicle } from "./shims/records";
@@ -81,7 +81,7 @@ function Home() {
         status: status.label,
         approved: status.approved,
         total: orderTotal(lines),
-        date: formatMediumDate(new Date(order.dateIn)),
+        date: `${formatMediumDate(new Date(order.dateIn))} ${lisbonTime(new Date(order.dateIn))}`,
       };
     });
   return (

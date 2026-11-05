@@ -53,7 +53,7 @@ function ToolButton({
   onClick?: () => void;
 }) {
   const className =
-    "grid size-10 place-items-center rounded-lg text-[#0b5f68] hover:bg-[#e7f7f8] focus-visible:ring-3 focus-visible:ring-[#0b8f9c]/40";
+    "grid size-8 place-items-center rounded text-[#3c4450] hover:bg-[#f3f5f8]";
   const body = (
     <>
       {children}
@@ -80,18 +80,19 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
   const home = pathname === "/";
   return (
     <>
-      <div className="border-b border-white/25 px-4 py-4">
+      <div className="px-3 py-3">
         <Logo light />
       </div>
-      <div className="flex-1 overflow-y-auto px-3 py-3 text-sm">
-        {extra ? <div className="px-2">{extra}</div> : home ? (
-          <div className="grid gap-1">
-            <p className="px-2 py-1 text-xs tracking-wide text-white/80 uppercase">Indicadores das obras</p>
-            <Link href="/" className="rounded-lg px-2 py-2 hover:bg-white/15">Ver tudo</Link>
-            <Link href="/?estado=aberta" className="rounded-lg px-2 py-2 hover:bg-white/15">Por aprovar</Link>
-            <Link href="/?estado=em_curso" className="rounded-lg px-2 py-2 hover:bg-white/15">Aprovado</Link>
-            <Link href="/?estado=hoje" className="rounded-lg px-2 py-2 hover:bg-white/15">Para hoje</Link>
-            <Link href="/?estado=concluida" className="rounded-lg px-2 py-2 hover:bg-white/15">Processo fechado</Link>
+      <div className="flex-1 overflow-y-auto px-2 py-1 text-[12px]">
+        {extra ? <div className="px-1">{extra}</div> : home ? (
+          <div className="grid gap-0.5">
+            <p className="px-2 py-1 text-[10px] tracking-wide text-white/50 uppercase">Indicadores das obras</p>
+            <Link href="/" className="rounded px-2 py-1 hover:bg-white/10">Ver tudo</Link>
+            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/50 uppercase">Estados do serviço</p>
+            <Link href="/?estado=aberta" className="rounded px-2 py-1 hover:bg-white/10">Por aprovar</Link>
+            <Link href="/?estado=em_curso" className="rounded px-2 py-1 hover:bg-white/10">Aprovado</Link>
+            <Link href="/?estado=hoje" className="rounded px-2 py-1 hover:bg-white/10">Para hoje</Link>
+            <Link href="/?estado=concluida" className="rounded px-2 py-1 hover:bg-white/10">Processo fechado</Link>
           </div>
         ) : (
           <div className="px-2 py-2">
@@ -107,23 +108,23 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
           </div>
         )}
       </div>
-      <div className="grid gap-2 border-t border-white/25 p-3">
-        <TotalBox label="Por aprovar" value={totals.porAprovar} />
-        <div className="grid grid-cols-2 gap-2">
-          <TotalBox label="Aprovado" value={totals.aprovado} compact />
-          <TotalBox label="Para hoje" value={totals.paraHoje} compact />
+      <div className="border-t border-white/10 text-[11px]">
+        <div className="bg-[#3a4146] px-2 py-1.5 text-white">
+          <p className="text-[10px] uppercase">Por aprovar</p>
+          <p className="text-sm font-semibold tabular-nums">{formatEUR(totals.porAprovar)}</p>
+        </div>
+        <div className="grid grid-cols-2">
+          <div className="bg-[#00a9fd] px-2 py-1.5 text-white">
+            <p className="text-[10px]">Aprovado</p>
+            <p className="font-semibold tabular-nums">{formatEUR(totals.aprovado)}</p>
+          </div>
+          <div className="bg-[#0096e0] px-2 py-1.5 text-white">
+            <p className="text-[10px]">Para hoje</p>
+            <p className="font-semibold tabular-nums">{formatEUR(totals.paraHoje)}</p>
+          </div>
         </div>
       </div>
     </>
-  );
-}
-
-function TotalBox({ label, value, compact }: { label: string; value: number; compact?: boolean }) {
-  return (
-    <div className="rounded-lg bg-white px-2 py-2 text-[#0b5f68]">
-      <p className="text-[10px] tracking-wide uppercase">{label}</p>
-      <p className={cn("font-semibold tabular-nums", compact ? "text-sm" : "text-base")}>{formatEUR(value)}</p>
-    </div>
   );
 }
 
@@ -167,22 +168,22 @@ export function Shell({
   return (
     <SheetSidebarProvider>
       {(sidebar) => (
-    <div className="min-h-screen bg-white text-[#14343a]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-[#0b8f9c] text-white lg:flex">
+    <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[#22272a]">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[210px] flex-col bg-[#22272a] text-white lg:flex">
         <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
-      <div className="lg:pl-56">
-        <header className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-[#d5ebed] bg-white px-2">
+      <div className="lg:pl-[210px]">
+        <header className="sticky top-0 z-40 flex h-11 items-center gap-0.5 border-b border-[#eaeaf2] bg-white px-1">
           <button type="button" className="grid size-10 place-items-center rounded-lg text-[#0b8f9c] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu />
           </button>
-          <ToolButton href="/" label="Obras em Curso"><ClipboardList className="size-5" /></ToolButton>
-          <ToolButton href="/orcamentos" label="Obras de Orçamentos e Encomendas"><FileStack className="size-5" /></ToolButton>
-          <ToolButton href="/clientes" label="Gestão de Cliente"><Users className="size-5" /></ToolButton>
+          <ToolButton href="/" label="Obras em Curso"><ClipboardList className="size-4" /></ToolButton>
+          <ToolButton href="/orcamentos" label="Obras de Orçamentos e Encomendas"><FileStack className="size-4" /></ToolButton>
+          <ToolButton href="/clientes" label="Gestão de Cliente"><Users className="size-4" /></ToolButton>
           <div className="relative">
             <ToolButton label="Gestão de Serviços e/ou Mercadorias" onClick={() => setStockOpen((value) => !value)}>
               <span className="flex items-center">
-                <Package className="size-5" />
+                <Package className="size-4" />
                 <ChevronDown className="size-3" />
               </span>
             </ToolButton>
@@ -196,10 +197,10 @@ export function Shell({
               </div>
             ) : null}
           </div>
-          <ToolButton href="/ordens/nova" label="Nova Obra"><Plus className="size-5" /></ToolButton>
-          <ToolButton href="/agenda" label="Agenda"><CalendarDays className="size-5" /></ToolButton>
-          <ToolButton href="/resultados" label="Resultados da Empresa"><BarChart3 className="size-5" /></ToolButton>
-          <ToolButton href="/definicoes" label="Parametrização"><Settings className="size-5" /></ToolButton>
+          <ToolButton href="/ordens/nova" label="Nova Obra"><Plus className="size-4" /></ToolButton>
+          <ToolButton href="/agenda" label="Agenda"><CalendarDays className="size-4" /></ToolButton>
+          <ToolButton href="/resultados" label="Resultados da Empresa"><BarChart3 className="size-4" /></ToolButton>
+          <ToolButton href="/definicoes" label="Parametrização"><Settings className="size-4" /></ToolButton>
           <form
             className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 md:max-w-sm"
             onSubmit={(event) => {
@@ -214,13 +215,13 @@ export function Shell({
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Pesquisar"
                 aria-label="Pesquisar"
-                className="h-9 bg-white pl-8"
+                className="h-8 border-[#e1e2e5] bg-[#f7f8fa] pl-8 text-[13px]"
               />
             </div>
           </form>
           <div className="relative">
             <button type="button" className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-[#e7f7f8]" onClick={() => setUserOpen((value) => !value)}>
-              <span className="grid size-8 place-items-center rounded-full bg-[#0b8f9c] text-xs font-semibold text-white">{user.name.slice(0, 1)}</span>
+              <span className="grid size-7 place-items-center rounded-full bg-[#22272a] text-[11px] font-semibold text-white">{user.name.slice(0, 1)}</span>
               <span className="hidden sm:block">{user.name.split(" ")[0]}</span>
             </button>
             {userOpen ? (
@@ -238,14 +239,14 @@ export function Shell({
           </div>
         </header>
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent side="left" className="w-72 bg-[#0b8f9c] p-0 text-white">
+          <SheetContent side="left" className="w-72 bg-[#22272a] p-0 text-white">
             <SheetTitle className="sr-only">Menu</SheetTitle>
             <div className="flex h-full flex-col">
               <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
             </div>
           </SheetContent>
         </Sheet>
-        <main className="px-3 py-3 md:px-5 md:py-4">{children}</main>
+        <main className="px-2 py-2">{children}</main>
       </div>
     </div>
       )}

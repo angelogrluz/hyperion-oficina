@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 78" role="img" aria-label="Hyperion Car Lab">
+  <polygon points="180,2 192,16 168,16" fill="#e10600"/>
+  <text x="180" y="44" text-anchor="middle" fill="none" stroke="#f2f4f6" stroke-width="1.15" font-family="Arial Black, Impact, sans-serif" font-size="30" letter-spacing="2">HYPERION</text>
+  <rect x="18" y="54" width="108" height="4" fill="#e10600"/>
+  <text x="180" y="60" text-anchor="middle" fill="#f2f4f6" font-family="Arial, sans-serif" font-size="9" letter-spacing="3">CAR LAB</text>
+  <rect x="234" y="54" width="108" height="4" fill="#e10600"/>
+</svg>

@@ -1,3 +1,4 @@
+import { CalendarDays } from "lucide-react";
 import Link from "next/link";
 import { CarSide, carColor } from "@/components/car-side";
 import { formatEUR } from "@/lib/format";
@@ -15,15 +16,18 @@ export type JobCard = {
 
 export function JobBoard({ jobs }: { jobs: JobCard[] }) {
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+    <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(168px, 188px))" }}>
       {jobs.map((job) => (
-        <Link key={job.id} href={job.href} className="rounded-xl border border-[#d5ebed] bg-white p-3 shadow-sm hover:border-[#0b8f9c]">
-          <p className="font-mono text-sm font-semibold">{job.plate}</p>
-          <p className="truncate text-xs text-[#4d6d73]">{job.model}</p>
-          <CarSide color={carColor(job.plate)} />
-          <p className={`mt-1 text-sm ${job.approved ? "text-[#0b8f9c]" : "text-[#4d6d73]"}`}>{job.status}</p>
-          <p className="text-lg font-semibold text-[#0b8f9c] tabular-nums">{formatEUR(job.total)}</p>
-          <p className="text-xs text-[#4d6d73]">{job.date}</p>
+        <Link key={job.id} href={job.href} className="flex min-h-[168px] flex-col rounded-md border border-[#e6e7eb] bg-white px-2 pt-1.5 text-[#22272a] shadow-[0_1px_1px_rgba(34,39,42,.04)] hover:border-[#00a9fd]">
+          <p className="text-[13px] leading-tight font-semibold">{job.plate}</p>
+          <p className="truncate text-[11px] leading-tight text-[#8d939c]">{job.model}</p>
+          <div className="my-1"><CarSide color={carColor(job.plate)} /></div>
+          <p className={`text-[12px] leading-tight ${job.approved ? "text-[#2eaf62]" : "text-[#8d939c]"}`}>{job.status}</p>
+          <p className="text-[16px] leading-tight font-semibold text-[#00a9fd] tabular-nums">{formatEUR(job.total)}</p>
+          <div className="mt-auto flex items-center gap-1 border-t border-[#f0f1f4] pt-1 pb-1 text-[11px] text-[#8d939c]">
+            <CalendarDays className="size-3" />
+            <span className="truncate">{job.date}</span>
+          </div>
         </Link>
       ))}
     </div>

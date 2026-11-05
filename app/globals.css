@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600;700&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
@@ -50,10 +51,10 @@
 }
 
 :root {
-  --font-geist-sans: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-geist-sans: "Source Sans Pro", "Source Sans 3", sans-serif;
   --font-geist-mono: ui-monospace, Consolas, "DejaVu Sans Mono", monospace;
   --background: #ffffff;
-  --foreground: #14343a;
+  --foreground: #22272a;
   --card: #ffffff;
   --card-foreground: #14343a;
   --popover: #ffffff;
