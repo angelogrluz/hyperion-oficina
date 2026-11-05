@@ -1,0 +1,84 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { isValidRef, normalizeRef } from "@/lib/domain";
+import { DOCUMENT_TYPES, PAYMENT_METHODS } from "@/lib/labels";
+import { postPurchases, voidPurchase } from "@/lib/stock";
+
+type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
+
+const lineSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
+  supplierId: z.string().min(1, "Escolha o fornecedor."),
+  documentType: z.string(),
+  invoiceNumber: z.string().trim().min(1, "Indique o número do documento.").max(40),
+  paymentMethod: z.string(),
+  ref: z.string(),
+  description: z.string().trim().min(2, "Indique a descrição do artigo."),
+  quantity: z.number().positive("A quantidade tem de ser superior a zero."),
+  cost: z.number().min(0, "Custo inválido."),
+  vat: z.number().min(0).max(100),
+  margin: z.number().min(0).max(500),
+  family: z.string().trim().min(1).max(40),
+});
+
+export async function savePurchases(payload: unknown): Promise<Result<{ count: number; articles: number }>> {
+  await requireUser();
+  const parsed = z.array(lineSchema).min(1, "Adicione pelo menos uma linha.").max(200).safeParse(payload);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Linha inválida." };
+
+  const lines: Array<z.infer<typeof lineSchema> & { ref: string }> = [];
+  for (const line of parsed.data) {
+    if (!(DOCUMENT_TYPES as readonly string[]).includes(line.documentType)) {
+      return { ok: false, error: "Tipo de documento inválido." };
+    }
+    if (!(PAYMENT_METHODS as readonly string[]).includes(line.paymentMethod)) {
+      return { ok: false, error: "Modo de pagamento inválido." };
+    }
+    const ref = normalizeRef(line.ref);
+    if (!isValidRef(ref)) return { ok: false, error: `Referência inválida: ${line.ref || "(vazia)"}.` };
+    const supplier = await prisma.supplier.findUnique({ where: { id: line.supplierId } });
+    if (!supplier) return { ok: false, error: "Fornecedor não encontrado." };
+    lines.push({ ...line, ref });
+  }
+
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const key = `${line.supplierId}|${line.documentType}|${line.invoiceNumber.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const existing = await prisma.purchase.findFirst({
+      where: {
+        supplierId: line.supplierId,
+        documentType: line.documentType,
+        invoiceNumber: line.invoiceNumber,
+        voided: false,
+      },
+    });
+    if (existing) {
+      return { ok: false, error: `O documento ${line.invoiceNumber} deste fornecedor já foi lançado.` };
+    }
+  }
+
+  try {
+    const result = await prisma.$transaction((tx) => postPurchases(tx, lines));
+    revalidatePath("/", "layout");
+    return { ok: true, count: result.purchaseIds.length, articles: result.articlesTouched };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Não foi possível lançar a compra." };
+  }
+}
+
+export async function cancelPurchase(id: string): Promise<Result> {
+  await requireUser();
+  try {
+    await prisma.$transaction((tx) => voidPurchase(tx, id));
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Não foi possível anular a compra." };
+  }
+}

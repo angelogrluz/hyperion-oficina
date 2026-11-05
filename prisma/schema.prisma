@@ -1,0 +1,243 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+model Workshop {
+  id         String @id
+  legalName  String
+  tradeName  String
+  nif        String
+  address    String
+  postalCode String
+  city       String
+  phone      String
+  email      String
+  labourRate Float
+}
+
+model Client {
+  id           String        @id @default(cuid())
+  name         String
+  nif          String
+  phone        String        @default("")
+  email        String        @default("")
+  address      String        @default("")
+  notes        String        @default("")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  vehicles     Vehicle[]
+  orders       RepairOrder[]
+  quotes       Quote[]
+  appointments Appointment[]
+
+  @@index([name])
+  @@index([nif])
+}
+
+model Vehicle {
+  id           String        @id @default(cuid())
+  plate        String        @unique
+  brand        String
+  model        String
+  year         Int
+  vin          String        @default("")
+  km           Int           @default(0)
+  fuel         String
+  clientId     String
+  client       Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  orders       RepairOrder[]
+  quotes       Quote[]
+  appointments Appointment[]
+
+  @@index([clientId])
+}
+
+model Article {
+  id            String         @id @default(cuid())
+  ref           String         @unique
+  description   String
+  family        String
+  costPrice     Float          @default(0)
+  marginPercent Float          @default(40)
+  vatRate       Float          @default(23)
+  stockQty      Float          @default(0)
+  minStock      Float          @default(2)
+  isOil         Boolean        @default(false)
+  active        Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  lines         DocumentLine[]
+  purchaseLines PurchaseLine[]
+
+  @@index([family])
+}
+
+model Supplier {
+  id        String     @id @default(cuid())
+  name      String
+  nif       String     @default("")
+  phone     String     @default("")
+  email     String     @default("")
+  address   String     @default("")
+  notes     String     @default("")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  purchases Purchase[]
+
+  @@index([name])
+}
+
+model RepairOrder {
+  id               String         @id @default(cuid())
+  number           String         @unique
+  clientId         String
+  client           Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId        String
+  vehicle          Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  dateIn           DateTime
+  dateOut          DateTime?
+  km               Int
+  problem          String
+  status           String         @default("aberta")
+  notes            String         @default("")
+  invoiceNumber    String?
+  invoiceProvider  String?
+  invoiceIssuedAt  DateTime?
+  invoiceSimulated Boolean        @default(false)
+  quoteId          String?        @unique
+  quote            Quote?         @relation(fields: [quoteId], references: [id])
+  lines            DocumentLine[]
+  invoiceLogs      InvoiceLog[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([status])
+  @@index([dateIn])
+  @@index([clientId])
+}
+
+model Quote {
+  id         String         @id @default(cuid())
+  number     String         @unique
+  clientId   String
+  client     Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId  String
+  vehicle    Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  date       DateTime
+  validUntil DateTime?
+  km         Int
+  problem    String
+  status     String         @default("aberto")
+  notes      String         @default("")
+  order      RepairOrder?
+  lines      DocumentLine[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@index([status])
+  @@index([clientId])
+}
+
+model DocumentLine {
+  id          String       @id @default(cuid())
+  kind        String
+  description String
+  quantity    Float
+  unitPrice   Float
+  unitCost    Float        @default(0)
+  vatRate     Float        @default(23)
+  articleId   String?
+  article     Article?     @relation(fields: [articleId], references: [id])
+  orderId     String?
+  order       RepairOrder? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  quoteId     String?
+  quote       Quote?       @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  position    Int          @default(0)
+
+  @@index([orderId])
+  @@index([quoteId])
+}
+
+model Purchase {
+  id            String         @id @default(cuid())
+  date          DateTime
+  supplierId    String
+  supplier      Supplier       @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  documentType  String
+  invoiceNumber String
+  paymentMethod String
+  voided        Boolean        @default(false)
+  voidedAt      DateTime?
+  lines         PurchaseLine[]
+  createdAt     DateTime       @default(now())
+
+  @@index([supplierId])
+  @@index([date])
+}
+
+model PurchaseLine {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  articleId   String
+  article     Article  @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  ref         String
+  description String
+  quantity    Float
+  cost        Float
+  vatRate     Float
+  margin      Float
+  position    Int      @default(0)
+  stockBefore Float
+  costBefore  Float
+
+  @@index([purchaseId])
+  @@index([articleId])
+}
+
+model Appointment {
+  id        String   @id @default(cuid())
+  startsAt  DateTime
+  endsAt    DateTime
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId String?
+  vehicle   Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  title     String
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([startsAt])
+  @@index([clientId])
+}
+
+model InvoiceLog {
+  id             String      @id @default(cuid())
+  orderId        String
+  order          RepairOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  providerId     String
+  providerLabel  String
+  simulated      Boolean
+  documentNumber String
+  requestJson    String
+  responseJson   String
+  createdAt      DateTime    @default(now())
+
+  @@index([orderId])
+}
