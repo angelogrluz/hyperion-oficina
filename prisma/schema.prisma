@@ -58,8 +58,8 @@ model Vehicle {
   engine       String        @default("")
   km           Int           @default(0)
   fuel         String
-  clientId     String
-  client       Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  clientId     String?
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   orders       RepairOrder[]
@@ -107,10 +107,10 @@ model Supplier {
 model RepairOrder {
   id               String         @id @default(cuid())
   number           String         @unique
-  clientId         String
-  client           Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  vehicleId        String
-  vehicle          Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  clientId         String?
+  client           Client?        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  vehicleId        String?
+  vehicle          Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   dateIn           DateTime
   dateOut          DateTime?
   km               Int

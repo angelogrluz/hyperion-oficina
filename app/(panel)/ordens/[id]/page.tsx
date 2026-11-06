@@ -30,8 +30,8 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         userName={user.name}
         printHref={`/ordens/${order.id}/imprimir`}
         initial={{
-          clientId: order.clientId,
-          vehicleId: order.vehicleId,
+          clientId: order.clientId ?? "",
+          vehicleId: order.vehicleId ?? "",
           dateIn: lisbonISODate(order.dateIn),
           dateOut: order.dateOut ? lisbonISODate(order.dateOut) : "",
           validUntil: "",

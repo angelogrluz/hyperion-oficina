@@ -15,7 +15,7 @@ export function VehicleFields({
   clients: Array<{ id: string; name: string }>;
   clientId?: string;
   vehicle?: {
-    clientId: string;
+    clientId: string | null;
     plate: string;
     brand: string;
     model: string;

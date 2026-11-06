@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
 import { prisma } from "@/lib/db";
 import {
   defaultMargin,
@@ -75,6 +76,24 @@ export async function saveClient(id: string | null, formData: FormData): Promise
   }
 }
 
+export async function ensureConsumidorFinal(): Promise<ActionResult<{ id: string; name: string; nif: string }>> {
+  await requireUser();
+  const existing = await prisma.client.findFirst({ where: { nif: CONSUMIDOR_FINAL.nif } });
+  if (existing) {
+    const client = await prisma.client.update({
+      where: { id: existing.id },
+      data: { name: CONSUMIDOR_FINAL.name, address: "", nif: CONSUMIDOR_FINAL.nif },
+    });
+    refresh();
+    return { ok: true, id: client.id, name: client.name, nif: client.nif };
+  }
+  const client = await prisma.client.create({
+    data: { name: CONSUMIDOR_FINAL.name, nif: CONSUMIDOR_FINAL.nif, phone: "", email: "", address: "", notes: "" },
+  });
+  refresh();
+  return { ok: true, id: client.id, name: client.name, nif: client.nif };
+}
+
 export async function deleteClient(id: string): Promise<ActionResult> {
   await requireUser();
   const [vehicles, orders, quotes, appointments] = await Promise.all([
@@ -92,10 +111,10 @@ export async function deleteClient(id: string): Promise<ActionResult> {
 }
 
 const vehicleSchema = z.object({
-  clientId: z.string().min(1, "Escolha o cliente."),
+  clientId: z.string(),
   plate: z.string().refine(isValidPlate, "A matrícula tem de estar no formato AA-00-AA."),
-  brand: z.string().trim().min(1, "Indique a marca.").max(40),
-  model: z.string().trim().min(1, "Indique o modelo.").max(60),
+  brand: z.string().trim().max(40),
+  model: z.string().trim().max(60),
   version: z.string().trim().max(80),
   year: z.coerce.number().int().min(1950, "Ano inválido.").max(new Date().getFullYear() + 1, "Ano inválido."),
   vin: z.string().refine(isValidVin, "O VIN, se preenchido, tem 17 caracteres (sem I, O ou Q)."),
@@ -107,7 +126,7 @@ const vehicleSchema = z.object({
 export async function saveVehicle(
   id: string | null,
   formData: FormData,
-): Promise<ActionResult<{ id: string; clientId: string; plate: string; brand: string; model: string; km: number }>> {
+): Promise<ActionResult<{ id: string; clientId: string | null; plate: string; brand: string; model: string; km: number }>> {
   await requireUser();
   const parsed = vehicleSchema.safeParse({
     clientId: text(formData, "clientId"),
@@ -123,17 +142,21 @@ export async function saveVehicle(
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
 
-  const client = await prisma.client.findUnique({ where: { id: parsed.data.clientId } });
-  if (!client) return { ok: false, error: "Cliente não encontrado." };
+  const clientId = parsed.data.clientId || null;
+  if (clientId) {
+    const client = await prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) return { ok: false, error: "Cliente não encontrado." };
+  }
   const duplicate = await prisma.vehicle.findFirst({
     where: { plate: parsed.data.plate, NOT: id ? { id } : undefined },
   });
   if (duplicate) return { ok: false, error: "Já existe uma viatura com esta matrícula." };
 
   try {
+    const data = { ...parsed.data, clientId };
     const vehicle = id
-      ? await prisma.vehicle.update({ where: { id }, data: parsed.data })
-      : await prisma.vehicle.create({ data: parsed.data });
+      ? await prisma.vehicle.update({ where: { id }, data })
+      : await prisma.vehicle.create({ data });
     refresh();
     return {
       ok: true,

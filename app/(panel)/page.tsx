@@ -32,8 +32,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
             return {
               id: order.id,
               href: `/ordens/${order.id}`,
-              plate: order.vehicle.plate,
-              model: `${order.vehicle.brand} ${order.vehicle.model}`,
+              plate: order.vehicle?.plate ?? "",
+              model: `${order.vehicle?.brand ?? ""} ${order.vehicle?.model ?? ""}`.trim(),
               status: status.label,
               approved: status.approved,
               total: orderTotal(order.lines),

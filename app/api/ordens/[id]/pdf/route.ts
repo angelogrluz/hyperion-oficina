@@ -9,8 +9,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   if (!session) return new NextResponse("Não autenticado", { status: 401 });
   const { id } = await context.params;
   const [order, workshop] = await Promise.all([getOrder(id), getWorkshop()]);
-  if (!order || !workshop) return new NextResponse("Não encontrado", { status: 404 });
-  const pdf = await renderDocumentPdf(orderToPrintable(order), workshop);
+  if (!order || !workshop || !order.client || !order.vehicle) return new NextResponse("Não encontrado", { status: 404 });
+  const pdf = await renderDocumentPdf(orderToPrintable({ ...order, client: order.client, vehicle: order.vehicle }), workshop);
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

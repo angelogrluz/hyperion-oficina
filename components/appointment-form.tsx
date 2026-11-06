@@ -18,7 +18,7 @@ export function AppointmentForm({
 }: {
   date: string;
   clients: Array<{ id: string; name: string }>;
-  vehicles: Array<{ id: string; clientId: string; plate: string; brand: string; model: string }>;
+  vehicles: Array<{ id: string; clientId: string | null; plate: string; brand: string; model: string }>;
 }) {
   const router = useRouter();
   const [clientId, setClientId] = useState("");

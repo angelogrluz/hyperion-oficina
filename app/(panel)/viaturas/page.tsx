@@ -14,7 +14,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
   const q = (await searchParams).q ?? "";
   const vehicles = await prisma.vehicle.findMany({ include: { client: true }, orderBy: { plate: "asc" } });
   const visible = vehicles.filter((vehicle) =>
-    includesSearch(`${vehicle.plate} ${vehicle.brand} ${vehicle.model} ${vehicle.vin} ${vehicle.client.name}`, q),
+    includesSearch(`${vehicle.plate} ${vehicle.brand} ${vehicle.model} ${vehicle.vin} ${vehicle.client?.name ?? ""}`, q),
   );
   return (
     <div>
@@ -32,7 +32,7 @@ export default async function VehiclesPage({ searchParams }: { searchParams: Pro
               <tr key={vehicle.id} className="relative border-t border-border hover:bg-accent/40">
                 <Td><Link href={`/viaturas/${vehicle.id}`} className="after:absolute after:inset-0"><Plate value={vehicle.plate} /></Link></Td>
                 <Td>{vehicle.brand} {vehicle.model}{vehicle.version ? ` ${vehicle.version}` : ""} · {vehicle.year}</Td>
-                <Td>{vehicle.client.name}</Td>
+                <Td>{vehicle.client?.name ?? "Sem cliente"}</Td>
                 <Td>{vehicle.fuel}</Td>
                 <Td className="text-right tabular-nums">{formatQty(vehicle.km)}</Td>
               </tr>

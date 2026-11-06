@@ -98,6 +98,16 @@ async function main() {
       address: "Rua do Bonfim, 23, 4300-066 Porto",
     },
   });
+  await prisma.client.create({
+    data: {
+      name: "Consumidor final",
+      nif: "999999990",
+      phone: "",
+      email: "",
+      address: "",
+      notes: "",
+    },
+  });
   const marta = await prisma.client.create({
     data: {
       name: "Marta Lopes",
@@ -511,7 +521,8 @@ async function invoice(
     where: { id: orderId },
     include: { client: true, vehicle: true, lines: { include: { article: true }, orderBy: { position: "asc" } } },
   });
-  const draft = buildInvoiceDraft({ order, workshop, sequence, year: 2026, issuedAt });
+  if (!order.client || !order.vehicle) throw new Error("A ordem de demonstração precisa de cliente e viatura.");
+  const draft = buildInvoiceDraft({ order: { ...order, client: order.client, vehicle: order.vehicle }, workshop, sequence, year: 2026, issuedAt });
   const issued = await mockMoloniAdapter.issue(draft);
   await prisma.repairOrder.update({
     where: { id: orderId },

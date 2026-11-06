@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
 import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
-import { saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
+import { ensureConsumidorFinal, saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
 import { moveSymptoms, writeStockLink, type CachedClient } from "@/lib/browser-cache";
 import { controlClass, Field, Select } from "@/components/field";
 import { FolhaView } from "@/components/folha-view";
@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
+import { isConsumidorFinal } from "@/lib/consumidor";
+import { defaultMargin, includesSearch, isValidPlate, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
 import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
@@ -49,7 +50,7 @@ export type EditorClient = {
 };
 export type EditorVehicle = {
   id: string;
-  clientId: string;
+  clientId: string | null;
   plate: string;
   brand: string;
   model: string;
@@ -130,6 +131,8 @@ export function DocumentEditor({
   const [supplierList, setSupplierList] = useState(suppliers);
   const [vehicleList, setVehicleList] = useState(vehicles);
   const [clientId, setClientId] = useState(initial.clientId);
+  const [consumidorFinal, setConsumidorFinal] = useState(() => isConsumidorFinal(clients.find((client) => client.id === initial.clientId)));
+  const [previousClientId, setPreviousClientId] = useState("");
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
   const startingVehicle = vehicles.find((vehicle) => vehicle.id === initial.vehicleId);
   const [plate, setPlate] = useState(startingVehicle?.plate ?? "");
@@ -289,51 +292,51 @@ export function DocumentEditor({
     if (statusOverride) setStatus(statusOverride);
     startTransition(async () => {
       let nextVehicleId = vehicleId;
-      const formData = new FormData();
-      formData.set("clientId", clientId);
-      formData.set("plate", plate);
-      formData.set("brand", brand);
-      formData.set("model", model);
-      formData.set("version", version);
-      formData.set("year", year || String(new Date().getFullYear()));
-      formData.set("vin", vin);
-      formData.set("engine", engine);
-      formData.set("km", String(kmValue));
-      formData.set("fuel", fuel || "Gasolina");
-      if (!nextVehicleId && plate.trim()) {
-        if (!clientId) {
-          setError("Escolha o cliente na barra lateral.");
-          return;
-        }
-        const created = await saveVehicle(null, formData);
-        if (!created.ok) {
-          setError(created.error);
-          return;
-        }
-        nextVehicleId = created.id;
-        setVehicleId(created.id);
-        setVehicleList((current) => [
-          ...current,
-          {
-            id: created.id,
-            clientId,
-            plate: created.plate,
-            brand: created.brand,
-            model: created.model,
-            version,
-            year: Number(year) || new Date().getFullYear(),
-            vin,
-            engine,
-            km: created.km,
-            fuel: fuel || "Gasolina",
-          },
-        ]);
-      } else if (nextVehicleId) {
-        const savedVehicle = await saveVehicle(nextVehicleId, formData);
+      const normalizedPlate = normalizePlate(plate);
+      if (normalizedPlate && !isValidPlate(normalizedPlate)) {
+        setError("A matrícula tem de estar no formato AA-00-AA.");
+        return;
+      }
+      const knownVehicle = nextVehicleId
+        ? vehicleList.find((item) => item.id === nextVehicleId)
+        : vehicleList.find((item) => item.plate === normalizedPlate);
+      if (normalizedPlate || knownVehicle) {
+        const formData = new FormData();
+        formData.set("clientId", clientId || knownVehicle?.clientId || "");
+        formData.set("plate", normalizedPlate || knownVehicle?.plate || "");
+        formData.set("brand", brand);
+        formData.set("model", model);
+        formData.set("version", version);
+        formData.set("year", year || String(new Date().getFullYear()));
+        formData.set("vin", vin);
+        formData.set("engine", engine);
+        formData.set("km", String(kmValue));
+        formData.set("fuel", fuel || "Gasolina");
+        const savedVehicle = await saveVehicle(knownVehicle?.id ?? null, formData);
         if (!savedVehicle.ok) {
           setError(savedVehicle.error);
           return;
         }
+        nextVehicleId = savedVehicle.id;
+        setVehicleId(savedVehicle.id);
+        setVehicleList((current) => {
+          const next = {
+            id: savedVehicle.id,
+            clientId: savedVehicle.clientId,
+            plate: savedVehicle.plate,
+            brand: savedVehicle.brand,
+            model: savedVehicle.model,
+            version,
+            year: Number(year) || new Date().getFullYear(),
+            vin,
+            engine,
+            km: savedVehicle.km,
+            fuel: fuel || "Gasolina",
+          };
+          return current.some((item) => item.id === next.id)
+            ? current.map((item) => (item.id === next.id ? next : item))
+            : [...current, next];
+        });
       }
       const body = {
         clientId,
@@ -425,11 +428,36 @@ export function DocumentEditor({
           client={selectedClient}
           clients={clientList}
           clientId={clientId}
+          consumidorFinal={consumidorFinal}
+          onConsumidorFinal={(next) => {
+            startTransition(async () => {
+              if (!next) {
+                setConsumidorFinal(false);
+                setClientId(previousClientId);
+                touch();
+                return;
+              }
+              const result = await ensureConsumidorFinal();
+              if (!result.ok) {
+                setError(result.error);
+                return;
+              }
+              setClientList((current) => (
+                current.some((item) => item.id === result.id)
+                  ? current.map((item) => (item.id === result.id ? { ...item, name: result.name, nif: result.nif, address: "" } : item))
+                  : [...current, { id: result.id, name: result.name, nif: result.nif, phone: "", email: "", address: "", notes: "" }]
+              ));
+              setPreviousClientId(isConsumidorFinal(clientList.find((item) => item.id === clientId)) ? previousClientId : clientId);
+              setClientId(result.id);
+              setConsumidorFinal(true);
+              setError(null);
+              touch();
+            });
+          }}
           onClient={(id) => {
             touch();
+            setConsumidorFinal(isConsumidorFinal(clientList.find((item) => item.id === id)));
             setClientId(id);
-            setVehicleId("");
-            fillVehicle(undefined);
           }}
           error={error}
           problem={problem}
@@ -540,10 +568,7 @@ export function DocumentEditor({
               setEngine(found.engine);
               setVin(found.vin ?? "");
               const known = vehicleList.find((item) => item.plate === normalizePlate(found.plate));
-              if (known) {
-                setVehicleId(known.id);
-                setClientId(known.clientId);
-              }
+              if (known) setVehicleId(known.id);
             });
           }}
           onSave={save}

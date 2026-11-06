@@ -206,8 +206,8 @@ function OrderScreen() {
       suppliers={catalog.suppliers}
       invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: order.invoiceProvider ?? "Simulação" } : null}
       initial={{
-        clientId: order.clientId,
-        vehicleId: order.vehicleId,
+        clientId: order.clientId ?? "",
+        vehicleId: order.vehicleId ?? "",
         dateIn: lisbonISODate(new Date(order.dateIn)),
         dateOut: order.dateOut ? lisbonISODate(new Date(order.dateOut)) : "",
         validUntil: "",

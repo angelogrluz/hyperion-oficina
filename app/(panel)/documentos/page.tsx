@@ -33,8 +33,8 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
             <tr key={order.id} className="relative border-t border-border hover:bg-[#e7f7f8]">
               <Td><Link href={`/ordens/${order.id}`} className="font-medium text-[#0b8f9c] after:absolute after:inset-0">{order.invoiceNumber}</Link></Td>
               <Td>{order.invoiceIssuedAt ? formatMediumDate(order.invoiceIssuedAt) : "—"}</Td>
-              <Td>{order.client.name}</Td>
-              <Td>{order.vehicle.plate}</Td>
+              <Td>{order.client?.name ?? "Sem cliente"}</Td>
+              <Td>{order.vehicle?.plate ?? "—"}</Td>
               <Td className="text-right tabular-nums">{formatEUR(orderTotal(order.lines))}</Td>
             </tr>
           ))}

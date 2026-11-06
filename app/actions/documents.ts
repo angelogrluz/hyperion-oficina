@@ -29,8 +29,8 @@ const lineSchema = z.object({
 });
 
 const orderSchema = z.object({
-  clientId: z.string().min(1, "Escolha o cliente."),
-  vehicleId: z.string().min(1, "Escolha a viatura."),
+  clientId: z.string(),
+  vehicleId: z.string(),
   dateIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data de entrada inválida."),
   dateOut: z.string(),
   km: z.number().int().min(0, "Os quilómetros não podem ser negativos.").max(2_000_000),
@@ -84,8 +84,13 @@ export async function saveOrder(id: string | null, payload: unknown): Promise<Re
     return { ok: false, error: "A data de saída não pode ser anterior à entrada." };
   }
 
-  const vehicle = await ownedVehicle(parsed.data.clientId, parsed.data.vehicleId);
-  if (!vehicle) return { ok: false, error: "A viatura não pertence ao cliente." };
+  const clientId = parsed.data.clientId || null;
+  const vehicleId = parsed.data.vehicleId || null;
+  if (clientId && !(await prisma.client.findUnique({ where: { id: clientId } }))) {
+    return { ok: false, error: "Cliente não encontrado." };
+  }
+  const vehicle = vehicleId ? await prisma.vehicle.findUnique({ where: { id: vehicleId } }) : null;
+  if (vehicleId && !vehicle) return { ok: false, error: "Viatura não encontrada." };
 
   for (const line of parsed.data.lines) {
     if (line.kind === "peca" && line.articleId) {
@@ -99,12 +104,15 @@ export async function saveOrder(id: string | null, payload: unknown): Promise<Re
 
   try {
     const savedId = await prisma.$transaction(async (tx) => {
-      if (parsed.data.km > vehicle.km) {
+      if (vehicle && clientId && vehicle.clientId !== clientId) {
+        await tx.vehicle.update({ where: { id: vehicle.id }, data: { clientId } });
+      }
+      if (vehicle && parsed.data.km > vehicle.km) {
         await tx.vehicle.update({ where: { id: vehicle.id }, data: { km: parsed.data.km } });
       }
       const data = {
-        clientId: parsed.data.clientId,
-        vehicleId: parsed.data.vehicleId,
+        clientId,
+        vehicleId,
         dateIn: dateOnly(parsed.data.dateIn),
         dateOut,
         km: parsed.data.km,
@@ -123,6 +131,12 @@ export async function saveOrder(id: string | null, payload: unknown): Promise<Re
       const current = await tx.repairOrder.findUnique({ where: { id } });
       if (!current) throw new Error("Ordem não encontrada.");
       if (current.status === "faturada") throw new Error("Uma ordem faturada não pode ser alterada.");
+      if (current.quoteId && clientId) {
+        await tx.quote.update({
+          where: { id: current.quoteId },
+          data: { clientId, ...(vehicleId ? { vehicleId } : {}) },
+        });
+      }
       await tx.documentLine.deleteMany({ where: { orderId: id } });
       await tx.repairOrder.update({
         where: { id },
@@ -250,6 +264,9 @@ export async function issueInvoice(orderId: string): Promise<Result<{ documentNu
     },
   });
   if (!order) return { ok: false, error: "Ordem não encontrada." };
+  const client = order.client;
+  const vehicle = order.vehicle;
+  if (!client || !vehicle) return { ok: false, error: "Indique o cliente e a viatura antes de faturar." };
   if (order.status === "faturada") return { ok: false, error: "Esta ordem já foi faturada." };
   if (order.status !== "concluida") return { ok: false, error: "Só é possível faturar uma ordem concluída." };
   if (order.lines.length === 0) return { ok: false, error: "A ordem não tem linhas para faturar." };
@@ -260,7 +277,7 @@ export async function issueInvoice(orderId: string): Promise<Result<{ documentNu
   const adapter = getInvoiceAdapter();
   const year = lisbonParts().year;
   const sequence = await nextInvoiceSequence(prisma, year);
-  const draft = buildInvoiceDraft({ order, workshop, sequence, year });
+  const draft = buildInvoiceDraft({ order: { ...order, client, vehicle }, workshop, sequence, year });
 
   let issued;
   try {

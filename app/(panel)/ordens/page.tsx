@@ -24,7 +24,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     orderBy: { dateIn: "desc" },
   });
   const visible = orders.filter((order) =>
-    includesSearch(`${order.number} ${order.client.name} ${order.vehicle.plate} ${order.problem}`, q),
+    includesSearch(`${order.number} ${order.client?.name ?? ""} ${order.vehicle?.plate ?? ""} ${order.problem}`, q),
   );
   return (
     <div>
@@ -48,8 +48,8 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
               <tr key={order.id} className="relative border-t border-border hover:bg-accent/40">
                 <Td><Link href={`/ordens/${order.id}`} className="font-medium after:absolute after:inset-0">{order.number}</Link></Td>
                 <Td>{formatMediumDate(order.dateIn)}</Td>
-                <Td>{order.client.name}</Td>
-                <Td><Plate value={order.vehicle.plate} /></Td>
+                <Td>{order.client?.name ?? "Sem cliente"}</Td>
+                <Td>{order.vehicle ? <Plate value={order.vehicle.plate} /> : "—"}</Td>
                 <Td><StatusPill status={order.status} label={orderStatusLabel(order.status)} /></Td>
                 <Td className="text-right tabular-nums">{formatEUR(sumTotals(order.lines).total)}</Td>
               </tr>

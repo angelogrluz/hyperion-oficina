@@ -42,6 +42,8 @@ export function FolhaView({
   client,
   clients,
   clientId,
+  consumidorFinal,
+  onConsumidorFinal,
   onClient,
   error,
   problem,
@@ -92,6 +94,8 @@ export function FolhaView({
   client?: EditorClient;
   clients: EditorClient[];
   clientId: string;
+  consumidorFinal: boolean;
+  onConsumidorFinal: (next: boolean) => void;
   onClient: (id: string) => void;
   error: string | null;
   problem: string;
@@ -169,9 +173,13 @@ export function FolhaView({
   const [clientOpen, setClientOpen] = useState(false);
   const [stockKey, setStockKey] = useState<string | null>(null);
   const openClientRef = useRef<() => void>(() => {});
+  const onFinalRef = useRef(onConsumidorFinal);
   useEffect(() => {
     openClientRef.current = () => setClientOpen(true);
   }, []);
+  useEffect(() => {
+    onFinalRef.current = onConsumidorFinal;
+  }, [onConsumidorFinal]);
   const suggestQuery = suggestField === "ref" ? draft.ref : suggestField === "description" ? draft.description : "";
   const matches = useMemo(() => {
     const query = suggestQuery.trim();
@@ -234,6 +242,20 @@ export function FolhaView({
   useEffect(() => {
     setSidebar(
       <div className="grid gap-2 text-xs">
+        <button
+          type="button"
+          data-testid="consumidor-final"
+          aria-pressed={consumidorFinal}
+          onClick={() => onFinalRef.current(!consumidorFinal)}
+          className={`h-7 rounded px-2 text-left text-[11px] font-semibold ${consumidorFinal ? "bg-[#00a9fd] text-white" : "border border-white/20 bg-white/10 text-white hover:bg-white/20"}`}
+        >
+          {consumidorFinal ? "Consumidor final ativo" : "Consumidor final"}
+        </button>
+        {consumidorFinal ? (
+          <p className="rounded border border-[#00a9fd] bg-[#00a9fd]/20 px-2 py-1 text-[11px] leading-snug">
+            Faturação: Consumidor final, NIF 999999990, sem morada. Os orçamentos desta folha usam este cliente.
+          </p>
+        ) : null}
         <div className="flex items-center justify-between gap-1">
           <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
           <button
@@ -241,7 +263,7 @@ export function FolhaView({
             data-testid="edit-client"
             title="Editar cliente"
             aria-label="Editar cliente"
-            disabled={!client}
+            disabled={!client || consumidorFinal}
             onClick={() => openClientRef.current()}
             className="inline-grid size-4 place-items-center rounded text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-40"
           >
@@ -275,7 +297,7 @@ export function FolhaView({
       </div>,
     );
     return () => setSidebar(null);
-  }, [setSidebar, locked, clientId, clients, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.notes, notes]);
+  }, [setSidebar, locked, clientId, clients, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.notes, notes]);
 
   const setHeader = useSetSheetHeader();
   const headerActions = useRef({ onDateIn, setPromiseQuote, setPromiseDelivery });

@@ -17,6 +17,7 @@ import {
   salePrice,
   stockDelta,
 } from "@/lib/domain";
+import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
 import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
@@ -45,7 +46,7 @@ export type Vehicle = {
   engine: string;
   km: number;
   fuel: string;
-  clientId: string;
+  clientId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -98,8 +99,8 @@ export type DocLine = {
 export type Order = {
   id: string;
   number: string;
-  clientId: string;
-  vehicleId: string;
+  clientId: string | null;
+  vehicleId: string | null;
   dateIn: string;
   dateOut: string | null;
   km: number;
@@ -324,6 +325,35 @@ export async function saveClientRecord(id: string | null, data: Omit<Client, "id
   return { ok: true as const, id: client.id, name: client.name, nif: client.nif };
 }
 
+export async function ensureConsumidorFinalRecord() {
+  let saved: Client | null = null;
+  await update((snap) => {
+    const current = snap.clients.find((client) => client.nif === CONSUMIDOR_FINAL.nif);
+    if (current) {
+      current.name = CONSUMIDOR_FINAL.name;
+      current.address = "";
+      current.updatedAt = stamp();
+      saved = current;
+      return;
+    }
+    saved = {
+      id: uid(),
+      name: CONSUMIDOR_FINAL.name,
+      nif: CONSUMIDOR_FINAL.nif,
+      phone: "",
+      email: "",
+      address: "",
+      notes: "",
+      createdAt: stamp(),
+      updatedAt: stamp(),
+    };
+    snap.clients.push(saved);
+  });
+  if (!saved) return { ok: false as const, error: "Não foi possível preparar o consumidor final." };
+  const client = saved as Client;
+  return { ok: true as const, id: client.id, name: client.name, nif: client.nif };
+}
+
 export async function deleteClientRecord(id: string) {
   try {
     await update((snap) => {
@@ -347,23 +377,23 @@ export async function saveVehicleRecord(
   id: string | null,
   data: Omit<Vehicle, "id" | "createdAt" | "updatedAt">,
 ) {
-  if (!data.clientId) return { ok: false as const, error: "Escolha o cliente." };
   if (!isValidPlate(data.plate)) return { ok: false as const, error: "A matrícula tem de estar no formato AA-00-AA." };
   if (!isValidVin(data.vin)) return { ok: false as const, error: "O VIN, se preenchido, tem 17 caracteres (sem I, O ou Q)." };
+  const clientId = data.clientId || null;
   let saved: Vehicle | null = null;
   try {
     await update((snap) => {
-      if (!snap.clients.some((client) => client.id === data.clientId)) throw new Error("Cliente não encontrado.");
+      if (clientId && !snap.clients.some((client) => client.id === clientId)) throw new Error("Cliente não encontrado.");
       if (snap.vehicles.some((vehicle) => vehicle.plate === data.plate && vehicle.id !== id)) {
         throw new Error("Já existe uma viatura com esta matrícula.");
       }
       if (id) {
         const current = snap.vehicles.find((vehicle) => vehicle.id === id);
         if (!current) throw new Error("Viatura não encontrada.");
-        Object.assign(current, data, { updatedAt: stamp() });
+        Object.assign(current, data, { clientId, updatedAt: stamp() });
         saved = current;
       } else {
-        saved = { ...data, id: uid(), createdAt: stamp(), updatedAt: stamp() };
+        saved = { ...data, clientId, id: uid(), createdAt: stamp(), updatedAt: stamp() };
         snap.vehicles.push(saved);
       }
     });
@@ -527,22 +557,26 @@ export async function saveOrderRecord(id: string | null, input: {
   let savedId = "";
   try {
     await update((snap) => {
-      const vehicle = snap.vehicles.find((item) => item.id === input.vehicleId && item.clientId === input.clientId);
-      if (!vehicle) throw new Error("A viatura não pertence ao cliente.");
+      const clientId = input.clientId || null;
+      const vehicleId = input.vehicleId || null;
+      if (clientId && !snap.clients.some((client) => client.id === clientId)) throw new Error("Cliente não encontrado.");
+      const vehicle = vehicleId ? snap.vehicles.find((item) => item.id === vehicleId) : null;
+      if (vehicleId && !vehicle) throw new Error("Viatura não encontrada.");
       for (const line of input.lines) {
         if (line.kind === "peca" && line.articleId && !snap.articles.some((article) => article.id === line.articleId)) {
           throw new Error("Uma das peças já não existe no stock.");
         }
       }
-      if (input.km > vehicle.km) vehicle.km = input.km;
+      if (vehicle && clientId) vehicle.clientId = clientId;
+      if (vehicle && input.km > vehicle.km) vehicle.km = input.km;
       const dateOut = input.dateOut
         ? dateOnly(input.dateOut).toISOString()
         : input.status === "concluida"
           ? dateOnly(lisbonParts().iso).toISOString()
           : null;
       const data = {
-        clientId: input.clientId,
-        vehicleId: input.vehicleId,
+        clientId,
+        vehicleId,
         dateIn: dateOnly(input.dateIn).toISOString(),
         dateOut,
         km: input.km,
@@ -572,6 +606,14 @@ export async function saveOrderRecord(id: string | null, input: {
       if (!current) throw new Error("Ordem não encontrada.");
       if (current.status === "faturada") throw new Error("Uma ordem faturada não pode ser alterada.");
       Object.assign(current, data);
+      if (current.quoteId && clientId) {
+        const quote = snap.quotes.find((item) => item.id === current.quoteId);
+        if (quote) {
+          quote.clientId = clientId;
+          if (vehicleId) quote.vehicleId = vehicleId;
+          quote.updatedAt = stamp();
+        }
+      }
       snap.lines = snap.lines.filter((line) => line.orderId !== id);
       pushLines(snap, { orderId: id }, input.lines);
       savedId = id;
@@ -704,6 +746,9 @@ function orderBundle(snap: Snapshot, orderId: string) {
 
 export async function issueInvoiceRecord(orderId: string) {
   const snap = await readSnapshot();
+  const order = snap.orders.find((item) => item.id === orderId);
+  if (!order) return { ok: false as const, error: "Ordem não encontrada." };
+  if (!order.clientId || !order.vehicleId) return { ok: false as const, error: "Indique o cliente e a viatura antes de faturar." };
   const bundle = orderBundle(snap, orderId);
   if (!bundle) return { ok: false as const, error: "Ordem não encontrada." };
   if (bundle.order.status === "faturada") return { ok: false as const, error: "Esta ordem já foi faturada." };
@@ -1127,9 +1172,8 @@ function attachLines(snap: Snapshot, parent: "order" | "quote", id: string) {
 export function hydrateOrder(snap: Snapshot, id: string) {
   const order = snap.orders.find((item) => item.id === id);
   if (!order) return null;
-  const client = clientById(snap, order.clientId);
-  const vehicle = vehicleById(snap, order.vehicleId);
-  if (!client || !vehicle) return null;
+  const client = order.clientId ? clientById(snap, order.clientId) : null;
+  const vehicle = order.vehicleId ? vehicleById(snap, order.vehicleId) : null;
   return { ...order, client, vehicle, lines: attachLines(snap, "order", id) };
 }
 
@@ -1165,6 +1209,7 @@ async function buildDemo(): Promise<Snapshot> {
     ["c-silva", "Transportes Silva, Lda", nif("51490218"), "225 098 441", "frota@transportesilva.pt", "Rua da Indústria, 40, 4470-553 Maia", "Faturação para a sede. Contacto de oficina: Sr. Paulo."],
     ["c-joao", "João Pereira", nif("17654028"), "918 663 902", "joao.pereira@email.pt", "Rua do Bonfim, 23, 4300-066 Porto", ""],
     ["c-marta", "Marta Lopes", nif("25190834"), "927 114 663", "marta.lopes@email.pt", "Travessa da Areosa, 7, 4405-560 Vila Nova de Gaia", ""],
+    ["c-final", CONSUMIDOR_FINAL.name, CONSUMIDOR_FINAL.nif, "", "", "", ""],
   ].map(([id, name, nifValue, phone, email, address, notes]) => ({
     id, name, nif: nifValue, phone, email, address, notes, createdAt: stampAt, updatedAt: stampAt,
   }));

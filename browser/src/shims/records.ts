@@ -6,6 +6,7 @@ import {
   deleteVehicleRecord,
   removeArticleRecord,
   saveArticleRecord,
+  ensureConsumidorFinalRecord,
   saveClientRecord,
   saveSupplierRecord,
   saveVehicleRecord,
@@ -27,6 +28,10 @@ export async function saveClient(id: string | null, formData: FormData) {
   const result = await saveClientRecord(id, data);
   if (result.ok) writeClientCache(result.id, data);
   return result;
+}
+
+export async function ensureConsumidorFinal() {
+  return ensureConsumidorFinalRecord();
 }
 
 export async function deleteClient(id: string) {

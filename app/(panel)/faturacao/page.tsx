@@ -48,7 +48,7 @@ export default async function BillingPage() {
                 <div>
                   <p className="font-semibold">{log.documentNumber}</p>
                   <p className="text-sm text-muted-foreground">
-                    {log.providerLabel} · {formatMediumDate(log.createdAt)} · {log.order.client.name}
+                    {log.providerLabel} · {formatMediumDate(log.createdAt)} · {log.order.client?.name ?? "Sem cliente"}
                   </p>
                 </div>
                 <div className="text-right">
