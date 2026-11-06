@@ -77,6 +77,7 @@ export function FolhaView({
   onKm,
   onLookup,
   onSave,
+  isNew,
   onInvoice,
   canInvoice,
   suppliers,
@@ -138,6 +139,7 @@ export function FolhaView({
   onKm: (value: string) => void;
   onLookup: () => void;
   onSave: (status?: string) => void;
+  isNew?: boolean;
   onInvoice: () => void;
   canInvoice: boolean;
   suppliers: { id: string; name: string }[];
@@ -652,6 +654,9 @@ export function FolhaView({
           <span className="ml-auto truncate text-[#8d939c]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
         <div className="fixed right-2 bottom-11 z-30 grid w-[var(--sheet)] gap-1">
+          <Button type="button" data-testid="gravar-obra" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
+            {isNew ? "Criar obra" : "Gravar"}
+          </Button>
           <div className="grid grid-cols-2 gap-1">
             <Button type="button" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
             <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>

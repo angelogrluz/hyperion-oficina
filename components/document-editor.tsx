@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { isConsumidorFinal } from "@/lib/consumidor";
 import { markUnsaved } from "@/lib/unsaved";
-import { defaultMargin, includesSearch, isValidPlate, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
+import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, platesMatch, salePrice, sumTotals } from "@/lib/domain";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
 import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
@@ -192,6 +192,19 @@ export function DocumentEditor({
     return () => markUnsaved(id, false);
   }, [dirty, documentId]);
 
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (!locked) saveRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [locked]);
+
   function updateLine(key: string, patch: Partial<Line>) {
     touch();
     setLines((current) => current.map((line) => (line.key === key ? { ...line, ...patch } : line)));
@@ -302,13 +315,9 @@ export function DocumentEditor({
     startTransition(async () => {
       let nextVehicleId = vehicleId;
       const normalizedPlate = normalizePlate(plate);
-      if (normalizedPlate && !isValidPlate(normalizedPlate)) {
-        setError("A matrícula tem de estar no formato AA-00-AA.");
-        return;
-      }
       const knownVehicle = nextVehicleId
         ? vehicleList.find((item) => item.id === nextVehicleId)
-        : vehicleList.find((item) => item.plate === normalizedPlate);
+        : vehicleList.find((item) => platesMatch(item.plate, normalizedPlate));
       if (normalizedPlate || knownVehicle) {
         const formData = new FormData();
         formData.set("clientId", clientId || knownVehicle?.clientId || "");
@@ -615,6 +624,7 @@ export function DocumentEditor({
             });
           }}
           onSave={save}
+          isNew={!documentId}
           onInvoice={() => setInvoiceOpen(true)}
           canInvoice={(savedStatus === "concluida" || status === "concluida") && !locked}
         />
