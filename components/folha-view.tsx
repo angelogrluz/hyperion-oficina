@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { PackagePlus, Pencil } from "lucide-react";
 import { CarSide, carColor } from "@/components/car-side";
@@ -9,6 +9,7 @@ import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sideba
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { readSymptoms, subscribeSymptoms, writeSymptoms, type SymptomItem } from "@/lib/browser-cache";
 import { defaultMargin, includesSearch, isOilArticle, lineAmounts, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
 import type { StockLink } from "@/lib/stock-entry";
@@ -32,6 +33,7 @@ type SheetLine = {
 const TABS = ["Folha de obra", "Consumíveis", "Checklist de Verificação", "Notas"] as const;
 
 export function FolhaView({
+  documentId,
   number,
   userName,
   printHref,
@@ -81,6 +83,7 @@ export function FolhaView({
   onCommitStock,
   onRemoveStock,
 }: {
+  documentId?: string;
   number?: string;
   userName: string;
   printHref?: string;
@@ -343,10 +346,7 @@ export function FolhaView({
   return (
     <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]">
       <div className="min-w-0 bg-white text-[#22272a]">
-        <div className="px-2 pt-2">
-          <p className="text-[12px] font-semibold leading-none">Sintomas/Requisitos do Cliente</p>
-          <input disabled placeholder="Adicionar sintoma/requisito do cliente" title="Indisponível nesta versão" className="mt-1 h-6 w-full cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[11px] text-[#8d939c]" />
-        </div>
+        <SymptomList documentId={documentId || "rascunho"} />
         <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
           <label className="min-w-48 flex-1 text-[11px]">
             Observações do cliente
@@ -666,6 +666,100 @@ export function FolhaView({
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function SymptomList({ documentId }: { documentId: string }) {
+  const items = useSyncExternalStore(subscribeSymptoms, () => readSymptoms(documentId), () => readSymptoms(""));
+  const [draft, setDraft] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+
+  function commit(next: SymptomItem[]) {
+    writeSymptoms(documentId, next);
+  }
+
+  function add() {
+    const text = draft.trim();
+    if (!text) return;
+    commit([...items, { id: crypto.randomUUID(), text, done: false }]);
+    setDraft("");
+  }
+
+  function finishEdit(id: string) {
+    const text = editingText.trim();
+    if (text) commit(items.map((item) => (item.id === id ? { ...item, text } : item)));
+    setEditingId(null);
+  }
+
+  return (
+    <div className="px-2 pt-2">
+      <p className="text-[12px] font-semibold leading-none">Sintomas/Requisitos do Cliente</p>
+      {items.length ? (
+        <ul className="mt-1 grid gap-0.5">
+          {items.map((item) => (
+            <li key={item.id} data-testid="symptom-item" className="flex items-center gap-1.5 text-[12px]">
+              <input
+                type="checkbox"
+                checked={item.done}
+                aria-label={`Concluído: ${item.text}`}
+                onChange={() => commit(items.map((current) => (current.id === item.id ? { ...current, done: !current.done } : current)))}
+                className="size-3.5 accent-[#00a9fd]"
+              />
+              {editingId === item.id ? (
+                <input
+                  value={editingText}
+                  aria-label="Editar sintoma"
+                  autoFocus
+                  onChange={(event) => setEditingText(event.target.value)}
+                  onBlur={() => finishEdit(item.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      finishEdit(item.id);
+                    }
+                  }}
+                  className="h-6 min-w-0 flex-1 rounded border border-[#00a9fd] bg-white px-1.5 text-[12px] outline-none"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId(item.id);
+                    setEditingText(item.text);
+                  }}
+                  className={`min-w-0 flex-1 truncate text-left ${item.done ? "text-[#8d939c] line-through" : "text-[#22272a]"}`}
+                >
+                  {item.text}
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Tirar sintoma"
+                onClick={() => commit(items.filter((current) => current.id !== item.id))}
+                className="inline-grid size-4 shrink-0 place-items-center rounded-full bg-[#6971f9] text-[9px] leading-none text-white"
+              >
+                ×
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <input
+        data-testid="symptom-input"
+        value={draft}
+        placeholder="Adicionar sintoma/requisito do cliente"
+        aria-label="Adicionar sintoma ou requisito"
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            add();
+          }
+        }}
+        className="mt-1 h-6 w-full rounded border border-[#e1e2e5] bg-white px-2 text-[12px] text-[#22272a] outline-none placeholder:text-[#8d939c]"
+      />
     </div>
   );
 }

@@ -521,7 +521,6 @@ export async function saveOrderRecord(id: string | null, input: {
   status: string;
   lines: IncomingLine[];
 }) {
-  if (input.problem.trim().length < 3) return { ok: false as const, error: "Descreva o problema relatado." };
   if (input.dateOut && input.dateOut < input.dateIn) {
     return { ok: false as const, error: "A data de saída não pode ser anterior à entrada." };
   }

@@ -7,7 +7,7 @@ import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/
 import { lookupPlate } from "@/app/actions/plates";
 import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
 import { saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
-import { writeStockLink, type CachedClient } from "@/lib/browser-cache";
+import { moveSymptoms, writeStockLink, type CachedClient } from "@/lib/browser-cache";
 import { controlClass, Field, Select } from "@/components/field";
 import { FolhaView } from "@/components/folha-view";
 import { LineGrid } from "@/components/line-grid";
@@ -355,6 +355,7 @@ export function DocumentEditor({
       setError(null);
       toast.success(mode === "order" ? "Ordem guardada." : "Orçamento guardado.");
       if (!documentId) {
+        if (mode === "order") moveSymptoms("rascunho", result.id);
         router.push(mode === "order" ? `/ordens/${result.id}` : `/orcamentos/${result.id}`);
       } else {
         setDirty(false);
@@ -415,6 +416,7 @@ export function DocumentEditor({
     return (
       <>
         <FolhaView
+          documentId={documentId}
           number={number}
           userName={userName}
           printHref={printHref}

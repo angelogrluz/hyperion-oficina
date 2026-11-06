@@ -34,7 +34,7 @@ const orderSchema = z.object({
   dateIn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data de entrada inválida."),
   dateOut: z.string(),
   km: z.number().int().min(0, "Os quilómetros não podem ser negativos.").max(2_000_000),
-  problem: z.string().trim().min(3, "Descreva o problema relatado.").max(2000),
+  problem: z.string().trim().max(2000),
   notes: z.string().max(2000),
   status: z.enum(["aberta", "em_curso", "concluida"]),
   lines: z.array(lineSchema).max(80),
