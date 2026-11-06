@@ -110,6 +110,11 @@ export function salePrice(cost: number, marginPercent: number) {
   return round2(cost * (1 + marginPercent / 100));
 }
 
+export function marginFromCost(cost: number, price: number) {
+  if (!(cost > 0)) return 0;
+  return round2((price / cost - 1) * 100);
+}
+
 export function priceWithVat(net: number, vatRate = DEFAULT_VAT) {
   return round2(net * (1 + vatRate / 100));
 }

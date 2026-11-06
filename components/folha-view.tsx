@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { readSymptoms, subscribeSymptoms, writeSymptoms, type SymptomItem } from "@/lib/browser-cache";
-import { defaultMargin, includesSearch, isOilArticle, lineAmounts, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
+import { defaultMargin, includesSearch, isOilArticle, lineAmounts, marginFromCost, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
 import type { StockLink } from "@/lib/stock-entry";
 import type { EditorArticle, EditorClient } from "@/components/document-editor";
@@ -325,10 +325,11 @@ export function FolhaView({
     const family = line.kind === "mao_de_obra" ? "Serviço" : article?.family || "Produto";
     const netUnit = unitPrice * (1 - Math.min(100, Math.max(0, discountPercent)) / 100);
     const margin = netUnit > 0 ? round2(((netUnit - unitCost) / netUnit) * 100) : 0;
+    const markup = marginFromCost(unitCost, unitPrice);
     const lucro = round2((unitPrice - unitCost) * quantity);
     const stockArticle = articles.find((item) => item.id === line.articleId) ?? articles.find((item) => item.ref === line.ref);
     const stock = stockArticle ? String(stockArticle.stockQty).replace(".", ",") : "—";
-    return { line, quantity, unitPrice, unitCost, amounts, family, margin, lucro, stock };
+    return { line, quantity, unitPrice, unitCost, amounts, family, margin, markup, lucro, stock };
   });
   const visible = tab === "Consumíveis"
     ? computed.filter((row) => ["Óleo", "Filtros", "Eco Taxa"].includes(row.family))
@@ -402,12 +403,12 @@ export function FolhaView({
                   <col style={{ width: "14px" }} />
                   <col style={{ width: "52px" }} />
                   <col />
-                  <col style={{ width: "58px" }} />
+                  <col style={{ width: "50px" }} />
                   <col style={{ width: "52px" }} />
                   <col style={{ width: "56px" }} />
                   <col style={{ width: "48px" }} />
                   <col style={{ width: "32px" }} />
-                  <col style={{ width: "40px" }} />
+                  <col style={{ width: "48px" }} />
                   <col style={{ width: "56px" }} />
                   <col style={{ width: "40px" }} />
                   <col style={{ width: "68px" }} />
@@ -451,7 +452,18 @@ export function FolhaView({
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5"><Cell value={moneyInput(row.unitCost)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitCost: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#f6b26b] px-0.5 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{pt2(row.margin)}%</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">
+                        {row.line.kind === "peca" ? (
+                          <MarginCell
+                            cost={row.unitCost}
+                            price={row.unitPrice}
+                            disabled={locked}
+                            onCommit={(margin) => onLine(row.line.key, { unitPrice: moneyInput(salePrice(row.unitCost, margin)) })}
+                          />
+                        ) : (
+                          <span>{pt2(row.margin)}%</span>
+                        )}
+                      </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={moneyInput(row.unitPrice)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitPrice: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={row.line.discount} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { discount: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
@@ -825,6 +837,54 @@ function Cell({
         onFocus?.(event.currentTarget);
       }}
       className={`box-border h-6 max-w-full min-w-0 bg-transparent px-0.5 outline-none ${narrow ? "w-full text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
+    />
+  );
+}
+
+function parseMargin(input: string) {
+  const cleaned = input.replace("%", "").trim().replace(/\s/g, "").replace(",", ".");
+  const normalized = cleaned.endsWith(".") ? cleaned.slice(0, -1) : cleaned;
+  return parseDecimal(normalized);
+}
+
+function MarginCell({
+  cost,
+  price,
+  disabled,
+  onCommit,
+}: {
+  cost: number;
+  price: number;
+  disabled: boolean;
+  onCommit: (margin: number) => void;
+}) {
+  const formatted = `${pt2(marginFromCost(cost, price))}%`;
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      data-testid="line-margin"
+      aria-label="Margem"
+      value={draft ?? formatted}
+      disabled={disabled}
+      inputMode="decimal"
+      onFocus={(event) => {
+        const input = event.currentTarget;
+        setDraft(input.value);
+        requestAnimationFrame(() => input.select());
+      }}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        const parsed = parseMargin(draft ?? "");
+        if (parsed !== null) onCommit(parsed);
+        setDraft(null);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          event.currentTarget.blur();
+        }
+      }}
+      className="box-border h-6 w-full min-w-0 bg-transparent px-0 text-right outline-none"
     />
   );
 }

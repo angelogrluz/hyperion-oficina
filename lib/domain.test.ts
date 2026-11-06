@@ -10,6 +10,7 @@ import {
   nextCost,
   nifCheckDigit,
   normalizePlate,
+  marginFromCost,
   salePrice,
   stockDelta,
   sumTotals,
@@ -34,6 +35,9 @@ test("NIF português", () => {
 
 test("PVP, margem e ECOLUB", () => {
   assert.equal(salePrice(10, 40), 14);
+  assert.equal(salePrice(22.5, 40), 31.5);
+  assert.equal(marginFromCost(22.5, 31.5), 40);
+  assert.equal(marginFromCost(6.8, salePrice(6.8, 30)), 30);
   assert.equal(salePrice(6.8, 30), 8.84);
   assert.equal(salePrice(0.09, 0), 0.09);
   assert.equal(defaultMargin({ family: "Óleo" }), 30);
