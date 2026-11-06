@@ -58,6 +58,10 @@ model Vehicle {
   year         Int
   vin          String        @default("")
   engine       String        @default("")
+  engineCode   String        @default("")
+  oil          String        @default("")
+  nextInspection String      @default("")
+  nextService  String        @default("")
   km           Int           @default(0)
   fuel         String
   clientId     String?
@@ -117,6 +121,7 @@ model RepairOrder {
   dateIn           DateTime
   dateOut          DateTime?
   km               Int
+  kmOut            Int?
   problem          String
   status           String         @default("aberta")
   notes            String         @default("")
@@ -124,6 +129,10 @@ model RepairOrder {
   invoiceProvider  String?
   invoiceIssuedAt  DateTime?
   invoiceSimulated Boolean        @default(false)
+  invoiceUrl       String?
+  paymentMethod    String?
+  quoteNumber      String?
+  quoteUrl         String?
   quoteId          String?        @unique
   quote            Quote?         @relation(fields: [quoteId], references: [id])
   lines            DocumentLine[]

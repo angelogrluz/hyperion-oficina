@@ -108,6 +108,8 @@ export function DocumentPaper({ doc, workshop }: { doc: PrintableDocument; works
         </div>
       </div>
 
+      {doc.paymentMethod ? <p className="mt-3 text-sm">Modo de pagamento: {doc.paymentMethod}</p> : null}
+
       {doc.invoice ? (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           <p className="font-semibold">

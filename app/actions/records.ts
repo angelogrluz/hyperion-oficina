@@ -20,7 +20,6 @@ import {
   normalizeRef,
   parseDecimal,
 } from "@/lib/domain";
-import { FUELS } from "@/lib/labels";
 
 export type ActionResult<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -116,7 +115,7 @@ export async function deleteClient(id: string): Promise<ActionResult> {
 
 const vehicleSchema = z.object({
   clientId: z.string(),
-  plate: z.string().refine(isValidPlate, "A matrícula tem de estar no formato AA-00-AA."),
+  plate: z.string().refine(isValidPlate, "Indique a matrícula."),
   brand: z.string().trim().max(40),
   model: z.string().trim().max(60),
   version: z.string().trim().max(80),
@@ -124,7 +123,7 @@ const vehicleSchema = z.object({
   vin: z.string().refine(isValidVin, "O VIN, se preenchido, tem 17 caracteres (sem I, O ou Q)."),
   engine: z.string().trim().max(80),
   km: z.coerce.number().int().min(0, "Os quilómetros não podem ser negativos.").max(2_000_000),
-  fuel: z.string().refine((value) => (FUELS as readonly string[]).includes(value), "Escolha o combustível."),
+  fuel: z.string().trim().min(1, "Indique o combustível.").max(40),
 });
 
 export async function saveVehicle(
@@ -157,10 +156,15 @@ export async function saveVehicle(
   if (duplicate) return { ok: false, error: "Já existe uma viatura com esta matrícula." };
 
   try {
-    const data = { ...parsed.data, clientId };
+    const extras: { engineCode?: string; oil?: string; nextInspection?: string; nextService?: string } = {};
+    if (formData.has("engineCode")) extras.engineCode = text(formData, "engineCode");
+    if (formData.has("oil")) extras.oil = text(formData, "oil");
+    if (formData.has("nextInspection")) extras.nextInspection = text(formData, "nextInspection");
+    if (formData.has("nextService")) extras.nextService = text(formData, "nextService");
+    const data = { ...parsed.data, clientId, ...extras };
     const vehicle = id
       ? await prisma.vehicle.update({ where: { id }, data })
-      : await prisma.vehicle.create({ data });
+      : await prisma.vehicle.create({ data: { engineCode: "", oil: "", nextInspection: "", nextService: "", ...data } });
     refresh();
     return {
       ok: true,

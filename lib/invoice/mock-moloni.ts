@@ -1,4 +1,5 @@
 import type { InvoiceAdapter, InvoiceDraft, InvoiceIssued } from "@/lib/invoice/types";
+import { issueMoloniInvoice } from "@/lib/moloni/service";
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -12,14 +13,22 @@ export const mockMoloniAdapter: InvoiceAdapter = {
     if (process.env.NODE_ENV !== "test") {
       await wait(350);
     }
-    const sequence = String(draft.sequence).padStart(4, "0");
-    return {
-      documentNumber: `FT A/${draft.year}/${sequence}`,
-      externalId: `sim_${draft.orderId}_${sequence}`,
-      providerId: "mock-moloni",
-      providerLabel: "Moloni (simulação)",
-      simulated: true,
-    };
+    return issueMoloniInvoice({
+      orderId: draft.orderId,
+      orderNumber: draft.orderNumber,
+      sequence: draft.sequence,
+      year: draft.year,
+      customer: draft.customer,
+      lines: draft.lines.map((line) => ({
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        vatRate: line.vatRate,
+        total: line.total,
+      })),
+      total: draft.totals.total,
+      paymentMethod: draft.paymentMethod ?? "Transferência",
+    });
   },
 };
 

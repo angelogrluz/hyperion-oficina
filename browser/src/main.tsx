@@ -14,7 +14,10 @@ import { SimulationBanner } from "@/components/simulation-banner";
 import { TableShell, Td, Th } from "@/components/table-shell";
 import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
+import { DocumentPaper } from "@/components/document-paper";
+import { PrintButton } from "@/components/print-button";
 import { salePrice } from "@/lib/domain";
+import { orderToPrintable } from "@/lib/printable";
 import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } from "@/lib/format";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
@@ -135,6 +138,10 @@ function editorCatalog(snap: Snapshot) {
       year: vehicle.year,
       vin: vehicle.vin,
       engine: vehicle.engine,
+      engineCode: vehicle.engineCode ?? "",
+      oil: vehicle.oil ?? "",
+      nextInspection: vehicle.nextInspection ?? "",
+      nextService: vehicle.nextService ?? "",
       km: vehicle.km,
       fuel: vehicle.fuel,
     })),
@@ -195,7 +202,7 @@ function OrderScreen() {
   const catalog = editorCatalog(snap);
   return (
     <DocumentEditor
-      key={order.updatedAt}
+      key={order.id}
       mode="order"
       documentId={order.id}
       number={order.number}
@@ -208,6 +215,9 @@ function OrderScreen() {
       articles={catalog.articles}
       suppliers={catalog.suppliers}
       invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: order.invoiceProvider ?? "Simulação" } : null}
+      quoteNumber={order.quoteNumber ?? null}
+      quoteUrl={order.quoteUrl ?? null}
+      invoiceUrl={order.invoiceUrl ?? null}
       initial={{
         clientId: order.clientId ?? "",
         vehicleId: order.vehicleId ?? "",
@@ -215,6 +225,7 @@ function OrderScreen() {
         dateOut: order.dateOut ? lisbonISODate(new Date(order.dateOut)) : "",
         validUntil: "",
         km: String(order.km),
+        kmOut: order.kmOut == null ? "" : String(order.kmOut),
         problem: order.problem,
         notes: order.notes,
         status: order.status,
@@ -399,12 +410,71 @@ function LoginPage() {
   );
 }
 
+function BillingView({ kind }: { kind: "orcamento" | "fatura" }) {
+  const { id } = useParams();
+  const snap = useSnap();
+  if (!snap || !id) return null;
+  const order = snap.orders.find((item) => item.id === id);
+  if (!order) return <p className="p-6">Documento não encontrado.</p>;
+  const client = snap.clients.find((item) => item.id === order.clientId);
+  const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
+  if (!client || !vehicle) return <p className="p-6">Indique o cliente e a viatura antes de abrir o documento.</p>;
+  const number = kind === "orcamento" ? order.quoteNumber : order.invoiceNumber;
+  if (!number) return <p className="p-6">Este documento ainda não foi emitido.</p>;
+  const lines = snap.lines
+    .filter((line) => line.orderId === order.id)
+    .sort((a, b) => a.position - b.position)
+    .map((line) => ({
+      kind: line.kind,
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      vatRate: line.vatRate,
+      discountPercent: line.discountPercent,
+      article: snap.articles.find((article) => article.id === line.articleId) ?? null,
+    }));
+  const doc = orderToPrintable({
+    number: order.number,
+    status: order.status,
+    dateIn: new Date(order.dateIn),
+    dateOut: order.dateOut ? new Date(order.dateOut) : null,
+    km: order.km,
+    problem: order.problem,
+    notes: order.notes,
+    invoiceNumber: kind === "fatura" ? order.invoiceNumber ?? null : null,
+    invoiceProvider: order.invoiceProvider,
+    invoiceSimulated: order.invoiceSimulated,
+    client,
+    vehicle,
+    lines,
+  });
+  doc.title = kind === "orcamento" ? "Orçamento" : "Fatura";
+  doc.kind = kind === "orcamento" ? "quote" : "order";
+  doc.number = number;
+  doc.statusLabel = "Simulação Moloni";
+  doc.paymentMethod = kind === "fatura" ? order.paymentMethod ?? null : null;
+  return (
+    <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
+      <div className="mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 print:hidden">
+        <a href={`${import.meta.env.BASE_URL}ordens/${order.id}`} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
+        <PrintButton />
+      </div>
+      <p className="mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 print:hidden">
+        Documento simulado pela Moloni. Não tem validade fiscal nem foi comunicado à Autoridade Tributária.
+      </p>
+      <DocumentPaper doc={doc} workshop={snap.workshop} />
+    </main>
+  );
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/entrar" element={<LoginPage />} />
       <Route path="/" element={<Frame><Home /></Frame>} />
       <Route path="/ordens/nova" element={<Frame><NewOrder /></Frame>} />
+      <Route path="/ordens/:id/orcamento" element={<BillingView kind="orcamento" />} />
+      <Route path="/ordens/:id/fatura" element={<BillingView kind="fatura" />} />
       <Route path="/ordens/:id" element={<Frame><OrderScreen /></Frame>} />
       <Route path="/clientes" element={<Frame><Clients /></Frame>} />
       <Route path="/clientes/novo" element={<Frame><NewClient /></Frame>} />

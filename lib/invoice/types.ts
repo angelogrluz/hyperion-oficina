@@ -44,6 +44,7 @@ export type InvoiceDraft = {
     total: number;
   };
   notes: string;
+  paymentMethod?: string;
 };
 
 export type InvoiceIssued = {

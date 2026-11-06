@@ -12,6 +12,7 @@ export default function Link({
   onClick?: () => void;
   title?: string;
   "aria-label"?: string;
+  "data-testid"?: string;
 }) {
   return (
     <RouterLink to={href} {...props}>

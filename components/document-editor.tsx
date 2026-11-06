@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/documents";
+import { convertQuote, issueInvoice, issueQuote, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
 import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
 import { ensureConsumidorFinal, saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
@@ -23,7 +23,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { isConsumidorFinal } from "@/lib/consumidor";
-import { markUnsaved } from "@/lib/unsaved";
+import { SHEET_PAYMENTS } from "@/lib/moloni/service";
+import { clearSheetDraft, readSheetDraft, writeSheetDraft, type SheetDraft } from "@/lib/sheet-draft";
+import { markUnsaved, registerSaveFlush } from "@/lib/unsaved";
 import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, platesMatch, salePrice, sumTotals } from "@/lib/domain";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
@@ -61,6 +63,10 @@ export type EditorVehicle = {
   year: number;
   vin: string;
   engine: string;
+  engineCode?: string;
+  oil?: string;
+  nextInspection?: string;
+  nextService?: string;
   km: number;
   fuel: string;
 };
@@ -97,6 +103,9 @@ export function DocumentEditor({
   suppliers = [],
   initial,
   invoice,
+  quoteNumber,
+  quoteUrl,
+  invoiceUrl,
   orderHref,
   userName = "Admin",
   printHref,
@@ -112,6 +121,9 @@ export function DocumentEditor({
   articles: EditorArticle[];
   suppliers?: { id: string; name: string }[];
   invoice?: { number: string; provider: string } | null;
+  quoteNumber?: string | null;
+  quoteUrl?: string | null;
+  invoiceUrl?: string | null;
   orderHref?: string | null;
   userName?: string;
   printHref?: string;
@@ -122,6 +134,7 @@ export function DocumentEditor({
     dateOut: string;
     validUntil: string;
     km: string;
+    kmOut?: string;
     problem: string;
     notes: string;
     status: string;
@@ -129,35 +142,45 @@ export function DocumentEditor({
   };
 }) {
   const router = useRouter();
+  const draft = useRef(readSheetDraft(documentId ?? "nova")).current;
   const [clientList, setClientList] = useState(clients);
   const [articleList, setArticleList] = useState(initialArticles);
   const [supplierList, setSupplierList] = useState(suppliers);
   const [vehicleList, setVehicleList] = useState(vehicles);
-  const [clientId, setClientId] = useState(initial.clientId);
-  const [consumidorFinal, setConsumidorFinal] = useState(() => isConsumidorFinal(clients.find((client) => client.id === initial.clientId)));
+  const [clientId, setClientId] = useState(draft?.clientId ?? initial.clientId);
+  const [consumidorFinal, setConsumidorFinal] = useState(() => isConsumidorFinal(clients.find((client) => client.id === (draft?.clientId ?? initial.clientId))));
   const [previousClientId, setPreviousClientId] = useState("");
-  const [vehicleId, setVehicleId] = useState(initial.vehicleId);
-  const startingVehicle = vehicles.find((vehicle) => vehicle.id === initial.vehicleId);
-  const [plate, setPlate] = useState(startingVehicle?.plate ?? "");
-  const [brand, setBrand] = useState(startingVehicle?.brand ?? "");
-  const [model, setModel] = useState(startingVehicle?.model ?? "");
-  const [version, setVersion] = useState(startingVehicle?.version ?? "");
-  const [year, setYear] = useState(startingVehicle ? String(startingVehicle.year) : "");
-  const [vin, setVin] = useState(startingVehicle?.vin ?? "");
-  const [engine, setEngine] = useState(startingVehicle?.engine ?? "");
-  const [fuel, setFuel] = useState(startingVehicle?.fuel || "Gasolina");
+  const [vehicleId, setVehicleId] = useState(draft?.vehicleId ?? initial.vehicleId);
+  const startingVehicle = vehicles.find((vehicle) => vehicle.id === (draft?.vehicleId || initial.vehicleId));
+  const [plate, setPlate] = useState(draft?.plate ?? startingVehicle?.plate ?? "");
+  const [brand, setBrand] = useState(draft?.brand ?? startingVehicle?.brand ?? "");
+  const [model, setModel] = useState(draft?.model ?? startingVehicle?.model ?? "");
+  const [version, setVersion] = useState(draft?.version ?? startingVehicle?.version ?? "");
+  const [year, setYear] = useState(draft?.year ?? (startingVehicle ? String(startingVehicle.year) : ""));
+  const [vin, setVin] = useState(draft?.vin ?? startingVehicle?.vin ?? "");
+  const [engine, setEngine] = useState(draft?.engine ?? startingVehicle?.engine ?? "");
+  const [engineCode, setEngineCode] = useState(draft?.engineCode ?? startingVehicle?.engineCode ?? "");
+  const [oil, setOil] = useState(draft?.oil ?? startingVehicle?.oil ?? "");
+  const [nextInspection, setNextInspection] = useState(draft?.nextInspection ?? startingVehicle?.nextInspection ?? "");
+  const [nextService, setNextService] = useState(draft?.nextService ?? startingVehicle?.nextService ?? "");
+  const [fuel, setFuel] = useState(draft?.fuel ?? (startingVehicle?.fuel || "Gasolina"));
   const [plateNote, setPlateNote] = useState<string | null>(null);
-  const [dateIn, setDateIn] = useState(initial.dateIn);
+  const [dateIn, setDateIn] = useState(draft?.dateIn ?? initial.dateIn);
   const [dateOut, setDateOut] = useState(initial.dateOut);
   const [validUntil, setValidUntil] = useState(initial.validUntil);
-  const [km, setKm] = useState(initial.km);
-  const [problem, setProblem] = useState(initial.problem);
-  const [notes, setNotes] = useState(initial.notes);
-  const [status, setStatus] = useState(initial.status);
-  const [lines, setLines] = useState<Line[]>(initial.lines);
+  const [km, setKm] = useState(draft?.km ?? initial.km);
+  const [kmOut, setKmOut] = useState(draft?.kmOut ?? initial.kmOut ?? "");
+  const [problem, setProblem] = useState(draft?.problem ?? initial.problem);
+  const [notes, setNotes] = useState(draft?.notes ?? initial.notes);
+  const [status, setStatus] = useState(draft?.status ?? initial.status);
+  const [lines, setLines] = useState<Line[]>((draft?.lines as Line[] | undefined) ?? initial.lines);
   const [partQuery, setPartQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(Boolean(draft && documentId));
+  const [revision, setRevision] = useState(0);
+  const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">(draft && documentId ? "dirty" : "saved");
+  const [payment, setPayment] = useState<string>("");
+  const revisionRef = useRef(0);
   const [pending, startTransition] = useTransition();
   const [clientOpen, setClientOpen] = useState(false);
   const [vehicleOpen, setVehicleOpen] = useState(false);
@@ -183,7 +206,12 @@ export function DocumentEditor({
   );
 
   function touch() {
+    if (locked) return;
+    revisionRef.current += 1;
+    setRevision(revisionRef.current);
     setDirty(true);
+    setSaveState("dirty");
+    markUnsaved(documentId ?? "folha-nova", true);
   }
 
   useEffect(() => {
@@ -191,19 +219,6 @@ export function DocumentEditor({
     markUnsaved(id, dirty);
     return () => markUnsaved(id, false);
   }, [dirty, documentId]);
-
-  const saveRef = useRef(save);
-  saveRef.current = save;
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
-        event.preventDefault();
-        if (!locked) saveRef.current();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [locked]);
 
   function updateLine(key: string, patch: Partial<Line>) {
     touch();
@@ -285,6 +300,10 @@ export function DocumentEditor({
       setYear("");
       setVin("");
       setEngine("");
+      setEngineCode("");
+      setOil("");
+      setNextInspection("");
+      setNextService("");
       setFuel("Gasolina");
       return;
     }
@@ -295,95 +314,235 @@ export function DocumentEditor({
     setYear(String(vehicle.year));
     setVin(vehicle.vin);
     setEngine(vehicle.engine);
+    setEngineCode(vehicle.engineCode ?? "");
+    setOil(vehicle.oil ?? "");
+    setNextInspection(vehicle.nextInspection ?? "");
+    setNextService(vehicle.nextService ?? "");
     setFuel(vehicle.fuel || "Gasolina");
     setKm(String(vehicle.km));
   }
 
-  function save(statusOverride?: string) {
-    const kmValue = Number(km);
+  type SaveOptions = { statusOverride?: string; silent?: boolean; navigate?: boolean };
+
+  function sheetDraft(id: string): SheetDraft {
+    return {
+      id,
+      clientId,
+      vehicleId,
+      plate,
+      brand,
+      model,
+      version,
+      year,
+      vin,
+      engine,
+      engineCode,
+      oil,
+      fuel,
+      km,
+      kmOut,
+      nextInspection,
+      nextService,
+      dateIn,
+      problem,
+      notes,
+      status,
+      lines,
+    };
+  }
+
+  const draftWriter = useRef(sheetDraft);
+  draftWriter.current = sheetDraft;
+
+  async function persist(options?: SaveOptions): Promise<{ ok: true; id: string } | { ok: false }> {
+    const kmValue = km.trim() === "" ? 0 : Number(km.replace(/\s/g, ""));
     if (!Number.isInteger(kmValue) || kmValue < 0) {
       setError("Indique os quilómetros em número inteiro.");
-      return;
+      setSaveState("error");
+      return { ok: false };
+    }
+    const kmOutValue = kmOut.trim() === "" ? null : Number(kmOut.replace(/\s/g, ""));
+    if (kmOutValue !== null && (!Number.isInteger(kmOutValue) || kmOutValue < 0)) {
+      setError("Os kms de saída têm de ser um número inteiro.");
+      setSaveState("error");
+      return { ok: false };
     }
     const parsedLines = payloadLines();
     if (parsedLines.some((line) => line === null)) {
       setError("Há linhas com quantidade ou preço inválido.");
-      return;
+      setSaveState("error");
+      return { ok: false };
     }
-    const nextStatus = statusOverride ?? status;
-    if (statusOverride) setStatus(statusOverride);
-    startTransition(async () => {
-      let nextVehicleId = vehicleId;
-      const normalizedPlate = normalizePlate(plate);
-      const knownVehicle = nextVehicleId
-        ? vehicleList.find((item) => item.id === nextVehicleId)
-        : vehicleList.find((item) => platesMatch(item.plate, normalizedPlate));
-      if (normalizedPlate || knownVehicle) {
-        const formData = new FormData();
-        formData.set("clientId", clientId || knownVehicle?.clientId || "");
-        formData.set("plate", normalizedPlate || knownVehicle?.plate || "");
-        formData.set("brand", brand);
-        formData.set("model", model);
-        formData.set("version", version);
-        formData.set("year", year || String(new Date().getFullYear()));
-        formData.set("vin", vin);
-        formData.set("engine", engine);
-        formData.set("km", String(kmValue));
-        formData.set("fuel", fuel || "Gasolina");
-        const savedVehicle = await saveVehicle(knownVehicle?.id ?? null, formData);
-        if (!savedVehicle.ok) {
-          setError(savedVehicle.error);
-          return;
-        }
-        nextVehicleId = savedVehicle.id;
-        setVehicleId(savedVehicle.id);
-        setVehicleList((current) => {
-          const next = {
-            id: savedVehicle.id,
-            clientId: savedVehicle.clientId,
-            plate: savedVehicle.plate,
-            brand: savedVehicle.brand,
-            model: savedVehicle.model,
-            version,
-            year: Number(year) || new Date().getFullYear(),
-            vin,
-            engine,
-            km: savedVehicle.km,
-            fuel: fuel || "Gasolina",
-          };
-          return current.some((item) => item.id === next.id)
-            ? current.map((item) => (item.id === next.id ? next : item))
-            : [...current, next];
-        });
+    const nextStatus = options?.statusOverride ?? status;
+    if (options?.statusOverride) setStatus(options.statusOverride);
+    const seen = revisionRef.current;
+    setSaveState("saving");
+    let nextVehicleId = vehicleId;
+    const normalizedPlate = normalizePlate(plate);
+    const knownVehicle = nextVehicleId
+      ? vehicleList.find((item) => item.id === nextVehicleId)
+      : vehicleList.find((item) => platesMatch(item.plate, normalizedPlate));
+    if (normalizedPlate || knownVehicle) {
+      const formData = new FormData();
+      formData.set("clientId", clientId || knownVehicle?.clientId || "");
+      formData.set("plate", normalizedPlate || knownVehicle?.plate || "");
+      formData.set("brand", brand);
+      formData.set("model", model);
+      formData.set("version", version);
+      formData.set("year", year || String(new Date().getFullYear()));
+      formData.set("vin", vin);
+      formData.set("engine", engine);
+      formData.set("engineCode", engineCode);
+      formData.set("oil", oil);
+      formData.set("nextInspection", nextInspection);
+      formData.set("nextService", nextService);
+      formData.set("km", String(kmValue));
+      formData.set("fuel", fuel || "Gasolina");
+      const savedVehicle = await saveVehicle(knownVehicle?.id ?? null, formData);
+      if (!savedVehicle.ok) {
+        setError(savedVehicle.error);
+        setSaveState("error");
+        return { ok: false };
       }
-      const body = {
-        clientId,
-        vehicleId: nextVehicleId,
-        km: kmValue,
-        problem,
-        notes,
-        status: nextStatus,
-        lines: parsedLines,
-      };
-      const result =
-        mode === "order"
-          ? await saveOrder(documentId ?? null, { ...body, dateIn, dateOut })
-          : await saveQuote(documentId ?? null, { ...body, date: dateIn, validUntil });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setError(null);
-      toast.success(mode === "order" ? "Ordem guardada." : "Orçamento guardado.");
-      if (!documentId) {
-        if (mode === "order") moveSymptoms("rascunho", result.id);
-        router.push(mode === "order" ? `/ordens/${result.id}` : `/orcamentos/${result.id}`);
-      } else {
-        setDirty(false);
-        router.refresh();
-      }
-    });
+      nextVehicleId = savedVehicle.id;
+      setVehicleId(savedVehicle.id);
+      setVehicleList((current) => {
+        const next = {
+          id: savedVehicle.id,
+          clientId: savedVehicle.clientId,
+          plate: savedVehicle.plate,
+          brand: savedVehicle.brand,
+          model: savedVehicle.model,
+          version,
+          year: Number(year) || new Date().getFullYear(),
+          vin,
+          engine,
+          engineCode,
+          oil,
+          nextInspection,
+          nextService,
+          km: savedVehicle.km,
+          fuel: fuel || "Gasolina",
+        };
+        return current.some((item) => item.id === next.id)
+          ? current.map((item) => (item.id === next.id ? next : item))
+          : [...current, next];
+      });
+    }
+    const body = {
+      clientId,
+      vehicleId: nextVehicleId,
+      km: kmValue,
+      kmOut: kmOutValue,
+      problem,
+      notes,
+      status: nextStatus,
+      lines: parsedLines,
+    };
+    const result =
+      mode === "order"
+        ? await saveOrder(documentId ?? null, { ...body, dateIn, dateOut })
+        : await saveQuote(documentId ?? null, { ...body, date: dateIn, validUntil });
+    if (!result.ok) {
+      setError(result.error);
+      setSaveState("error");
+      return { ok: false };
+    }
+    setError(null);
+    const savedId = result.id;
+    if (revisionRef.current === seen) {
+      setDirty(false);
+      setSaveState("saved");
+      clearSheetDraft(documentId ?? "nova");
+      clearSheetDraft(savedId);
+    }
+    if (!options?.silent) toast.success(mode === "order" ? "Ordem guardada." : "Orçamento guardado.");
+    if (!documentId && options?.navigate !== false) {
+      if (mode === "order") moveSymptoms("rascunho", savedId);
+      clearSheetDraft("nova");
+      router.push(mode === "order" ? `/ordens/${savedId}` : `/orcamentos/${savedId}`);
+    }
+    return { ok: true, id: savedId };
   }
+
+  const queue = useRef(Promise.resolve());
+  function flush(options?: SaveOptions) {
+    const run = queue.current.then(() => persist(options), () => persist(options));
+    queue.current = run.then(() => undefined, () => undefined);
+    return run;
+  }
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  function save(statusOverride?: string) {
+    void flush({ statusOverride, silent: false });
+  }
+
+  useEffect(() => {
+    if (mode !== "order") return;
+    writeSheetDraft(draftWriter.current(documentId ?? "nova"));
+  }, [revision, documentId, mode]);
+
+  useEffect(() => {
+    if (mode !== "order" || !documentId || locked) return;
+    if (revision === 0) return;
+    const timer = window.setTimeout(() => {
+      void flushRef.current({ silent: true, navigate: false });
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [revision, documentId, locked, mode]);
+
+  useEffect(() => {
+    if (draft && documentId && !locked) {
+      revisionRef.current = 1;
+      setRevision(1);
+    }
+    // Restore an unsaved draft once, then the debounce writes it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentId]);
+
+  useEffect(() => {
+    if (mode !== "order") return;
+    return registerSaveFlush(async () => {
+      writeSheetDraft(draftWriter.current(documentId ?? "nova"));
+      if (!documentId || locked) return true;
+      if (!dirty && revisionRef.current === 0) return true;
+      const result = await flushRef.current({ silent: true, navigate: false });
+      return result.ok;
+    });
+  }, [documentId, dirty, locked, mode]);
+
+  useEffect(() => {
+    if (mode !== "order") return;
+    const flushNow = () => {
+      writeSheetDraft(draftWriter.current(documentId ?? "nova"));
+      if (documentId && !locked && (dirty || revisionRef.current > 0)) {
+        void flushRef.current({ silent: true, navigate: false });
+      }
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        if (locked) return;
+        if (documentId) flushNow();
+        else void flushRef.current({ silent: false });
+      }
+    };
+    const onHide = () => {
+      if (document.visibilityState === "hidden") flushNow();
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("beforeunload", flushNow);
+    window.addEventListener("pagehide", flushNow);
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      flushNow();
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("beforeunload", flushNow);
+      window.removeEventListener("pagehide", flushNow);
+      document.removeEventListener("visibilitychange", onHide);
+    };
+  }, [documentId, dirty, locked, mode]);
 
   function addDraft(draft: {
     description: string;
@@ -584,8 +743,13 @@ export function DocumentEditor({
           year={year}
           vin={vin}
           engine={engine}
+          engineCode={engineCode}
+          oil={oil}
           fuel={fuel}
           km={km}
+          kmOut={kmOut}
+          nextInspection={nextInspection}
+          nextService={nextService}
           onProblem={(value) => { touch(); setProblem(value); }}
           onNotes={(value) => { touch(); setNotes(value); }}
           onDateIn={(value) => { touch(); setDateIn(value); }}
@@ -599,8 +763,13 @@ export function DocumentEditor({
           onYear={(value) => { touch(); setYear(value); }}
           onVin={(value) => { touch(); setVin(value); }}
           onEngine={(value) => { touch(); setEngine(value); }}
+          onEngineCode={(value) => { touch(); setEngineCode(value); }}
+          onOil={(value) => { touch(); setOil(value); }}
           onFuel={(value) => { touch(); setFuel(value); }}
           onKm={(value) => { touch(); setKm(value); }}
+          onKmOut={(value) => { touch(); setKmOut(value); }}
+          onNextInspection={(value) => { touch(); setNextInspection(value); }}
+          onNextService={(value) => { touch(); setNextService(value); }}
           onLookup={() => {
             startTransition(async () => {
               const result = await lookupPlate(plate);
@@ -624,42 +793,85 @@ export function DocumentEditor({
             });
           }}
           onSave={save}
+          onFlush={() => {
+            if (documentId) void flush({ silent: true, navigate: false });
+          }}
           isNew={!documentId}
+          saveState={saveState}
           onInvoice={() => setInvoiceOpen(true)}
-          canInvoice={(savedStatus === "concluida" || status === "concluida") && !locked}
+          onQuote={() => {
+            startTransition(async () => {
+              const saved = await flush({ silent: true, navigate: false });
+              if (!saved.ok) return;
+              const result = await issueQuote(saved.id);
+              if (!result.ok) {
+                setError(result.error);
+                return;
+              }
+              toast.success(`Orçamento ${result.documentNumber}`);
+              if (!documentId) router.push(`/ordens/${saved.id}`);
+            });
+          }}
+          canInvoice={(savedStatus === "concluida" || status === "concluida") && !locked && !invoice?.number}
+          quoteNumber={quoteNumber}
+          quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
+          invoiceNumber={invoice?.number ?? null}
+          invoiceHref={documentId ? (invoiceUrl || `/ordens/${documentId}/fatura`) : undefined}
         />
         <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}>
           <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle>Emitir fatura simulada</DialogTitle>
+              <DialogTitle>Faturar</DialogTitle>
               <DialogDescription>
-                O adaptador ativo é a Moloni em modo de simulação. O documento fica numerado, mas não tem validade fiscal nem é enviado à Autoridade Tributária.
+                A Moloni emite a fatura em simulação. Escolha o modo de pagamento. O documento não tem validade fiscal.
               </DialogDescription>
             </DialogHeader>
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
               Total a comunicar: {formatEUR(totals.total)} ({formatEUR(totals.base)} + IVA).
             </div>
+            <fieldset className="grid gap-2">
+              <legend className="mb-1 text-sm font-medium">Modo de pagamento</legend>
+              {SHEET_PAYMENTS.map((method) => (
+                <label key={method} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="pagamento"
+                    value={method}
+                    checked={payment === method}
+                    onChange={() => setPayment(method)}
+                  />
+                  {method}
+                </label>
+              ))}
+            </fieldset>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button>
               <Button
                 type="button"
-                disabled={pending || !documentId}
+                className="bg-[#00a9fd] hover:bg-[#0096e0]"
+                data-testid="emitir-fatura"
+                disabled={pending || !documentId || !payment}
                 onClick={() => {
-                  if (!documentId) return;
+                  if (!documentId || !payment) return;
+                  const method = payment;
+                  setInvoiceOpen(false);
                   startTransition(async () => {
-                    const result = await issueInvoice(documentId);
-                    if (!result.ok) {
-                      setError(result.error);
-                      setInvoiceOpen(false);
+                    const saved = await flush({ silent: true, navigate: false });
+                    if (!saved.ok) {
+                      setInvoiceOpen(true);
                       return;
                     }
-                    toast.success(`Documento simulado ${result.documentNumber}`);
-                    setInvoiceOpen(false);
-                    router.refresh();
+                    const result = await issueInvoice(saved.id, method);
+                    if (!result.ok) {
+                      setError(result.error);
+                      setInvoiceOpen(true);
+                      return;
+                    }
+                    toast.success(`Fatura ${result.documentNumber}`);
                   });
                 }}
               >
-                {pending ? "A emitir…" : "Emitir simulação"}
+                {pending ? "A emitir…" : "Emitir fatura"}
               </Button>
             </DialogFooter>
           </DialogContent>

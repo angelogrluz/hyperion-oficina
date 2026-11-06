@@ -52,6 +52,10 @@ export async function saveVehicle(id: string | null, formData: FormData) {
     engine: text(formData, "engine"),
     km: Number(text(formData, "km") || 0),
     fuel: text(formData, "fuel"),
+    ...(formData.has("engineCode") ? { engineCode: text(formData, "engineCode") } : {}),
+    ...(formData.has("oil") ? { oil: text(formData, "oil") } : {}),
+    ...(formData.has("nextInspection") ? { nextInspection: text(formData, "nextInspection") } : {}),
+    ...(formData.has("nextService") ? { nextService: text(formData, "nextService") } : {}),
   });
 }
 

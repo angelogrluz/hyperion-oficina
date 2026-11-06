@@ -1,4 +1,4 @@
-import { issueInvoiceRecord, saveOrderRecord, saveQuoteRecord, convertQuoteRecord } from "../store";
+import { issueInvoiceRecord, issueQuoteRecord, saveOrderRecord, saveQuoteRecord, convertQuoteRecord } from "../store";
 
 export async function saveOrder(id: string | null, payload: unknown) {
   return saveOrderRecord(id, payload as Parameters<typeof saveOrderRecord>[1]);
@@ -12,6 +12,10 @@ export async function convertQuote(id: string) {
   return convertQuoteRecord(id);
 }
 
-export async function issueInvoice(orderId: string) {
-  return issueInvoiceRecord(orderId);
+export async function issueQuote(orderId: string) {
+  return issueQuoteRecord(orderId);
+}
+
+export async function issueInvoice(orderId: string, paymentMethod: string) {
+  return issueInvoiceRecord(orderId, paymentMethod);
 }

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { hasUnsaved, subscribeUnsaved } from "@/lib/unsaved";
+import { flushSaves, hasUnsaved, subscribeUnsaved } from "@/lib/unsaved";
 
 const LOADED_VERSION = __APP_VERSION__;
 
 type RemoteVersion = { id?: string };
 
-function reloadForVersion(version: string) {
+async function reloadForVersion(version: string) {
+  const saved = await flushSaves();
+  if (!saved) return;
   const url = new URL(window.location.href);
   url.searchParams.set("v", version);
   window.location.replace(url.toString());

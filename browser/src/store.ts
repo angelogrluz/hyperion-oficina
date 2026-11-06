@@ -49,6 +49,10 @@ export type Vehicle = {
   year: number;
   vin: string;
   engine: string;
+  engineCode?: string;
+  oil?: string;
+  nextInspection?: string;
+  nextService?: string;
   km: number;
   fuel: string;
   clientId: string | null;
@@ -110,6 +114,7 @@ export type Order = {
   dateIn: string;
   dateOut: string | null;
   km: number;
+  kmOut?: number | null;
   problem: string;
   status: string;
   notes: string;
@@ -402,13 +407,24 @@ export async function saveVehicleRecord(
         throw new Error("Já existe uma viatura com esta matrícula.");
       }
       data = { ...data, plate };
+      const patch = Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
       if (id) {
         const current = snap.vehicles.find((vehicle) => vehicle.id === id);
         if (!current) throw new Error("Viatura não encontrada.");
-        Object.assign(current, data, { clientId, updatedAt: stamp() });
+        Object.assign(current, patch, { clientId, updatedAt: stamp() });
         saved = current;
       } else {
-        saved = { ...data, clientId, id: uid(), createdAt: stamp(), updatedAt: stamp() };
+        saved = {
+          engineCode: "",
+          oil: "",
+          nextInspection: "",
+          nextService: "",
+          ...patch,
+          clientId,
+          id: uid(),
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        } as Vehicle;
         snap.vehicles.push(saved);
       }
     });
@@ -561,6 +577,7 @@ export async function saveOrderRecord(id: string | null, input: {
   dateIn: string;
   dateOut: string;
   km: number;
+  kmOut?: number | null;
   problem: string;
   notes: string;
   status: string;
@@ -595,6 +612,7 @@ export async function saveOrderRecord(id: string | null, input: {
         dateIn: dateOnly(input.dateIn).toISOString(),
         dateOut,
         km: input.km,
+        kmOut: input.kmOut ?? null,
         problem: input.problem.trim(),
         notes: input.notes,
         status: input.status,
@@ -1308,7 +1326,7 @@ async function buildDemo(): Promise<Snapshot> {
     ["v-bmw", "FN-63-VX", "BMW", "320d", 2016, "WBA8E5104G1234567", 186400, "Gasóleo", "c-joao"],
     ["v-yaris", "GT-15-QB", "Toyota", "Yaris Hybrid", 2023, "SB1K93BE00E123456", 28450, "Híbrido", "c-marta"],
   ] as const).map(([id, plate, brand, model, year, vin, km, fuel, clientId]) => ({
-    id, plate, brand, model, version: "", engine: "", year, vin, km, fuel, clientId, createdAt: stampAt, updatedAt: stampAt,
+    id, plate, brand, model, version: "", engine: "", engineCode: "", oil: "", nextInspection: "", nextService: "", year, vin, km, fuel, clientId, createdAt: stampAt, updatedAt: stampAt,
   }));
   vehicles.forEach((vehicle) => {
     if (!isValidPlate(vehicle.plate) || !isValidVin(vehicle.vin)) throw new Error(vehicle.plate);

@@ -39,6 +39,7 @@ export type PrintableDocument = {
   lines: PrintableLine[];
   totals: { base: number; vat: number; total: number };
   invoice: { number: string; provider: string; simulated: boolean } | null;
+  paymentMethod?: string | null;
 };
 
 type WorkshopLike = {

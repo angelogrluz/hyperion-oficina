@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { PackagePlus, Pencil, Plus } from "lucide-react";
 import { CarSide, carColor } from "@/components/car-side";
@@ -58,8 +59,13 @@ export function FolhaView({
   year,
   vin,
   engine,
+  engineCode,
+  oil,
   fuel,
   km,
+  kmOut,
+  nextInspection,
+  nextService,
   onProblem,
   onNotes,
   onDateIn,
@@ -73,13 +79,25 @@ export function FolhaView({
   onYear,
   onVin,
   onEngine,
+  onEngineCode,
+  onOil,
   onFuel,
   onKm,
+  onKmOut,
+  onNextInspection,
+  onNextService,
   onLookup,
   onSave,
+  onFlush,
   isNew,
+  saveState,
   onInvoice,
+  onQuote,
   canInvoice,
+  quoteNumber,
+  quoteHref,
+  invoiceNumber,
+  invoiceHref,
   suppliers,
   onSaveClient,
   onCreateClient,
@@ -112,8 +130,13 @@ export function FolhaView({
   year: string;
   vin: string;
   engine: string;
+  engineCode: string;
+  oil: string;
   fuel: string;
   km: string;
+  kmOut: string;
+  nextInspection: string;
+  nextService: string;
   onProblem: (value: string) => void;
   onNotes: (value: string) => void;
   onDateIn: (value: string) => void;
@@ -135,13 +158,25 @@ export function FolhaView({
   onYear: (value: string) => void;
   onVin: (value: string) => void;
   onEngine: (value: string) => void;
+  onEngineCode: (value: string) => void;
+  onOil: (value: string) => void;
   onFuel: (value: string) => void;
   onKm: (value: string) => void;
+  onKmOut: (value: string) => void;
+  onNextInspection: (value: string) => void;
+  onNextService: (value: string) => void;
   onLookup: () => void;
   onSave: (status?: string) => void;
+  onFlush?: () => void;
   isNew?: boolean;
+  saveState?: "saved" | "saving" | "dirty" | "error";
   onInvoice: () => void;
+  onQuote: () => void;
   canInvoice: boolean;
+  quoteNumber?: string | null;
+  quoteHref?: string;
+  invoiceNumber?: string | null;
+  invoiceHref?: string;
   suppliers: { id: string; name: string }[];
   onSaveClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
   onCreateClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -163,7 +198,6 @@ export function FolhaView({
   onRemoveStock: (lineKey: string, purchaseLineId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Folha de obra");
-  const [kmOut, setKmOut] = useState("");
   const [promiseQuote, setPromiseQuote] = useState("");
   const [promiseDelivery, setPromiseDelivery] = useState("");
   const [keyBox, setKeyBox] = useState("Não");
@@ -386,7 +420,7 @@ export function FolhaView({
   const stockLine = lines.find((item) => item.key === stockKey && item.kind === "peca") ?? null;
 
   return (
-    <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]">
+    <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]" onBlur={() => onFlush?.()}>
       <div className="min-w-0 bg-white text-[#22272a]">
         <SymptomList documentId={documentId || "rascunho"} />
         <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
@@ -654,15 +688,34 @@ export function FolhaView({
           <span className="ml-auto truncate text-[#8d939c]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
         <div className="fixed right-2 bottom-11 z-30 grid w-[var(--sheet)] gap-1">
-          <Button type="button" data-testid="gravar-obra" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
-            {isNew ? "Criar obra" : "Gravar"}
+          {isNew ? (
+            <Button type="button" data-testid="gravar-obra" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
+              Criar obra
+            </Button>
+          ) : (
+            <p data-testid="guardado" className="text-right text-[11px] text-[#8d939c]">
+              {saveState === "error" ? "Não gravado" : saveState === "saved" ? "Guardado" : "A guardar…"}
+            </p>
+          )}
+          <Button type="button" data-testid="gerar-orcamento" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={onQuote}>
+            Gerar orçamento
           </Button>
+          {quoteNumber && quoteHref ? (
+            <Link href={quoteHref} data-testid="abrir-orcamento" className="inline-flex h-8 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[12px] font-medium text-[#00a9fd]">
+              Abrir orçamento
+            </Link>
+          ) : null}
           <div className="grid grid-cols-2 gap-1">
             <Button type="button" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
             <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>
           </div>
           <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
-          {canInvoice ? <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
+          {canInvoice ? <Button type="button" data-testid="faturar" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
+          {invoiceNumber && invoiceHref ? (
+            <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-8 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[12px] font-medium text-[#00a9fd]">
+              Abrir fatura
+            </Link>
+          ) : null}
         </div>
       </div>
       <aside className="rounded border border-[#eaeaf2] bg-white p-2 text-[11px] text-[#22272a]">
@@ -685,15 +738,15 @@ export function FolhaView({
           <Spec label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
           <Spec label="Potência" value={engine} onChange={onEngine} disabled={locked} />
           <Spec label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
-          <Spec label="Código Motor" value={engine} onChange={onEngine} disabled={locked} />
-          <Spec label="Óleo do Motor" value="" onChange={() => undefined} disabled />
+          <Spec label="Código Motor" value={engineCode} onChange={onEngineCode} disabled={locked} />
+          <Spec label="Óleo do motor" value={oil} onChange={onOil} disabled={locked} />
           <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
           <Spec label="Marca" value={brand} onChange={onBrand} disabled={locked} />
           <Spec label="Modelo" value={model} onChange={onModel} disabled={locked} />
           <Spec label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
-          <Spec label="Kms saída" value={kmOut} onChange={setKmOut} disabled={locked} />
-          <Spec label="Próxima IPO" value="" onChange={() => undefined} disabled />
-          <Spec label="Próxima revisão" value="" onChange={() => undefined} disabled />
+          <Spec label="Kms saída" value={kmOut} onChange={onKmOut} disabled={locked} />
+          <Spec label="Próxima IPO" value={nextInspection} onChange={onNextInspection} disabled={locked} />
+          <Spec label="Próxima revisão" value={nextService} onChange={onNextService} disabled={locked} />
         </div>
         <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
           <p className="text-[10px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
@@ -970,7 +1023,7 @@ function Spec({ label, value, onChange, disabled, wide }: { label: string; value
   return (
     <label className={wide ? "col-span-2 block min-w-0" : "block min-w-0"}>
       <span className="block text-[9px] tracking-wide text-[#8d939c] uppercase">{label}</span>
-      <input value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-5 w-full border-0 border-b border-[#eaeaf2] bg-transparent px-0 text-[11px] outline-none disabled:text-[#22272a]" />
+      <input aria-label={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-5 w-full border-0 border-b border-[#eaeaf2] bg-transparent px-0 text-[11px] outline-none disabled:text-[#22272a]" />
     </label>
   );
 }
