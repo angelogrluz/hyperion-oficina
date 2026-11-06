@@ -120,6 +120,8 @@ function editorCatalog(snap: Snapshot) {
       phone: client.phone,
       email: client.email,
       address: client.address,
+      postalCode: client.postalCode,
+      city: client.city,
       notes: client.notes,
     })),
     vehicles: snap.vehicles.map((vehicle) => ({

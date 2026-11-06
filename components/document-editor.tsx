@@ -46,6 +46,8 @@ export type EditorClient = {
   phone?: string;
   email?: string;
   address?: string;
+  postalCode?: string;
+  city?: string;
   notes?: string;
 };
 export type EditorVehicle = {
@@ -466,6 +468,36 @@ export function DocumentEditor({
           lines={lines}
           articles={articleList}
           suppliers={supplierList}
+          onCreateClient={async (data) => {
+            const formData = new FormData();
+            formData.set("name", data.name);
+            formData.set("nif", data.nif);
+            formData.set("phone", data.phone);
+            formData.set("email", data.email);
+            formData.set("address", data.address);
+            formData.set("postalCode", data.postalCode);
+            formData.set("city", data.city);
+            formData.set("notes", "");
+            const result = await saveClient(null, formData);
+            if (!result.ok) return result;
+            const created = {
+              id: result.id,
+              name: data.name.trim(),
+              nif: normalizeNif(data.nif),
+              phone: data.phone.trim(),
+              email: data.email.trim().toLowerCase(),
+              address: data.address.trim(),
+              postalCode: data.postalCode.trim(),
+              city: data.city.trim(),
+              notes: "",
+            };
+            setClientList((current) => [...current.filter((item) => item.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name, "pt")));
+            setConsumidorFinal(false);
+            setClientId(created.id);
+            setError(null);
+            touch();
+            return { ok: true };
+          }}
           onSaveClient={async (data) => {
             if (!clientId) return { ok: false, error: "Escolha o cliente." };
             const formData = new FormData();
@@ -474,6 +506,8 @@ export function DocumentEditor({
             formData.set("phone", data.phone);
             formData.set("email", data.email);
             formData.set("address", data.address);
+            formData.set("postalCode", data.postalCode);
+            formData.set("city", data.city);
             formData.set("notes", data.notes);
             const result = await saveClient(clientId, formData);
             if (!result.ok) return result;
@@ -483,6 +517,8 @@ export function DocumentEditor({
               phone: data.phone.trim(),
               email: data.email.trim().toLowerCase(),
               address: data.address.trim(),
+              postalCode: data.postalCode.trim(),
+              city: data.city.trim(),
               notes: data.notes.trim(),
             };
             setClientList((current) => current.map((item) => (item.id === clientId ? { ...item, ...saved } : item)));

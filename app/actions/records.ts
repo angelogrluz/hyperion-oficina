@@ -45,6 +45,8 @@ const clientSchema = z.object({
   phone: z.string().max(40),
   email: z.string().max(120).refine((value) => value === "" || z.string().email().safeParse(value).success, "E-mail inválido."),
   address: z.string().max(240),
+  postalCode: z.string().max(12),
+  city: z.string().max(80),
   notes: z.string().max(1000),
 });
 
@@ -56,6 +58,8 @@ export async function saveClient(id: string | null, formData: FormData): Promise
     phone: text(formData, "phone"),
     email: text(formData, "email").toLowerCase(),
     address: text(formData, "address"),
+    postalCode: text(formData, "postalCode"),
+    city: text(formData, "city"),
     notes: text(formData, "notes"),
   });
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };

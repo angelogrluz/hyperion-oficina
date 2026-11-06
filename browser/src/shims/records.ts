@@ -23,6 +23,8 @@ export async function saveClient(id: string | null, formData: FormData) {
     phone: text(formData, "phone"),
     email: text(formData, "email").toLowerCase(),
     address: text(formData, "address"),
+    postalCode: text(formData, "postalCode"),
+    city: text(formData, "city"),
     notes: text(formData, "notes"),
   };
   const result = await saveClientRecord(id, data);

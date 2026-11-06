@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import {
   defaultMinStock,
   isOilArticle,
+  latestEntryCost,
   nextCost,
   normalizeArticleDescription,
   normalizeRef,
@@ -111,6 +112,7 @@ export async function postPurchases(tx: Prisma.TransactionClient, lines: Incomin
     }
   }
 
+  for (const articleId of touched) await refreshLastCost(tx, articleId);
   return { purchaseIds, articlesTouched: touched.size };
 }
 
@@ -136,6 +138,21 @@ export async function voidPurchase(tx: Prisma.TransactionClient, purchaseId: str
     where: { id: purchaseId },
     data: { voided: true, voidedAt: new Date() },
   });
+  for (const line of purchase.lines) await refreshLastCost(tx, line.articleId);
+}
+
+export async function refreshLastCost(tx: Prisma.TransactionClient, articleId: string) {
+  const lines = await tx.purchaseLine.findMany({
+    where: { articleId, purchase: { voided: false, documentType: { not: "Nota de crédito" } } },
+    include: { purchase: { select: { date: true, createdAt: true } } },
+  });
+  const lastCost = latestEntryCost(lines.map((line) => ({
+    date: line.purchase.date.toISOString(),
+    createdAt: line.purchase.createdAt.toISOString(),
+    cost: line.cost,
+  })));
+  await tx.article.update({ where: { id: articleId }, data: { lastCost } });
+  return lastCost;
 }
 
 function articleView(article: {
@@ -143,6 +160,7 @@ function articleView(article: {
   ref: string;
   description: string;
   costPrice: number;
+  lastCost?: number | null;
   marginPercent: number;
   vatRate: number;
   stockQty: number;
@@ -153,6 +171,7 @@ function articleView(article: {
     ref: article.ref,
     description: article.description,
     costPrice: article.costPrice,
+    lastCost: article.lastCost ?? null,
     marginPercent: article.marginPercent,
     vatRate: article.vatRate,
     stockQty: article.stockQty,
@@ -266,7 +285,9 @@ export async function upsertSheetStock(tx: Prisma.TransactionClient, input: Stoc
     vatRate: vat,
     date: input.date,
   };
-  return { link, article: articleView(article) };
+  await refreshLastCost(tx, article.id);
+  const fresh = await tx.article.findUniqueOrThrow({ where: { id: article.id } });
+  return { link, article: articleView(fresh) };
 }
 
 export async function removeSheetStock(tx: Prisma.TransactionClient, purchaseLineId: string) {
@@ -276,14 +297,17 @@ export async function removeSheetStock(tx: Prisma.TransactionClient, purchaseLin
   let article: StockArticle | null = null;
   if (current) {
     const delta = stockDelta(line.purchase.documentType, line.quantity);
-    const updated = await tx.article.update({
+    await tx.article.update({
       where: { id: current.id },
       data: { stockQty: round2(current.stockQty - delta) },
     });
-    article = articleView(updated);
   }
   await tx.purchaseLine.delete({ where: { id: line.id } });
   const remaining = await tx.purchaseLine.count({ where: { purchaseId: line.purchaseId } });
   if (remaining === 0) await tx.purchase.delete({ where: { id: line.purchaseId } });
+  if (current) {
+    await refreshLastCost(tx, current.id);
+    article = articleView(await tx.article.findUniqueOrThrow({ where: { id: current.id } }));
+  }
   return { article };
 }

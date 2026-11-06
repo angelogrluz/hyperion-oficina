@@ -15,6 +15,7 @@ export type StockArticle = {
   ref: string;
   description: string;
   costPrice: number;
+  lastCost: number | null;
   marginPercent: number;
   vatRate: number;
   stockQty: number;

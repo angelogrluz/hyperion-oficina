@@ -19,19 +19,27 @@ export function normalizeSearch(value: string) {
 export function includesSearch(haystack: string, query: string) {
   const q = normalizeSearch(query);
   if (!q) return true;
-  return normalizeSearch(haystack).includes(q);
+  if (normalizeSearch(haystack).includes(q)) return true;
+  const looseQuery = q.replace(/[\s-]/g, "");
+  const looseHaystack = normalizeSearch(haystack).replace(/[\s-]/g, "");
+  return looseQuery.length > 0 && looseHaystack.includes(looseQuery);
 }
 
 export function normalizePlate(input: string) {
-  const raw = input.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  if (/^[A-Z]{2}\d{2}[A-Z]{2}$/.test(raw)) {
-    return `${raw.slice(0, 2)}-${raw.slice(2, 4)}-${raw.slice(4, 6)}`;
-  }
-  return input.toUpperCase().trim();
+  return input.trim().toUpperCase();
+}
+
+export function plateKey(input: string) {
+  return normalizePlate(input).replace(/[\s-]/g, "");
+}
+
+export function platesMatch(a: string, b: string) {
+  const key = plateKey(a);
+  return key.length > 0 && key === plateKey(b);
 }
 
 export function isValidPlate(plate: string) {
-  return /^[A-Z]{2}-\d{2}-[A-Z]{2}$/.test(plate);
+  return normalizePlate(plate).length > 0;
 }
 
 export function normalizeNif(input: string) {
@@ -113,6 +121,20 @@ export function salePrice(cost: number, marginPercent: number) {
 export function marginFromCost(cost: number, price: number) {
   if (!(cost > 0)) return 0;
   return round2((price / cost - 1) * 100);
+}
+
+export function latestEntryCost(entries: Array<{ date: string; createdAt?: string; cost: number }>) {
+  if (!entries.length) return null;
+  const latest = [...entries].sort((a, b) => {
+    const byDate = a.date.localeCompare(b.date);
+    if (byDate !== 0) return byDate;
+    return (a.createdAt ?? "").localeCompare(b.createdAt ?? "");
+  }).at(-1);
+  return latest ? latest.cost : null;
+}
+
+export function prefillUnitCost(article: { costPrice: number; lastCost?: number | null }) {
+  return article.lastCost ?? article.costPrice;
 }
 
 export function priceWithVat(net: number, vatRate = DEFAULT_VAT) {

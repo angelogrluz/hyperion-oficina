@@ -2,15 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { PackagePlus, Pencil } from "lucide-react";
+import { PackagePlus, Pencil, Plus } from "lucide-react";
 import { CarSide, carColor } from "@/components/car-side";
-import { ClientEditDialog, StockEntryDialog, type ClientForm } from "@/components/sheet-dialogs";
+import { ClientEditDialog, NewClientDialog, StockEntryDialog, type ClientForm } from "@/components/sheet-dialogs";
 import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { readSymptoms, subscribeSymptoms, writeSymptoms, type SymptomItem } from "@/lib/browser-cache";
-import { defaultMargin, includesSearch, isOilArticle, lineAmounts, marginFromCost, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
+import { defaultMargin, includesSearch, isOilArticle, lineAmounts, marginFromCost, normalizeArticleDescription, parseDecimal, prefillUnitCost, round2, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
 import type { StockLink } from "@/lib/stock-entry";
 import type { EditorArticle, EditorClient } from "@/components/document-editor";
@@ -81,6 +81,7 @@ export function FolhaView({
   canInvoice,
   suppliers,
   onSaveClient,
+  onCreateClient,
   onCreateSupplier,
   onCommitStock,
   onRemoveStock,
@@ -141,6 +142,7 @@ export function FolhaView({
   canInvoice: boolean;
   suppliers: { id: string; name: string }[];
   onSaveClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onCreateClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
   onCreateSupplier: (name: string) => Promise<{ ok: true; id: string; name: string } | { ok: false; error: string }>;
   onCommitStock: (input: {
     lineKey: string;
@@ -171,6 +173,7 @@ export function FolhaView({
   const [highlight, setHighlight] = useState(0);
   const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const [clientOpen, setClientOpen] = useState(false);
+  const [newClientOpen, setNewClientOpen] = useState(false);
   const [stockKey, setStockKey] = useState<string | null>(null);
   const openClientRef = useRef<() => void>(() => {});
   const onFinalRef = useRef(onConsumidorFinal);
@@ -197,12 +200,13 @@ export function FolhaView({
 
   function chooseArticle(article: EditorArticle) {
     const margin = defaultMargin({ family: article.family, ref: article.ref });
+    const cost = prefillUnitCost(article);
     onAdd({
       description: normalizeArticleDescription(article.description),
       ref: article.ref,
       quantity: draft.quantity || "1",
-      unitPrice: moneyInput(salePrice(article.costPrice, margin)),
-      unitCost: moneyInput(article.costPrice),
+      unitPrice: moneyInput(salePrice(cost, margin)),
+      unitCost: moneyInput(cost),
       vatRate: moneyInput(article.vatRate),
       articleId: article.id,
     });
@@ -258,6 +262,18 @@ export function FolhaView({
         ) : null}
         <div className="flex items-center justify-between gap-1">
           <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
+          <span className="flex items-center gap-1">
+          <button
+            type="button"
+            data-testid="new-client"
+            title="Novo cliente"
+            aria-label="Novo cliente"
+            onClick={() => setNewClientOpen(true)}
+            className="inline-flex h-4 items-center gap-0.5 rounded bg-white/10 px-1 text-[10px] font-semibold text-white hover:bg-white/20"
+          >
+            <Plus className="size-3" />
+            Novo
+          </button>
           <button
             type="button"
             data-testid="edit-client"
@@ -269,6 +285,7 @@ export function FolhaView({
           >
             <Pencil className="size-3" />
           </button>
+          </span>
         </div>
         {client ? null : (
           <select
@@ -289,15 +306,15 @@ export function FolhaView({
         <p className="break-all">{client?.email || "Sem e-mail"}</p>
         <p>NIF {client?.nif || "—"}</p>
         <p className="text-white/90">{client?.address || "Sem morada"}</p>
+        {client?.postalCode || client?.city ? <p>{[client.postalCode, client.city].filter(Boolean).join(" ")}</p> : null}
         <p className="mt-2 text-[10px] tracking-wide text-white/70 uppercase">Notas</p>
         <p>{client?.notes || "Sem notas do cliente."}</p>
-        <p className="mt-2 rounded bg-white/15 px-2 py-1">App Cliente — Não registado</p>
         <p className="mt-2 text-[10px] tracking-wide text-white/70 uppercase">Histórico notas</p>
         <p>{notes || "Sem notas nesta obra."}</p>
       </div>,
     );
     return () => setSidebar(null);
-  }, [setSidebar, locked, clientId, clients, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.notes, notes]);
+  }, [setSidebar, locked, clientId, clients, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.postalCode, client?.city, client?.notes, notes]);
 
   const setHeader = useSetSheetHeader();
   const headerActions = useRef({ onDateIn, setPromiseQuote, setPromiseDelivery });
@@ -472,22 +489,44 @@ export function FolhaView({
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.ref}><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5"><Cell value={moneyInput(row.unitCost)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitCost: value })} /></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#f6b26b] px-0.5 py-0.5"><Cell value={row.line.quantity} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { quantity: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5">
+                        <NumberCell
+                          value={row.unitCost}
+                          disabled={locked}
+                          label="Preço de custo"
+                          testId="line-cost"
+                          onCommit={(cost) => {
+                            if (row.line.kind !== "peca") {
+                              onLine(row.line.key, { unitCost: moneyInput(cost) });
+                              return;
+                            }
+                            const margin = marginFromCost(row.unitCost, row.unitPrice);
+                            onLine(row.line.key, { unitCost: moneyInput(cost), unitPrice: moneyInput(salePrice(cost, margin)) });
+                          }}
+                        />
+                      </td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#f6b26b] px-0.5 py-0.5">
+                        <NumberCell value={row.quantity} disabled={locked} label="Quantidade" testId="line-qty" onCommit={(quantity) => onLine(row.line.key, { quantity: moneyInput(quantity) })} />
+                      </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">
                         {row.line.kind === "peca" ? (
-                          <MarginCell
-                            cost={row.unitCost}
-                            price={row.unitPrice}
+                          <NumberCell
+                            value={row.markup}
                             disabled={locked}
+                            label="Margem"
+                            testId="line-margin"
                             onCommit={(margin) => onLine(row.line.key, { unitPrice: moneyInput(salePrice(row.unitCost, margin)) })}
                           />
                         ) : (
                           <span>{pt2(row.margin)}%</span>
                         )}
                       </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={moneyInput(row.unitPrice)} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { unitPrice: value })} /></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5"><Cell value={row.line.discount} disabled={locked} align="right" narrow onChange={(value) => onLine(row.line.key, { discount: value })} /></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
+                        <NumberCell value={row.unitPrice} disabled={locked} label="PVP base" testId="line-price" onCommit={(price) => onLine(row.line.key, { unitPrice: moneyInput(price) })} />
+                      </td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
+                        <NumberCell value={parseDecimal(row.line.discount) ?? 0} disabled={locked} label="Desconto" testId="line-discount" onCommit={(discount) => onLine(row.line.key, { discount: moneyInput(discount) })} />
+                      </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] text-white">●</span></td>
@@ -589,7 +628,7 @@ export function FolhaView({
                             <span>
                               <span className="font-mono font-semibold">{article.ref}</span> {normalizeArticleDescription(article.description)}
                             </span>
-                            <span className="shrink-0 text-[#4d6d73]">{article.family} · {margin}% · {formatEUR(salePrice(article.costPrice, margin))}</span>
+                            <span className="shrink-0 text-[#4d6d73]">{article.family} · {margin}% · {formatEUR(salePrice(prefillUnitCost(article), margin))}</span>
                           </button>
                         </li>
                       );
@@ -643,8 +682,6 @@ export function FolhaView({
           <Spec label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
           <Spec label="Código Motor" value={engine} onChange={onEngine} disabled={locked} />
           <Spec label="Óleo do Motor" value="" onChange={() => undefined} disabled />
-          <Spec label="Código Rádio" value="" onChange={() => undefined} disabled />
-          <Spec label="Código de Cor" value={brand.slice(0, 3).toUpperCase()} onChange={() => undefined} disabled />
           <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
           <Spec label="Marca" value={brand} onChange={onBrand} disabled={locked} />
           <Spec label="Modelo" value={model} onChange={onModel} disabled={locked} />
@@ -666,12 +703,15 @@ export function FolhaView({
             phone: client.phone ?? "",
             email: client.email ?? "",
             address: client.address ?? "",
+            postalCode: client.postalCode ?? "",
+            city: client.city ?? "",
             notes: client.notes ?? "",
           }}
           onClose={() => setClientOpen(false)}
           onSave={onSaveClient}
         />
       ) : null}
+      {newClientOpen ? <NewClientDialog onClose={() => setNewClientOpen(false)} onSave={onCreateClient} /> : null}
       {stockLine ? (
         <StockEntryDialog
           key={`${stockLine.key}:${stockLine.stockEntry?.purchaseLineId ?? "new"}`}
@@ -863,40 +903,42 @@ function Cell({
   );
 }
 
-function parseMargin(input: string) {
+function parseLooseDecimal(input: string) {
   const cleaned = input.replace("%", "").trim().replace(/\s/g, "").replace(",", ".");
+  if (!cleaned || cleaned === "." || cleaned === "-" || cleaned === "-.") return null;
   const normalized = cleaned.endsWith(".") ? cleaned.slice(0, -1) : cleaned;
-  return parseDecimal(normalized);
+  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
 }
 
-function MarginCell({
-  cost,
-  price,
+function NumberCell({
+  value,
   disabled,
+  label,
+  testId,
   onCommit,
 }: {
-  cost: number;
-  price: number;
+  value: number;
   disabled: boolean;
-  onCommit: (margin: number) => void;
+  label: string;
+  testId: string;
+  onCommit: (value: number) => void;
 }) {
-  const formatted = `${pt2(marginFromCost(cost, price))}%`;
+  const formatted = pt2(value);
   const [draft, setDraft] = useState<string | null>(null);
   return (
     <input
-      data-testid="line-margin"
-      aria-label="Margem"
+      data-testid={testId}
+      aria-label={label}
       value={draft ?? formatted}
       disabled={disabled}
       inputMode="decimal"
-      onFocus={(event) => {
-        const input = event.currentTarget;
-        setDraft(input.value);
-        requestAnimationFrame(() => input.select());
-      }}
+      onFocus={() => setDraft((current) => current ?? formatted)}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={() => {
-        const parsed = parseMargin(draft ?? "");
+        const text = (draft ?? "").trim();
+        const parsed = text === "" ? 0 : parseLooseDecimal(text);
         if (parsed !== null) onCommit(parsed);
         setDraft(null);
       }}

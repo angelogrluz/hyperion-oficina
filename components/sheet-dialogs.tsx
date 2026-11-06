@@ -16,6 +16,8 @@ export type ClientForm = {
   phone: string;
   email: string;
   address: string;
+  postalCode: string;
+  city: string;
   notes: string;
 };
 
@@ -35,6 +37,8 @@ export function ClientEditDialog({
   const [phone, setPhone] = useState(client.phone);
   const [email, setEmail] = useState(client.email);
   const [address, setAddress] = useState(client.address);
+  const [postalCode, setPostalCode] = useState(client.postalCode);
+  const [city, setCity] = useState(client.city);
   const [notes, setNotes] = useState(client.notes);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -46,6 +50,8 @@ export function ClientEditDialog({
       phone: phone.trim(),
       email: email.trim().toLowerCase(),
       address: address.trim(),
+      postalCode: postalCode.trim(),
+      city: city.trim(),
       notes: notes.trim(),
     };
     if (data.name.length < 2) {
@@ -98,6 +104,14 @@ export function ClientEditDialog({
             Morada
             <Textarea value={address} onChange={(event) => setAddress(event.target.value)} className="min-h-16" />
           </label>
+          <label className="grid gap-1 text-xs">
+            Código postal
+            <Input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} className="h-9" />
+          </label>
+          <label className="grid gap-1 text-xs">
+            Localidade
+            <Input value={city} onChange={(event) => setCity(event.target.value)} className="h-9" />
+          </label>
           <label className="grid gap-1 text-xs sm:col-span-2">
             Notas
             <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-16" />
@@ -108,6 +122,105 @@ export function ClientEditDialog({
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
           <Button type="button" className="bg-[#00a9fd] hover:bg-[#0096e0]" disabled={pending} onClick={() => void save()}>
             {pending ? "A guardar…" : "Guardar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function NewClientDialog({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
+}) {
+  const [name, setName] = useState("");
+  const [nif, setNif] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [city, setCity] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function save() {
+    const data: ClientForm = {
+      name: name.trim(),
+      nif: normalizeNif(nif),
+      phone: phone.trim(),
+      email: email.trim().toLowerCase(),
+      address: address.trim(),
+      postalCode: postalCode.trim(),
+      city: city.trim(),
+      notes: "",
+    };
+    if (data.name.length < 2) {
+      setError("Indique o nome.");
+      return;
+    }
+    if (!isValidNif(data.nif)) {
+      setError("NIF inválido.");
+      return;
+    }
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+      setError("E-mail inválido.");
+      return;
+    }
+    setPending(true);
+    const result = await onSave(data);
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Novo cliente</DialogTitle>
+          <DialogDescription>Fica selecionado nesta folha de obra.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="grid gap-1 text-xs sm:col-span-2">
+            Nome
+            <Input value={name} onChange={(event) => setName(event.target.value)} className="h-9" />
+          </label>
+          <label className="grid gap-1 text-xs">
+            NIF
+            <Input value={nif} onChange={(event) => setNif(event.target.value)} inputMode="numeric" className="h-9" />
+          </label>
+          <label className="grid gap-1 text-xs">
+            Telefone
+            <Input value={phone} onChange={(event) => setPhone(event.target.value)} className="h-9" />
+          </label>
+          <label className="grid gap-1 text-xs sm:col-span-2">
+            E-mail
+            <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" className="h-9" />
+          </label>
+          <label className="grid gap-1 text-xs sm:col-span-2">
+            Morada
+            <Textarea value={address} onChange={(event) => setAddress(event.target.value)} className="min-h-16" />
+          </label>
+          <label className="grid gap-1 text-xs">
+            Código postal
+            <Input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} className="h-9" />
+          </label>
+          <label className="grid gap-1 text-xs">
+            Localidade
+            <Input value={city} onChange={(event) => setCity(event.target.value)} className="h-9" />
+          </label>
+        </div>
+        {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="button" className="bg-[#00a9fd] hover:bg-[#0096e0]" disabled={pending} onClick={() => void save()}>
+            {pending ? "A guardar…" : "Criar cliente"}
           </Button>
         </DialogFooter>
       </DialogContent>

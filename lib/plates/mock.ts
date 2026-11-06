@@ -1,4 +1,4 @@
-import { isValidPlate, normalizePlate } from "@/lib/domain";
+import { normalizePlate, plateKey, platesMatch } from "@/lib/domain";
 import { FUELS } from "@/lib/labels";
 import type { PlateLookup, PlateLookupResult, PlateVehicle } from "@/lib/plates/types";
 
@@ -95,8 +95,8 @@ function vinFrom(hash: number) {
   return vin;
 }
 
-function plausible(plate: string): PlateVehicle {
-  const hash = hashPlate(plate);
+function plausible(identity: string, plate: string): PlateVehicle {
+  const hash = hashPlate(identity);
   const sample = CATALOG[hash % CATALOG.length];
   const year = 2008 + (hash % 18);
   const fuel = FUELS.includes(sample.fuel as (typeof FUELS)[number]) ? sample.fuel : "Gasolina";
@@ -114,18 +114,18 @@ function plausible(plate: string): PlateVehicle {
 
 export function lookupMockPlate(input: string): PlateLookupResult {
   const plate = normalizePlate(input);
-  if (!isValidPlate(plate)) {
+  if (!plate) {
     return {
       found: false,
       simulated: true,
       providerId: "mock-plate",
       providerLabel: "Consulta de matrícula (simulação)",
       vehicle: null,
-      message: "A matrícula tem de estar no formato AA-00-AA.",
+      message: "Indique a matrícula.",
     };
   }
-  const known = KNOWN[plate];
-  const vehicle = known ? { plate, ...known } : plausible(plate);
+  const known = Object.entries(KNOWN).find(([key]) => platesMatch(key, plate))?.[1];
+  const vehicle = known ? { plate, ...known } : plausible(plateKey(plate), plate);
   return {
     found: true,
     simulated: true,

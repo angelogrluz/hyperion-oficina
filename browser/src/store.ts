@@ -3,6 +3,7 @@ import {
   defaultMargin,
   defaultMinStock,
   isOilArticle,
+  latestEntryCost,
   isValidNif,
   isValidPlate,
   isValidRef,
@@ -12,6 +13,7 @@ import {
   normalizeArticleDescription,
   normalizeNif,
   normalizePlate,
+  platesMatch,
   normalizeRef,
   round2,
   salePrice,
@@ -30,6 +32,8 @@ export type Client = {
   phone: string;
   email: string;
   address: string;
+  postalCode: string;
+  city: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -57,6 +61,7 @@ export type Article = {
   description: string;
   family: string;
   costPrice: number;
+  lastCost: number | null;
   marginPercent: number;
   vatRate: number;
   stockQty: number;
@@ -343,6 +348,8 @@ export async function ensureConsumidorFinalRecord() {
       phone: "",
       email: "",
       address: "",
+      postalCode: "",
+      city: "",
       notes: "",
       createdAt: stamp(),
       updatedAt: stamp(),
@@ -377,16 +384,18 @@ export async function saveVehicleRecord(
   id: string | null,
   data: Omit<Vehicle, "id" | "createdAt" | "updatedAt">,
 ) {
-  if (!isValidPlate(data.plate)) return { ok: false as const, error: "A matrícula tem de estar no formato AA-00-AA." };
+  const plate = normalizePlate(data.plate);
+  if (!plate) return { ok: false as const, error: "Indique a matrícula." };
   if (!isValidVin(data.vin)) return { ok: false as const, error: "O VIN, se preenchido, tem 17 caracteres (sem I, O ou Q)." };
   const clientId = data.clientId || null;
   let saved: Vehicle | null = null;
   try {
     await update((snap) => {
       if (clientId && !snap.clients.some((client) => client.id === clientId)) throw new Error("Cliente não encontrado.");
-      if (snap.vehicles.some((vehicle) => vehicle.plate === data.plate && vehicle.id !== id)) {
+      if (snap.vehicles.some((vehicle) => platesMatch(vehicle.plate, plate) && vehicle.id !== id)) {
         throw new Error("Já existe uma viatura com esta matrícula.");
       }
+      data = { ...data, plate };
       if (id) {
         const current = snap.vehicles.find((vehicle) => vehicle.id === id);
         if (!current) throw new Error("Viatura não encontrada.");
@@ -868,6 +877,7 @@ export async function savePurchasesRecord(lines: PurchaseInput[]) {
               description,
               family: line.family || (oil ? "Óleo" : "Produto"),
               costPrice: 0,
+              lastCost: null,
               marginPercent: line.margin,
               vatRate: line.vat,
               stockQty: 0,
@@ -905,6 +915,7 @@ export async function savePurchasesRecord(lines: PurchaseInput[]) {
           touched.add(article.id);
         });
       }
+      for (const articleId of touched) syncLastCost(snap, articleId);
       articles = touched.size;
     });
   } catch (error) {
@@ -929,6 +940,7 @@ export async function cancelPurchaseRecord(id: string) {
       }
       purchase.voided = true;
       purchase.voidedAt = stamp();
+      for (const line of lines) syncLastCost(snap, line.articleId);
     });
     return { ok: true as const };
   } catch (error) {
@@ -942,11 +954,24 @@ function viewArticle(article: Article): StockArticle {
     ref: article.ref,
     description: article.description,
     costPrice: article.costPrice,
+    lastCost: article.lastCost,
     marginPercent: article.marginPercent,
     vatRate: article.vatRate,
     stockQty: article.stockQty,
     family: article.family,
   };
+}
+
+function syncLastCost(snap: Snapshot, articleId: string) {
+  const article = snap.articles.find((item) => item.id === articleId);
+  if (!article) return;
+  const entries = snap.purchaseLines.flatMap((line) => {
+    if (line.articleId !== articleId) return [];
+    const purchase = snap.purchases.find((item) => item.id === line.purchaseId);
+    if (!purchase || purchase.voided || purchase.documentType === "Nota de crédito") return [];
+    return [{ date: purchase.date, createdAt: purchase.createdAt, cost: line.cost }];
+  });
+  article.lastCost = latestEntryCost(entries);
 }
 
 export async function commitStockEntryRecord(input: StockEntryInput) {
@@ -1022,6 +1047,7 @@ export async function commitStockEntryRecord(input: StockEntryInput) {
           description,
           family: input.family || (oil ? "Óleo" : "Produto"),
           costPrice: cost,
+          lastCost: null,
           marginPercent: input.margin,
           vatRate: input.vat,
           stockQty: 0,
@@ -1069,6 +1095,7 @@ export async function commitStockEntryRecord(input: StockEntryInput) {
           if (doc.kind === "peca") doc.articleId = article.id;
         }
       }
+      syncLastCost(snap, article.id);
       saved = { link, article: viewArticle(article) };
     });
   } catch (error) {
@@ -1096,6 +1123,8 @@ export async function removeStockEntryRecord(purchaseLineId: string) {
       if (!snap.purchaseLines.some((item) => item.purchaseId === purchase.id)) {
         snap.purchases = snap.purchases.filter((item) => item.id !== purchase.id);
       }
+      if (current) syncLastCost(snap, current.id);
+      article = current ? viewArticle(current) : article;
       for (const doc of snap.lines) {
         if (doc.stockEntry?.purchaseLineId === purchaseLineId) doc.stockEntry = null;
       }
@@ -1211,7 +1240,7 @@ async function buildDemo(): Promise<Snapshot> {
     ["c-marta", "Marta Lopes", nif("25190834"), "927 114 663", "marta.lopes@email.pt", "Travessa da Areosa, 7, 4405-560 Vila Nova de Gaia", ""],
     ["c-final", CONSUMIDOR_FINAL.name, CONSUMIDOR_FINAL.nif, "", "", "", ""],
   ].map(([id, name, nifValue, phone, email, address, notes]) => ({
-    id, name, nif: nifValue, phone, email, address, notes, createdAt: stampAt, updatedAt: stampAt,
+    id, name, nif: nifValue, phone, email, address, postalCode: "", city: "", notes, createdAt: stampAt, updatedAt: stampAt,
   }));
   const vehicles: Vehicle[] = ([
     ["v-208", "AB-19-CK", "Peugeot", "208", 2020, "VF3CCHMZ6LS123456", 62340, "Gasolina", "c-ana"],
@@ -1505,6 +1534,7 @@ function applyPurchases(snap: Snapshot, lines: PurchaseInput[]) {
           description,
           family: line.family || (oil ? "Óleo" : "Produto"),
           costPrice: 0,
+          lastCost: null,
           marginPercent: line.margin,
           vatRate: line.vat,
           stockQty: 0,

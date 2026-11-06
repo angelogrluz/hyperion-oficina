@@ -4,25 +4,33 @@ import {
   defaultMargin,
   ecolubAmount,
   inheritedPurchaseHeader,
+  includesSearch,
   isValidNif,
   isValidPlate,
   lineAmounts,
   nextCost,
   nifCheckDigit,
   normalizePlate,
+  platesMatch,
+  latestEntryCost,
   marginFromCost,
+  prefillUnitCost,
   salePrice,
   stockDelta,
   sumTotals,
 } from "./domain";
 import { zonedDateTime } from "./format";
 
-test("matrícula AA-00-AA", () => {
-  assert.equal(normalizePlate("ab19ck"), "AB-19-CK");
-  assert.equal(normalizePlate("AB-19-CK"), "AB-19-CK");
+test("matrícula em texto livre", () => {
+  assert.equal(normalizePlate("  ab 19 ck  "), "AB 19 CK");
+  assert.equal(normalizePlate("12-AB-34"), "12-AB-34");
+  assert.equal(normalizePlate("m-123-ab"), "M-123-AB");
   assert.equal(isValidPlate("AB-19-CK"), true);
-  assert.equal(isValidPlate("00-AB-00"), false);
-  assert.equal(isValidPlate("AB-19-CKK"), false);
+  assert.equal(isValidPlate("00-AB-00"), true);
+  assert.equal(isValidPlate("  "), false);
+  assert.equal(platesMatch("AB-19-CK", "ab19ck"), true);
+  assert.equal(platesMatch("AB 19 CK", "AB-19-CK"), true);
+  assert.equal(includesSearch("Peugeot AB-19-CK", "ab19ck"), true);
 });
 
 test("NIF português", () => {
@@ -37,6 +45,9 @@ test("PVP, margem e ECOLUB", () => {
   assert.equal(salePrice(10, 40), 14);
   assert.equal(salePrice(22.5, 40), 31.5);
   assert.equal(marginFromCost(22.5, 31.5), 40);
+  assert.equal(latestEntryCost([{ date: "2026-01-01", cost: 8 }, { date: "2026-03-01", cost: 10 }]), 10);
+  assert.equal(prefillUnitCost({ costPrice: 22.5, lastCost: 10 }), 10);
+  assert.equal(prefillUnitCost({ costPrice: 22.5, lastCost: null }), 22.5);
   assert.equal(marginFromCost(6.8, salePrice(6.8, 30)), 30);
   assert.equal(salePrice(6.8, 30), 8.84);
   assert.equal(salePrice(0.09, 0), 0.09);

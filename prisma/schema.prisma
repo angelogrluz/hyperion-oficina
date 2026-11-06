@@ -35,6 +35,8 @@ model Client {
   phone        String        @default("")
   email        String        @default("")
   address      String        @default("")
+  postalCode   String        @default("")
+  city         String        @default("")
   notes        String        @default("")
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
@@ -75,6 +77,7 @@ model Article {
   description   String
   family        String
   costPrice     Float          @default(0)
+  lastCost      Float?
   marginPercent Float          @default(40)
   vatRate       Float          @default(23)
   stockQty      Float          @default(0)

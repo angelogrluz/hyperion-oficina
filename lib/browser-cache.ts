@@ -63,6 +63,8 @@ export type CachedClient = {
   phone: string;
   email: string;
   address: string;
+  postalCode: string;
+  city: string;
   notes: string;
 };
 
