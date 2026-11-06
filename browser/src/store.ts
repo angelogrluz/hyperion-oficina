@@ -18,6 +18,7 @@ import {
   stockDelta,
 } from "@/lib/domain";
 import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
+import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
 import { mockMoloniAdapter } from "@/lib/invoice/mock-moloni";
 
@@ -91,6 +92,7 @@ export type DocLine = {
   orderId: string | null;
   quoteId: string | null;
   position: number;
+  stockEntry?: StockLink | null;
 };
 
 export type Order = {
@@ -213,6 +215,18 @@ const uid = () => crypto.randomUUID();
 
 let database: IDBPDatabase | null = null;
 let chain: Promise<unknown> = Promise.resolve();
+const listeners = new Set<() => void>();
+
+export function subscribeSnapshot(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notifySnapshot() {
+  for (const listener of listeners) listener();
+}
 
 async function databaseHandle() {
   if (!database) {
@@ -238,6 +252,7 @@ export async function resetDemo() {
   const db = await databaseHandle();
   const seeded = await buildDemo();
   await db.put("kv", seeded, "snapshot");
+  notifySnapshot();
   return seeded;
 }
 
@@ -247,6 +262,7 @@ function update(mutate: (snap: Snapshot) => void | Promise<void>) {
     await mutate(snap);
     const db = await databaseHandle();
     await db.put("kv", snap, "snapshot");
+    notifySnapshot();
     return snap;
   });
   chain = run.then(
@@ -470,6 +486,7 @@ type IncomingLine = {
   vatRate: number;
   internalNote?: string;
   articleId: string | null;
+  stockEntry?: StockLink | null;
 };
 
 function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string }, lines: IncomingLine[]) {
@@ -488,6 +505,7 @@ function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string 
       orderId: parent.orderId ?? null,
       quoteId: parent.quoteId ?? null,
       position,
+      stockEntry: line.kind === "peca" ? line.stockEntry ?? null : null,
     });
   });
 }
@@ -872,6 +890,176 @@ export async function cancelPurchaseRecord(id: string) {
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível anular a compra." };
   }
+}
+
+function viewArticle(article: Article): StockArticle {
+  return {
+    id: article.id,
+    ref: article.ref,
+    description: article.description,
+    costPrice: article.costPrice,
+    marginPercent: article.marginPercent,
+    vatRate: article.vatRate,
+    stockQty: article.stockQty,
+    family: article.family,
+  };
+}
+
+export async function commitStockEntryRecord(input: StockEntryInput) {
+  const ref = normalizeRef(input.ref);
+  if (!isValidRef(ref)) return { ok: false as const, error: `Referência inválida: ${input.ref || "(vazia)"}.` };
+  const description = normalizeArticleDescription(input.description);
+  if (description.length < 2) return { ok: false as const, error: "Indique a descrição do artigo." };
+  if (!(input.quantity > 0)) return { ok: false as const, error: "A quantidade tem de ser superior a zero." };
+  if (!input.supplierId) return { ok: false as const, error: "Escolha o fornecedor." };
+  const invoiceNumber = input.invoiceNumber.trim();
+  if (!invoiceNumber) return { ok: false as const, error: "Indique o número da fatura." };
+  if (invoiceNumber.length > 40) return { ok: false as const, error: "O número da fatura é demasiado longo." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { ok: false as const, error: "Data inválida." };
+  if (!(input.cost >= 0)) return { ok: false as const, error: "Custo inválido." };
+  if (!(input.vat >= 0 && input.vat <= 100)) return { ok: false as const, error: "IVA inválido." };
+  const quantity = round2(input.quantity);
+  const cost = round2(input.cost);
+  let saved: { link: StockLink; article: StockArticle } | null = null;
+  try {
+    await update((snap) => {
+      const supplier = snap.suppliers.find((item) => item.id === input.supplierId);
+      if (!supplier) throw new Error("Fornecedor não encontrado.");
+      const existing = input.purchaseLineId
+        ? snap.purchaseLines.find((item) => item.id === input.purchaseLineId)
+        : undefined;
+      const existingPurchase = existing ? snap.purchases.find((item) => item.id === existing.purchaseId) : undefined;
+      if (input.purchaseLineId && (!existing || !existingPurchase || existingPurchase.voided)) {
+        throw new Error("A entrada de stock já não existe.");
+      }
+      if (existing && existingPurchase) {
+        const previous = snap.articles.find((item) => item.id === existing.articleId);
+        if (previous) {
+          previous.stockQty = round2(previous.stockQty - stockDelta(existingPurchase.documentType, existing.quantity));
+          previous.updatedAt = stamp();
+        }
+        snap.purchaseLines = snap.purchaseLines.filter((item) => item.id !== existing.id);
+        if (!snap.purchaseLines.some((item) => item.purchaseId === existingPurchase.id)) {
+          snap.purchases = snap.purchases.filter((item) => item.id !== existingPurchase.id);
+        }
+      }
+
+      let purchase = snap.purchases.find(
+        (item) =>
+          !item.voided &&
+          item.supplierId === supplier.id &&
+          item.documentType === "Fatura" &&
+          item.invoiceNumber.trim().toLowerCase() === invoiceNumber.toLowerCase(),
+      );
+      if (purchase) {
+        purchase.date = dateOnly(input.date).toISOString();
+        purchase.invoiceNumber = invoiceNumber;
+      } else {
+        purchase = {
+          id: uid(),
+          date: dateOnly(input.date).toISOString(),
+          supplierId: supplier.id,
+          documentType: "Fatura",
+          invoiceNumber,
+          paymentMethod: "Transferência",
+          voided: false,
+          voidedAt: null,
+          createdAt: stamp(),
+        };
+        snap.purchases.push(purchase);
+      }
+
+      const oil = isOilArticle({ family: input.family, ref });
+      let article = snap.articles.find((item) => item.ref === ref);
+      if (!article) {
+        article = {
+          id: uid(),
+          ref,
+          description,
+          family: input.family || (oil ? "Óleo" : "Produto"),
+          costPrice: cost,
+          marginPercent: input.margin,
+          vatRate: input.vat,
+          stockQty: 0,
+          minStock: defaultMinStock({ family: input.family, ref, isOil: oil }),
+          isOil: oil,
+          active: true,
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        };
+        snap.articles.push(article);
+      }
+      const stockBefore = article.stockQty;
+      article.stockQty = round2(stockBefore + quantity);
+      article.active = true;
+      article.updatedAt = stamp();
+      const purchaseLineId = existing?.id ?? uid();
+      snap.purchaseLines.push({
+        id: purchaseLineId,
+        purchaseId: purchase.id,
+        articleId: article.id,
+        ref,
+        description,
+        quantity,
+        cost,
+        vatRate: input.vat,
+        margin: input.margin,
+        position: snap.purchaseLines.filter((item) => item.purchaseId === purchase.id).length,
+        stockBefore,
+        costBefore: article.costPrice,
+      });
+      const link: StockLink = {
+        purchaseId: purchase.id,
+        purchaseLineId,
+        invoiceNumber,
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        quantity,
+        cost,
+        vatRate: input.vat,
+        date: input.date,
+      };
+      for (const doc of snap.lines) {
+        if (doc.id === input.lineId || doc.stockEntry?.purchaseLineId === purchaseLineId) {
+          doc.stockEntry = link;
+          if (doc.kind === "peca") doc.articleId = article.id;
+        }
+      }
+      saved = { link, article: viewArticle(article) };
+    });
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível dar entrada de stock." };
+  }
+  if (!saved) return { ok: false as const, error: "Não foi possível dar entrada de stock." };
+  return { ok: true as const, ...saved };
+}
+
+export async function removeStockEntryRecord(purchaseLineId: string) {
+  let article: StockArticle | null = null;
+  try {
+    await update((snap) => {
+      const line = snap.purchaseLines.find((item) => item.id === purchaseLineId);
+      if (!line) return;
+      const purchase = snap.purchases.find((item) => item.id === line.purchaseId);
+      if (!purchase || purchase.voided) return;
+      const current = snap.articles.find((item) => item.id === line.articleId);
+      if (current) {
+        current.stockQty = round2(current.stockQty - stockDelta(purchase.documentType, line.quantity));
+        current.updatedAt = stamp();
+        article = viewArticle(current);
+      }
+      snap.purchaseLines = snap.purchaseLines.filter((item) => item.id !== line.id);
+      if (!snap.purchaseLines.some((item) => item.purchaseId === purchase.id)) {
+        snap.purchases = snap.purchases.filter((item) => item.id !== purchase.id);
+      }
+      for (const doc of snap.lines) {
+        if (doc.stockEntry?.purchaseLineId === purchaseLineId) doc.stockEntry = null;
+      }
+    });
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível retirar a entrada." };
+  }
+  return { ok: true as const, article };
 }
 
 export async function saveAppointmentRecord(input: {

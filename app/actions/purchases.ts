@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { isValidRef, normalizeRef } from "@/lib/domain";
+import { isValidRef, normalizeArticleDescription, normalizeRef } from "@/lib/domain";
 import { DOCUMENT_TYPES, PAYMENT_METHODS } from "@/lib/labels";
-import { postPurchases, voidPurchase } from "@/lib/stock";
+import { postPurchases, removeSheetStock, upsertSheetStock, voidPurchase } from "@/lib/stock";
+import type { StockEntryInput } from "@/lib/stock-entry";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -69,6 +70,51 @@ export async function savePurchases(payload: unknown): Promise<Result<{ count: n
     return { ok: true, count: result.purchaseIds.length, articles: result.articlesTouched };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "Não foi possível lançar a compra." };
+  }
+}
+
+const sheetStockSchema = z.object({
+  ref: z.string(),
+  description: z.string(),
+  quantity: z.number().positive("A quantidade tem de ser superior a zero."),
+  supplierId: z.string().min(1, "Escolha o fornecedor."),
+  invoiceNumber: z.string().trim().min(1, "Indique o número da fatura.").max(40),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida."),
+  cost: z.number().min(0, "Custo inválido."),
+  vat: z.number().min(0).max(100),
+  family: z.string().trim().min(1).max(40),
+  margin: z.number().min(0).max(500),
+  purchaseLineId: z.string().nullable().optional(),
+  lineId: z.string().nullable().optional(),
+});
+
+export async function commitStockEntry(payload: unknown): Promise<Result<Awaited<ReturnType<typeof upsertSheetStock>>>> {
+  await requireUser();
+  const parsed = sheetStockSchema.safeParse(payload);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos." };
+  const ref = normalizeRef(parsed.data.ref);
+  if (!isValidRef(ref)) return { ok: false, error: `Referência inválida: ${parsed.data.ref || "(vazia)"}.` };
+  const description = normalizeArticleDescription(parsed.data.description);
+  if (description.length < 2) return { ok: false, error: "Indique a descrição do artigo." };
+  const input: StockEntryInput = { ...parsed.data, ref, description, invoiceNumber: parsed.data.invoiceNumber.trim() };
+  try {
+    const result = await prisma.$transaction((tx) => upsertSheetStock(tx, input));
+    revalidatePath("/", "layout");
+    return { ok: true, ...result };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Não foi possível dar entrada de stock." };
+  }
+}
+
+export async function removeStockEntry(purchaseLineId: string): Promise<Result<Awaited<ReturnType<typeof removeSheetStock>>>> {
+  await requireUser();
+  if (!purchaseLineId) return { ok: false, error: "Entrada não encontrada." };
+  try {
+    const result = await prisma.$transaction((tx) => removeSheetStock(tx, purchaseLineId));
+    revalidatePath("/", "layout");
+    return { ok: true, ...result };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Não foi possível retirar a entrada." };
   }
 }
 

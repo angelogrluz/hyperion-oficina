@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { PackagePlus, Pencil } from "lucide-react";
 import { CarSide, carColor } from "@/components/car-side";
+import { ClientEditDialog, StockEntryDialog, type ClientForm } from "@/components/sheet-dialogs";
 import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
+import { defaultMargin, includesSearch, isOilArticle, lineAmounts, normalizeArticleDescription, parseDecimal, round2, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
+import type { StockLink } from "@/lib/stock-entry";
 import type { EditorArticle, EditorClient } from "@/components/document-editor";
 
 type SheetLine = {
@@ -23,6 +26,7 @@ type SheetLine = {
   note: string;
   articleId: string | null;
   ref: string;
+  stockEntry?: StockLink | null;
 };
 
 const TABS = ["Folha de obra", "Consumíveis", "Checklist de Verificação", "Notas"] as const;
@@ -71,6 +75,11 @@ export function FolhaView({
   onSave,
   onInvoice,
   canInvoice,
+  suppliers,
+  onSaveClient,
+  onCreateSupplier,
+  onCommitStock,
+  onRemoveStock,
 }: {
   number?: string;
   userName: string;
@@ -123,6 +132,24 @@ export function FolhaView({
   onSave: (status?: string) => void;
   onInvoice: () => void;
   canInvoice: boolean;
+  suppliers: { id: string; name: string }[];
+  onSaveClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onCreateSupplier: (name: string) => Promise<{ ok: true; id: string; name: string } | { ok: false; error: string }>;
+  onCommitStock: (input: {
+    lineKey: string;
+    ref: string;
+    description: string;
+    quantity: number;
+    supplierId: string;
+    invoiceNumber: string;
+    date: string;
+    cost: number;
+    vat: number;
+    family: string;
+    margin: number;
+    purchaseLineId?: string | null;
+  }) => Promise<{ ok: true } | { ok: false; error: string }>;
+  onRemoveStock: (lineKey: string, purchaseLineId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("Folha de obra");
   const [kmOut, setKmOut] = useState("");
@@ -136,6 +163,12 @@ export function FolhaView({
   const [suggestField, setSuggestField] = useState<"ref" | "description" | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [clientOpen, setClientOpen] = useState(false);
+  const [stockKey, setStockKey] = useState<string | null>(null);
+  const openClientRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    openClientRef.current = () => setClientOpen(true);
+  }, []);
   const suggestQuery = suggestField === "ref" ? draft.ref : suggestField === "description" ? draft.description : "";
   const matches = useMemo(() => {
     const query = suggestQuery.trim();
@@ -192,11 +225,26 @@ export function FolhaView({
 
   const setSidebar = useSetSheetSidebar();
   const onClientRef = useRef(onClient);
-  onClientRef.current = onClient;
+  useEffect(() => {
+    onClientRef.current = onClient;
+  }, [onClient]);
   useEffect(() => {
     setSidebar(
       <div className="grid gap-2 text-xs">
-        <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
+        <div className="flex items-center justify-between gap-1">
+          <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
+          <button
+            type="button"
+            data-testid="edit-client"
+            title="Editar cliente"
+            aria-label="Editar cliente"
+            disabled={!client}
+            onClick={() => openClientRef.current()}
+            className="inline-grid size-4 place-items-center rounded text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-40"
+          >
+            <Pencil className="size-3" />
+          </button>
+        </div>
         {client ? null : (
           <select
             aria-label="Cliente"
@@ -228,7 +276,9 @@ export function FolhaView({
 
   const setHeader = useSetSheetHeader();
   const headerActions = useRef({ onDateIn, setPromiseQuote, setPromiseDelivery });
-  headerActions.current = { onDateIn, setPromiseQuote, setPromiseDelivery };
+  useEffect(() => {
+    headerActions.current = { onDateIn, setPromiseQuote, setPromiseDelivery };
+  }, [onDateIn]);
   useEffect(() => {
     setHeader(
       <div className="flex h-12 w-full items-stretch gap-px bg-[#e4e6ea] px-1 py-1 shadow-[0_1px_2px_rgba(34,39,42,.12)]">
@@ -288,6 +338,7 @@ export function FolhaView({
   const desc = round2(computed.reduce((sum, row) => sum + (row.quantity * row.unitPrice - row.amounts.base), 0));
   const iva = round2(computed.reduce((sum, row) => sum + row.amounts.vat, 0));
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
+  const stockLine = lines.find((item) => item.key === stockKey && item.kind === "peca") ?? null;
 
   return (
     <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]">
@@ -351,9 +402,9 @@ export function FolhaView({
                   <col style={{ width: "14px" }} />
                   <col style={{ width: "52px" }} />
                   <col />
-                  <col style={{ width: "72px" }} />
+                  <col style={{ width: "58px" }} />
                   <col style={{ width: "52px" }} />
-                  <col style={{ width: "64px" }} />
+                  <col style={{ width: "56px" }} />
                   <col style={{ width: "48px" }} />
                   <col style={{ width: "32px" }} />
                   <col style={{ width: "40px" }} />
@@ -363,6 +414,7 @@ export function FolhaView({
                   <col style={{ width: "60px" }} />
                   <col style={{ width: "24px" }} />
                   <col style={{ width: "36px" }} />
+                  <col style={{ width: "22px" }} />
                 </colgroup>
                 <thead className="text-[11px] text-[#22272a]">
                   <tr>
@@ -382,6 +434,7 @@ export function FolhaView({
                     <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente</th>
                     <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">A</th>
                     <th className="bg-[#e1e2e5] px-0.5 py-1 text-right font-semibold">Stock</th>
+                    <th className="bg-[#e1e2e5] px-0.5 py-1" aria-label="Entrada de stock" />
                   </tr>
                 </thead>
                 <tbody>
@@ -405,6 +458,22 @@ export function FolhaView({
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] text-white">●</span></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center">
+                        {row.line.kind === "peca" ? (
+                          <button
+                            type="button"
+                            data-testid="stock-entry"
+                            data-linked={row.line.stockEntry ? "true" : "false"}
+                            title={row.line.stockEntry ? row.line.stockEntry.invoiceNumber : "Dar entrada de stock"}
+                            aria-label={row.line.stockEntry ? `Entrada ${row.line.stockEntry.invoiceNumber}` : "Dar entrada de stock"}
+                            disabled={locked}
+                            onClick={() => setStockKey(row.line.key)}
+                            className={`inline-grid size-4 place-items-center rounded ${row.line.stockEntry ? "bg-[#1f8a4c] text-white" : "bg-[#e1e2e5] text-[#22272a] hover:bg-[#d7ebf8]"} disabled:opacity-40`}
+                          >
+                            <PackagePlus className="size-3" />
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                   <tr className="border-t border-[#eaeaf2]">
@@ -444,6 +513,7 @@ export function FolhaView({
                     <td className="bg-[#e1e2e5]" />
                     <td />
                     <td />
+                    <td />
                   </tr>
                 </tbody>
                 <tfoot>
@@ -452,7 +522,7 @@ export function FolhaView({
                     <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
                     <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
                     <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
-                    <td colSpan={2} />
+                    <td colSpan={3} />
                   </tr>
                 </tfoot>
               </table>
@@ -554,6 +624,48 @@ export function FolhaView({
           <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
         </div>
       </aside>
+      {clientOpen && client ? (
+        <ClientEditDialog
+          client={{
+            name: client.name,
+            nif: client.nif,
+            phone: client.phone ?? "",
+            email: client.email ?? "",
+            address: client.address ?? "",
+            notes: client.notes ?? "",
+          }}
+          onClose={() => setClientOpen(false)}
+          onSave={onSaveClient}
+        />
+      ) : null}
+      {stockLine ? (
+        <StockEntryDialog
+          key={`${stockLine.key}:${stockLine.stockEntry?.purchaseLineId ?? "new"}`}
+          line={stockLine}
+          suppliers={suppliers}
+          onClose={() => setStockKey(null)}
+          onCreateSupplier={onCreateSupplier}
+          onRemove={() => onRemoveStock(stockLine.key, stockLine.stockEntry?.purchaseLineId ?? "")}
+          onSave={(input) => {
+            const article = articles.find((item) => item.id === stockLine.articleId) ?? articles.find((item) => item.ref === stockLine.ref);
+            const family = article?.family || (isOilArticle({ ref: stockLine.ref }) ? "Óleo" : "Produto");
+            return onCommitStock({
+              lineKey: stockLine.key,
+              ref: stockLine.ref,
+              description: stockLine.description,
+              family,
+              margin: article?.marginPercent ?? defaultMargin({ family, ref: stockLine.ref }),
+              purchaseLineId: stockLine.stockEntry?.purchaseLineId,
+              quantity: input.quantity,
+              supplierId: input.supplierId,
+              invoiceNumber: input.invoiceNumber,
+              date: input.date,
+              cost: input.cost,
+              vat: input.vat,
+            });
+          }}
+        />
+      ) : null}
     </div>
   );
 }

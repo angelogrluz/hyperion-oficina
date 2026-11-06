@@ -1,6 +1,7 @@
 import { DOCUMENT_TYPES, PAYMENT_METHODS } from "@/lib/labels";
 import { isValidRef, normalizeRef } from "@/lib/domain";
-import { cancelPurchaseRecord, savePurchasesRecord } from "../store";
+import { cancelPurchaseRecord, commitStockEntryRecord, removeStockEntryRecord, savePurchasesRecord } from "../store";
+import type { StockEntryInput } from "@/lib/stock-entry";
 
 export async function savePurchases(payload: unknown) {
   if (!Array.isArray(payload) || payload.length === 0) {
@@ -23,4 +24,12 @@ export async function savePurchases(payload: unknown) {
 
 export async function cancelPurchase(id: string) {
   return cancelPurchaseRecord(id);
+}
+
+export async function commitStockEntry(payload: unknown) {
+  return commitStockEntryRecord(payload as StockEntryInput);
+}
+
+export async function removeStockEntry(purchaseLineId: string) {
+  return removeStockEntryRecord(purchaseLineId);
 }

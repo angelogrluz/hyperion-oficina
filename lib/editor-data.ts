@@ -2,10 +2,11 @@ import { prisma } from "@/lib/db";
 import { lisbonParts } from "@/lib/format";
 
 export async function editorCatalog() {
-  const [clients, vehicles, articles, workshop] = await Promise.all([
+  const [clients, vehicles, articles, suppliers, workshop] = await Promise.all([
     prisma.client.findMany({ orderBy: { name: "asc" } }),
     prisma.vehicle.findMany({ orderBy: { plate: "asc" } }),
     prisma.article.findMany({ where: { active: true }, orderBy: { ref: "asc" } }),
+    prisma.supplier.findMany({ orderBy: { name: "asc" } }),
     prisma.workshop.findUnique({ where: { id: "default" } }),
   ]);
   return {
@@ -32,6 +33,7 @@ export async function editorCatalog() {
       km: vehicle.km,
       fuel: vehicle.fuel,
     })),
+    suppliers: suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
     articles: articles.map((article) => ({
       id: article.id,
       ref: article.ref,

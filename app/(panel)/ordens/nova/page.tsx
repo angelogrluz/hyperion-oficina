@@ -17,6 +17,7 @@ export default async function NewOrderPage() {
         clients={catalog.clients}
         vehicles={catalog.vehicles}
         articles={catalog.articles}
+        suppliers={catalog.suppliers}
         initial={{
           clientId: "",
           vehicleId: "",

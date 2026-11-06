@@ -1,3 +1,4 @@
+import { writeClientCache } from "@/lib/browser-cache";
 import { normalizeNif, normalizePlate } from "@/lib/domain";
 import {
   deleteClientRecord,
@@ -15,14 +16,17 @@ function text(formData: FormData, key: string) {
 }
 
 export async function saveClient(id: string | null, formData: FormData) {
-  return saveClientRecord(id, {
+  const data = {
     name: text(formData, "name"),
     nif: normalizeNif(text(formData, "nif")),
     phone: text(formData, "phone"),
     email: text(formData, "email").toLowerCase(),
     address: text(formData, "address"),
     notes: text(formData, "notes"),
-  });
+  };
+  const result = await saveClientRecord(id, data);
+  if (result.ok) writeClientCache(result.id, data);
+  return result;
 }
 
 export async function deleteClient(id: string) {

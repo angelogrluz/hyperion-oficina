@@ -25,6 +25,7 @@ export default async function OrderPage({ params }: { params: Promise<{ id: stri
         clients={catalog.clients}
         vehicles={catalog.vehicles}
         articles={catalog.articles}
+        suppliers={catalog.suppliers}
         invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: order.invoiceProvider ?? "Simulação" } : null}
         userName={user.name}
         printHref={`/ordens/${order.id}/imprimir`}

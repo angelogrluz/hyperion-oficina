@@ -19,13 +19,25 @@ import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } f
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
 import { saveClient, saveVehicle } from "./shims/records";
-import { readSnapshot, resetDemo, type Snapshot } from "./store";
+import { clearWorkshopCache } from "@/lib/browser-cache";
+import { readSnapshot, resetDemo, subscribeSnapshot, type Snapshot } from "./store";
 import "./styles.css";
 
 function useSnap() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   useEffect(() => {
-    void readSnapshot().then(setSnap);
+    let alive = true;
+    const load = () => {
+      void readSnapshot().then((next) => {
+        if (alive) setSnap(next);
+      });
+    };
+    load();
+    const unsubscribe = subscribeSnapshot(load);
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
   }, []);
   return snap;
 }
@@ -37,6 +49,7 @@ function ResetButton() {
       className="mb-2 w-full rounded-lg bg-white px-2 py-2 text-left text-xs font-semibold text-[#0b8f9c]"
       onClick={() => {
         if (!window.confirm("Repor dados de demonstração? As alterações neste browser serão apagadas.")) return;
+        clearWorkshopCache();
         void resetDemo().then(() => window.location.assign(import.meta.env.BASE_URL));
       }}
     >
@@ -132,6 +145,7 @@ function editorCatalog(snap: Snapshot) {
       stockQty: article.stockQty,
       family: article.family,
     })),
+    suppliers: snap.suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
   };
 }
 
@@ -148,9 +162,10 @@ function linesFor(snap: Snapshot, orderId: string) {
       unitCost: String(line.unitCost).replace(".", ","),
       discount: String(line.discountPercent ?? 0).replace(".", ","),
       vatRate: String(line.vatRate).replace(".", ","),
-      note: "",
+      note: line.internalNote ?? "",
       articleId: line.articleId,
       ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? "",
+      stockEntry: line.stockEntry ?? null,
     }));
 }
 
@@ -188,6 +203,7 @@ function OrderScreen() {
       clients={catalog.clients}
       vehicles={catalog.vehicles}
       articles={catalog.articles}
+      suppliers={catalog.suppliers}
       invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: order.invoiceProvider ?? "Simulação" } : null}
       initial={{
         clientId: order.clientId,
@@ -219,6 +235,7 @@ function NewOrder() {
       clients={catalog.clients}
       vehicles={catalog.vehicles}
       articles={catalog.articles}
+      suppliers={catalog.suppliers}
       initial={{
         clientId: "",
         vehicleId: "",

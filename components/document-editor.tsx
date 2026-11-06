@@ -5,7 +5,9 @@ import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
-import { saveClient, saveVehicle } from "@/app/actions/records";
+import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
+import { saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
+import { writeStockLink, type CachedClient } from "@/lib/browser-cache";
 import { controlClass, Field, Select } from "@/components/field";
 import { FolhaView } from "@/components/folha-view";
 import { LineGrid } from "@/components/line-grid";
@@ -20,7 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
+import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
+import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
 import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
 
@@ -70,6 +73,7 @@ type Line = {
   note: string;
   articleId: string | null;
   ref: string;
+  stockEntry?: StockLink | null;
 };
 
 function num(value: number) {
@@ -85,7 +89,8 @@ export function DocumentEditor({
   labourRate,
   clients,
   vehicles,
-  articles,
+  articles: initialArticles,
+  suppliers = [],
   initial,
   invoice,
   orderHref,
@@ -101,6 +106,7 @@ export function DocumentEditor({
   clients: EditorClient[];
   vehicles: EditorVehicle[];
   articles: EditorArticle[];
+  suppliers?: { id: string; name: string }[];
   invoice?: { number: string; provider: string } | null;
   orderHref?: string | null;
   userName?: string;
@@ -120,6 +126,8 @@ export function DocumentEditor({
 }) {
   const router = useRouter();
   const [clientList, setClientList] = useState(clients);
+  const [articleList, setArticleList] = useState(initialArticles);
+  const [supplierList, setSupplierList] = useState(suppliers);
   const [vehicleList, setVehicleList] = useState(vehicles);
   const [clientId, setClientId] = useState(initial.clientId);
   const [vehicleId, setVehicleId] = useState(initial.vehicleId);
@@ -153,10 +161,10 @@ export function DocumentEditor({
   const ownedVehicles = vehicleList.filter((vehicle) => vehicle.clientId === clientId);
   const matches = useMemo(() => {
     const query = partQuery.trim();
-    return articles
+    return articleList
       .filter((article) => !query || includesSearch(`${article.ref} ${article.description}`, query))
       .slice(0, 8);
-  }, [articles, partQuery]);
+  }, [articleList, partQuery]);
 
   const totals = sumTotals(
     lines.map((line) => ({
@@ -238,6 +246,7 @@ export function DocumentEditor({
         vatRate,
         internalNote: line.note ?? "",
         articleId: line.articleId,
+        stockEntry: line.kind === "peca" ? line.stockEntry ?? null : null,
       };
     });
   }
@@ -365,8 +374,8 @@ export function DocumentEditor({
   }) {
     touch();
     const article = draft.articleId
-      ? articles.find((item) => item.id === draft.articleId)
-      : articles.find((item) => item.ref.toLowerCase() === draft.ref.trim().toLowerCase());
+      ? articleList.find((item) => item.id === draft.articleId)
+      : articleList.find((item) => item.ref.toLowerCase() === draft.ref.trim().toLowerCase());
     setLines((current) => [
       ...current,
       article
@@ -425,7 +434,67 @@ export function DocumentEditor({
           notes={notes}
           dateIn={dateIn}
           lines={lines}
-          articles={articles}
+          articles={articleList}
+          suppliers={supplierList}
+          onSaveClient={async (data) => {
+            if (!clientId) return { ok: false, error: "Escolha o cliente." };
+            const formData = new FormData();
+            formData.set("name", data.name);
+            formData.set("nif", data.nif);
+            formData.set("phone", data.phone);
+            formData.set("email", data.email);
+            formData.set("address", data.address);
+            formData.set("notes", data.notes);
+            const result = await saveClient(clientId, formData);
+            if (!result.ok) return result;
+            const saved: CachedClient = {
+              name: data.name.trim(),
+              nif: normalizeNif(data.nif),
+              phone: data.phone.trim(),
+              email: data.email.trim().toLowerCase(),
+              address: data.address.trim(),
+              notes: data.notes.trim(),
+            };
+            setClientList((current) => current.map((item) => (item.id === clientId ? { ...item, ...saved } : item)));
+            return { ok: true };
+          }}
+          onCreateSupplier={async (name) => {
+            const formData = new FormData();
+            formData.set("name", name);
+            formData.set("nif", "");
+            formData.set("phone", "");
+            formData.set("email", "");
+            formData.set("address", "");
+            formData.set("notes", "");
+            const result = await saveSupplier(null, formData);
+            if (!result.ok) return result;
+            setSupplierList((current) => [...current, { id: result.id, name: result.name }].sort((a, b) => a.name.localeCompare(b.name, "pt")));
+            return { ok: true, id: result.id, name: result.name };
+          }}
+          onCommitStock={async (input) => {
+            const result = await commitStockEntry({ ...input, lineId: input.lineKey });
+            if (!result.ok) return result;
+            setArticleList((current) => {
+              const next = result.article;
+              return current.some((item) => item.id === next.id)
+                ? current.map((item) => (item.id === next.id ? { ...item, ...next } : item))
+                : [...current, next];
+            });
+            updateLine(input.lineKey, { stockEntry: result.link, articleId: result.article.id });
+            writeStockLink(input.lineKey, result.link);
+            return { ok: true };
+          }}
+          onRemoveStock={async (lineKey, purchaseLineId) => {
+            const result = await removeStockEntry(purchaseLineId);
+            if (!result.ok) return result;
+            if (result.article) {
+              const next = result.article;
+              setArticleList((current) => current.map((item) => (item.id === next.id ? { ...item, ...next } : item)));
+            }
+            updateLine(lineKey, { stockEntry: null });
+            writeStockLink(lineKey, null);
+            return { ok: true };
+          }}
           plate={plate}
           brand={brand}
           model={model}
@@ -624,7 +693,7 @@ export function DocumentEditor({
             }}
             onChange={(key, patch) => {
               if (patch.ref !== undefined) {
-                const article = articles.find((item) => item.ref.toLowerCase() === patch.ref!.trim().toLowerCase());
+                const article = articleList.find((item) => item.ref.toLowerCase() === patch.ref!.trim().toLowerCase());
                 if (article) {
                   updateLine(key, {
                     ref: article.ref,
