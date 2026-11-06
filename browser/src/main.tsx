@@ -21,6 +21,7 @@ import { readSession } from "./shims/auth";
 import { saveClient, saveVehicle } from "./shims/records";
 import { clearWorkshopCache } from "@/lib/browser-cache";
 import { readSnapshot, resetDemo, subscribeSnapshot, type Snapshot } from "./store";
+import { AppUpdates } from "./updates";
 import "./styles.css";
 
 function useSnap() {
@@ -421,6 +422,7 @@ const basename = import.meta.env.BASE_URL.replace(/\/$/, "");
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter basename={basename}>
+      <AppUpdates />
       <AppRoutes />
       <Toaster position="top-right" />
     </BrowserRouter>

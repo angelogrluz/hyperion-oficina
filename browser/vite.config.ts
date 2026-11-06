@@ -1,14 +1,31 @@
+import { writeFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 
 const root = path.resolve(__dirname, "..");
+const buildId = new Date().toISOString();
+
+function versionJson(): Plugin {
+  return {
+    name: "hyperion-version",
+    config() {
+      return { define: { __APP_VERSION__: JSON.stringify(buildId) } };
+    },
+    closeBundle() {
+      writeFileSync(
+        path.resolve(__dirname, "dist/version.json"),
+        `${JSON.stringify({ id: buildId, builtAt: buildId }, null, 2)}\n`,
+      );
+    },
+  };
+}
 
 export default defineConfig({
   root: __dirname,
   base: "/hyperion-oficina/",
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), versionJson()],
   resolve: {
     alias: [
       { find: "@/app/actions/auth", replacement: path.resolve(__dirname, "src/shims/auth.ts") },

@@ -9,6 +9,7 @@ import { round2 } from "@/lib/domain";
 import { dateOnly, lisbonParts } from "@/lib/format";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
 import { getInvoiceAdapter } from "@/lib/invoice";
+import { issueMoloniInvoice, issueMoloniQuote, SHEET_PAYMENTS } from "@/lib/moloni/service";
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -253,7 +254,51 @@ export async function convertQuote(id: string): Promise<Result<{ orderId: string
   }
 }
 
-export async function issueInvoice(orderId: string): Promise<Result<{ documentNumber: string; provider: string }>> {
+export async function issueQuote(orderId: string): Promise<Result<{ documentNumber: string; url: string }>> {
+  await requireUser();
+  const order = await prisma.repairOrder.findUnique({
+    where: { id: orderId },
+    include: { client: true, vehicle: true, lines: { orderBy: { position: "asc" } } },
+  });
+  if (!order?.client || !order.vehicle) return { ok: false, error: "Indique o cliente e a viatura antes de gerar o orçamento." };
+  if (order.lines.length === 0) return { ok: false, error: "A folha não tem linhas." };
+  if (order.quoteNumber && order.quoteUrl) return { ok: true, documentNumber: order.quoteNumber, url: order.quoteUrl };
+  const year = lisbonParts().year;
+  const sequence = (await prisma.repairOrder.count({ where: { quoteNumber: { startsWith: `ORC A/${year}/` } } })) + 1;
+  try {
+    const issued = await issueMoloniQuote({
+      orderId,
+      orderNumber: order.number,
+      sequence,
+      year,
+      customer: {
+        name: order.client.name,
+        nif: order.client.nif,
+        address: order.client.address,
+        postalCode: order.client.postalCode,
+        city: order.client.city,
+        email: order.client.email,
+        phone: order.client.phone,
+      },
+      lines: order.lines.map((line) => ({
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        vatRate: line.vatRate,
+        total: line.quantity * line.unitPrice,
+      })),
+      total: order.lines.reduce((sum, line) => sum + line.quantity * line.unitPrice * (1 + line.vatRate / 100), 0),
+    });
+    const url = issued.url ?? `/ordens/${orderId}/orcamento`;
+    await prisma.repairOrder.update({ where: { id: orderId }, data: { quoteNumber: issued.documentNumber, quoteUrl: url } });
+    refresh();
+    return { ok: true, documentNumber: issued.documentNumber, url };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "A Moloni recusou o orçamento." };
+  }
+}
+
+export async function issueInvoice(orderId: string, paymentMethod = "Transferência"): Promise<Result<{ documentNumber: string; provider: string; url: string }>> {
   await requireUser();
   const order = await prisma.repairOrder.findUnique({
     where: { id: orderId },
@@ -270,18 +315,36 @@ export async function issueInvoice(orderId: string): Promise<Result<{ documentNu
   if (order.status === "faturada") return { ok: false, error: "Esta ordem já foi faturada." };
   if (order.status !== "concluida") return { ok: false, error: "Só é possível faturar uma ordem concluída." };
   if (order.lines.length === 0) return { ok: false, error: "A ordem não tem linhas para faturar." };
+  if (!SHEET_PAYMENTS.includes(paymentMethod as (typeof SHEET_PAYMENTS)[number])) {
+    return { ok: false, error: "Escolha o modo de pagamento." };
+  }
 
   const workshop = await prisma.workshop.findUnique({ where: { id: "default" } });
   if (!workshop) return { ok: false, error: "A oficina não está configurada." };
 
-  const adapter = getInvoiceAdapter();
   const year = lisbonParts().year;
   const sequence = await nextInvoiceSequence(prisma, year);
   const draft = buildInvoiceDraft({ order: { ...order, client, vehicle }, workshop, sequence, year });
+  draft.paymentMethod = paymentMethod;
 
   let issued;
   try {
-    issued = await adapter.issue(draft);
+    issued = await issueMoloniInvoice({
+      orderId,
+      orderNumber: order.number,
+      sequence,
+      year,
+      customer: draft.customer,
+      lines: draft.lines.map((line) => ({
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        vatRate: line.vatRate,
+        total: line.total,
+      })),
+      total: draft.totals.total,
+      paymentMethod,
+    });
   } catch (error) {
     return {
       ok: false,
@@ -303,6 +366,8 @@ export async function issueInvoice(orderId: string): Promise<Result<{ documentNu
           invoiceProvider: issued.providerLabel,
           invoiceIssuedAt: new Date(),
           invoiceSimulated: issued.simulated,
+          invoiceUrl: issued.url ?? `/ordens/${orderId}/fatura`,
+          paymentMethod,
           dateOut: current.dateOut ?? dateOnly(lisbonParts().iso),
         },
       });
@@ -323,5 +388,5 @@ export async function issueInvoice(orderId: string): Promise<Result<{ documentNu
   }
 
   refresh();
-  return { ok: true, documentNumber: issued.documentNumber, provider: issued.providerLabel };
+  return { ok: true, documentNumber: issued.documentNumber, provider: issued.providerLabel, url: issued.url ?? `/ordens/${orderId}/fatura` };
 }

@@ -20,6 +20,7 @@ import {
   stockDelta,
 } from "@/lib/domain";
 import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
+import { issueMoloniInvoice, issueMoloniQuote, SHEET_PAYMENTS } from "@/lib/moloni/service";
 import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
@@ -116,6 +117,10 @@ export type Order = {
   invoiceProvider: string | null;
   invoiceIssuedAt: string | null;
   invoiceSimulated: boolean;
+  invoiceUrl?: string | null;
+  paymentMethod?: string | null;
+  quoteNumber?: string | null;
+  quoteUrl?: string | null;
   quoteId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -294,11 +299,12 @@ function nextNumber(snap: Snapshot, kind: "OR" | "ORC") {
   return `${prefix}${String(max + 1).padStart(4, "0")}`;
 }
 
-function nextInvoiceSequence(snap: Snapshot, year: number) {
+function nextDocumentSequence(snap: Snapshot, year: number, prefix: "FT" | "ORC") {
   return (
     snap.orders.reduce((highest, order) => {
-      if (!order.invoiceNumber?.startsWith(`FT A/${year}/`)) return highest;
-      const value = Number(order.invoiceNumber.split("/").at(-1));
+      const number = prefix === "FT" ? order.invoiceNumber : order.quoteNumber;
+      if (!number?.startsWith(`${prefix} A/${year}/`)) return highest;
+      const value = Number(number.split("/").at(-1));
       return Number.isFinite(value) ? Math.max(highest, value) : highest;
     }, 0) + 1
   );
@@ -753,7 +759,71 @@ function orderBundle(snap: Snapshot, orderId: string) {
   return { order, client, vehicle, lines };
 }
 
-export async function issueInvoiceRecord(orderId: string) {
+function moloniPayload(bundle: NonNullable<ReturnType<typeof orderBundle>>, sequence: number, year: number) {
+  const totals = bundle.lines.reduce(
+    (sum, line) => sum + line.quantity * line.unitPrice * (1 + line.vatRate / 100),
+    0,
+  );
+  return {
+    orderId: bundle.order.id,
+    orderNumber: bundle.order.number,
+    sequence,
+    year,
+    customer: {
+      name: bundle.client.name,
+      nif: bundle.client.nif,
+      address: bundle.client.address,
+      postalCode: bundle.client.postalCode,
+      city: bundle.client.city,
+      email: bundle.client.email,
+      phone: bundle.client.phone,
+    },
+    lines: bundle.lines.map((line) => ({
+      description: line.description,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      vatRate: line.vatRate,
+      total: line.quantity * line.unitPrice,
+    })),
+    total: totals,
+  };
+}
+
+export async function issueQuoteRecord(orderId: string) {
+  const snap = await readSnapshot();
+  const bundle = orderBundle(snap, orderId);
+  if (!bundle) return { ok: false as const, error: "Indique o cliente e a viatura antes de gerar o orçamento." };
+  if (bundle.lines.length === 0) return { ok: false as const, error: "A folha não tem linhas." };
+  if (bundle.order.quoteNumber) {
+    return {
+      ok: true as const,
+      documentNumber: bundle.order.quoteNumber,
+      url: bundle.order.quoteUrl ?? `/ordens/${orderId}/orcamento`,
+    };
+  }
+  const year = lisbonParts().year;
+  const sequence = nextDocumentSequence(snap, year, "ORC");
+  let issued;
+  try {
+    issued = await issueMoloniQuote(moloniPayload(bundle, sequence, year));
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou o orçamento." };
+  }
+  const url = issued.url ?? `/ordens/${orderId}/orcamento`;
+  await update((current) => {
+    const order = current.orders.find((item) => item.id === orderId);
+    if (!order) throw new Error("Ordem não encontrada.");
+    order.quoteNumber = issued.documentNumber;
+    order.quoteUrl = url;
+    order.updatedAt = stamp();
+  });
+  return { ok: true as const, documentNumber: issued.documentNumber, url };
+}
+
+export async function issueInvoiceRecord(orderId: string, paymentMethod = "Transferência") {
+  if (!SHEET_PAYMENTS.includes(paymentMethod as (typeof SHEET_PAYMENTS)[number])) {
+    return { ok: false as const, error: "Escolha o modo de pagamento." };
+  }
   const snap = await readSnapshot();
   const order = snap.orders.find((item) => item.id === orderId);
   if (!order) return { ok: false as const, error: "Ordem não encontrada." };
@@ -764,42 +834,30 @@ export async function issueInvoiceRecord(orderId: string) {
   if (bundle.order.status !== "concluida") return { ok: false as const, error: "Só é possível faturar uma ordem concluída." };
   if (bundle.lines.length === 0) return { ok: false as const, error: "A ordem não tem linhas para faturar." };
   const year = lisbonParts().year;
-  const sequence = nextInvoiceSequence(snap, year);
-  const draft = buildInvoiceDraft({
-    order: {
-      id: bundle.order.id,
-      number: bundle.order.number,
-      km: bundle.order.km,
-      problem: bundle.order.problem,
-      notes: bundle.order.notes,
-      client: bundle.client,
-      vehicle: bundle.vehicle,
-      lines: bundle.lines,
-    },
-    workshop: snap.workshop,
-    sequence,
-    year,
-  });
+  const sequence = nextDocumentSequence(snap, year, "FT");
   let issued;
   try {
-    issued = await mockMoloniAdapter.issue(draft);
+    issued = await issueMoloniInvoice({ ...moloniPayload(bundle, sequence, year), paymentMethod });
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "O adaptador de faturação recusou o documento." };
+    return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou a fatura." };
   }
+  const url = issued.url ?? `/ordens/${orderId}/fatura`;
   try {
     await update((current) => {
-      const order = current.orders.find((item) => item.id === orderId);
-      if (!order || order.status !== "concluida") throw new Error("A ordem mudou de estado. Atualize a página.");
+      const saved = current.orders.find((item) => item.id === orderId);
+      if (!saved || saved.status !== "concluida") throw new Error("A ordem mudou de estado. Atualize a página.");
       if (current.orders.some((item) => item.invoiceNumber === issued.documentNumber)) {
         throw new Error("Esse número de documento já existe. Tente faturar outra vez.");
       }
-      order.status = "faturada";
-      order.invoiceNumber = issued.documentNumber;
-      order.invoiceProvider = issued.providerLabel;
-      order.invoiceIssuedAt = new Date().toISOString();
-      order.invoiceSimulated = issued.simulated;
-      order.dateOut = order.dateOut ?? dateOnly(lisbonParts().iso).toISOString();
-      order.updatedAt = stamp();
+      saved.status = "faturada";
+      saved.invoiceNumber = issued.documentNumber;
+      saved.invoiceProvider = issued.providerLabel;
+      saved.invoiceIssuedAt = new Date().toISOString();
+      saved.invoiceSimulated = issued.simulated;
+      saved.invoiceUrl = url;
+      saved.paymentMethod = paymentMethod;
+      saved.dateOut = saved.dateOut ?? dateOnly(lisbonParts().iso).toISOString();
+      saved.updatedAt = stamp();
       current.invoiceLogs.push({
         id: uid(),
         orderId,
@@ -807,7 +865,7 @@ export async function issueInvoiceRecord(orderId: string) {
         providerLabel: issued.providerLabel,
         simulated: issued.simulated,
         documentNumber: issued.documentNumber,
-        requestJson: JSON.stringify(draft),
+        requestJson: JSON.stringify({ paymentMethod, customer: bundle.client.nif }),
         responseJson: JSON.stringify(issued),
         createdAt: stamp(),
       });
@@ -815,7 +873,7 @@ export async function issueInvoiceRecord(orderId: string) {
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível gravar a fatura." };
   }
-  return { ok: true as const, documentNumber: issued.documentNumber, provider: issued.providerLabel };
+  return { ok: true as const, documentNumber: issued.documentNumber, provider: issued.providerLabel, url };
 }
 
 type PurchaseInput = {
@@ -1339,6 +1397,10 @@ async function buildDemo(): Promise<Snapshot> {
       invoiceProvider: null,
       invoiceIssuedAt: null,
       invoiceSimulated: false,
+      invoiceUrl: null,
+      paymentMethod: null,
+      quoteNumber: null,
+      quoteUrl: null,
       createdAt: stampAt,
       updatedAt: stampAt,
     });

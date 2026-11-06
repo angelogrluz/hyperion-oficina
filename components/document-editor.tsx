@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { convertQuote, issueInvoice, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
@@ -23,6 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { isConsumidorFinal } from "@/lib/consumidor";
+import { markUnsaved } from "@/lib/unsaved";
 import { defaultMargin, includesSearch, isValidPlate, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, salePrice, sumTotals } from "@/lib/domain";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
@@ -184,6 +185,12 @@ export function DocumentEditor({
   function touch() {
     setDirty(true);
   }
+
+  useEffect(() => {
+    const id = documentId ?? "folha-nova";
+    markUnsaved(id, dirty);
+    return () => markUnsaved(id, false);
+  }, [dirty, documentId]);
 
   function updateLine(key: string, patch: Partial<Line>) {
     touch();
