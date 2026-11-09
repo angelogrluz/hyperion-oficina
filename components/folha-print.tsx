@@ -74,7 +74,7 @@ export function FolhaPrint({
         <a href={backHref} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
         <PrintButton />
       </div>
-      <article data-testid="folha-impressa" className="mx-auto max-w-[210mm] bg-white px-8 py-8 text-[12px] shadow-sm print:shadow-none">
+      <article data-testid="folha-impressa" className="print-keep mx-auto max-w-[210mm] bg-white px-8 py-8 text-[12px] shadow-sm print:shadow-none">
         <div className="flex items-start justify-between gap-6 border-b border-neutral-300 pb-4">
           <CompanyBlock showIban />
           <div className="text-right">

@@ -35,7 +35,7 @@ export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
   const addressLines = [doc.client.address, [doc.client.postalCode, doc.client.city].filter(Boolean).join(" ")].filter(Boolean);
 
   return (
-    <article data-testid="documento-moloni" className="mx-auto max-w-[210mm] bg-white px-6 py-6 text-[11px] leading-snug text-black shadow-sm ring-1 ring-black/10 print:shadow-none print:ring-0">
+    <article data-testid="documento-moloni" className="print-keep mx-auto max-w-[210mm] bg-white px-6 py-6 text-[11px] leading-snug text-black shadow-sm ring-1 ring-black/10 print:shadow-none print:ring-0">
       <div className="grid grid-cols-2 items-start gap-6">
         <CompanyBlock />
         <div>

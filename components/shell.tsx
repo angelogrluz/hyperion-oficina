@@ -53,7 +53,7 @@ function ToolButton({
   onClick?: () => void;
 }) {
   const className =
-    "grid size-8 place-items-center rounded text-[#3c4450] hover:bg-[#f3f5f8]";
+    "grid size-10 place-items-center rounded text-[#3c4450] hover:bg-[#f3f5f8]";
   const body = (
     <>
       {children}
@@ -87,21 +87,21 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
       <div className="px-2 pt-3 pb-2">
         <Logo light />
       </div>
-      <div className="flex-1 overflow-y-auto px-2 py-1 text-[12px]">
+      <div className="flex-1 overflow-y-auto px-2 py-1 text-[17px]">
         {extra ? <div className="px-1">{extra}</div> : home ? (
           <div className="grid gap-0.5">
             {item("/", "Ver tudo", estado === "")}
             <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Selecionar todos</button>
-            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Indicadores das obras</p>
+            <p className="mt-2 px-2 py-1 text-[14px] tracking-wide text-white/45 uppercase">Indicadores das obras</p>
             <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Em curso</button>
-            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Colaboradores</p>
+            <p className="mt-2 px-2 py-1 text-[14px] tracking-wide text-white/45 uppercase">Colaboradores</p>
             <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Sem colaboradores</button>
-            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Estados do serviço</p>
+            <p className="mt-2 px-2 py-1 text-[14px] tracking-wide text-white/45 uppercase">Estados do serviço</p>
             {item("/?estado=aberta", "Por aprovar", estado === "aberta")}
             {item("/?estado=em_curso", "Aprovado", estado === "em_curso")}
             {item("/?estado=hoje", "Para hoje", estado === "hoje")}
             {item("/?estado=concluida", "Processo fechado", estado === "concluida")}
-            <p className="mt-2 px-2 py-1 text-[10px] tracking-wide text-white/45 uppercase">Atribuído a</p>
+            <p className="mt-2 px-2 py-1 text-[14px] tracking-wide text-white/45 uppercase">Atribuído a</p>
             <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed rounded px-2 py-1 text-left text-white/40">Sem atribuição</button>
           </div>
         ) : (
@@ -118,18 +118,18 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
           </div>
         )}
       </div>
-      <div className="border-t border-white/10 text-[11px]">
+      <div className="border-t border-white/10 text-[16px]">
         <div className="bg-[#3a4146] px-2 py-1.5 text-white">
-          <p className="text-[10px] uppercase">Por aprovar</p>
+          <p className="text-[14px] uppercase">Por aprovar</p>
           <p className="text-sm font-semibold tabular-nums">{formatEUR(totals.porAprovar)}</p>
         </div>
         <div className="grid grid-cols-2">
           <div className="bg-[#00a9fd] px-2 py-1.5 text-white">
-            <p className="text-[10px]">Aprovado</p>
+            <p className="text-[14px]">Aprovado</p>
             <p className="font-semibold tabular-nums">{formatEUR(totals.aprovado)}</p>
           </div>
           <div className="bg-[#0096e0] px-2 py-1.5 text-white">
-            <p className="text-[10px]">Para hoje</p>
+            <p className="text-[14px]">Para hoje</p>
             <p className="font-semibold tabular-nums">{formatEUR(totals.paraHoje)}</p>
           </div>
         </div>
@@ -178,7 +178,7 @@ export function Shell({
   return (
     <SheetSidebarProvider>
       {(sidebar, header) => (
-    <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[#22272a] [--rail:clamp(150px,11.7vw,230px)]">
+    <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[17px] text-[#22272a] [--rail:clamp(190px,12vw,230px)]">
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-[var(--rail)] flex-col bg-[#22272a] text-white lg:flex">
         <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
@@ -186,7 +186,7 @@ export function Shell({
         {header ? (
           <header className="no-print sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">{header}</header>
         ) : (
-        <header className="no-print sticky top-0 z-40 flex h-11 items-center gap-0.5 border-b border-[#eaeaf2] bg-white px-1">
+        <header className="no-print sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-[#eaeaf2] bg-white px-2">
           <button type="button" className="grid size-10 place-items-center rounded-lg text-[#0b8f9c] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu />
           </button>
@@ -228,13 +228,13 @@ export function Shell({
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Pesquisar"
                 aria-label="Pesquisar"
-                className="h-8 border-[#e1e2e5] bg-[#f7f8fa] pl-8 text-[13px]"
+                className="h-8 border-[#e1e2e5] bg-[#f7f8fa] pl-8 text-[18px]"
               />
             </div>
           </form>
           <div className="relative">
             <button type="button" className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-[#e7f7f8]" onClick={() => setUserOpen((value) => !value)}>
-              <span className="grid size-7 place-items-center rounded-full bg-[#22272a] text-[11px] font-semibold text-white">{user.name.slice(0, 1)}</span>
+              <span className="grid size-7 place-items-center rounded-full bg-[#22272a] text-[16px] font-semibold text-white">{user.name.slice(0, 1)}</span>
               <span className="hidden sm:block">{user.name.split(" ")[0]}</span>
             </button>
             {userOpen ? (

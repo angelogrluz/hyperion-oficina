@@ -81,7 +81,7 @@ function Frame({ children }: { children: ReactNode }) {
   return (
     <Shell user={{ name: session.name, email: session.email }} totals={totals} footerExtra={<ResetButton />}>
       {onSheet ? null : (
-        <p className="mb-2 bg-[#e7f7f8] px-2 py-1 text-[12px] text-[#0b5f68]">
+        <p className="mb-2 bg-[#e7f7f8] px-2 py-1 text-[17px] text-[#0b5f68]">
           Versão de teste no browser. Os dados ficam neste computador.
         </p>
       )}
@@ -127,7 +127,7 @@ function Home() {
             data-testid={`filter-${item}`}
             aria-pressed={filter === item}
             onClick={() => setFilter(item)}
-            className={`h-8 rounded-full px-3 text-[12px] font-semibold ${filter === item ? "bg-[#22272a] text-white" : "bg-white text-[#22272a] ring-1 ring-[#e1e2e5]"}`}
+            className={`h-10 rounded-full px-4 text-[17px] font-semibold ${filter === item ? "bg-[#22272a] text-white" : "bg-white text-[#22272a] ring-1 ring-[#e1e2e5]"}`}
           >
             {item === "todas" ? "Todas" : APPROVAL_LABEL[item]}
           </button>

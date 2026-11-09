@@ -11,7 +11,7 @@ export function ApprovalBadge({ approval, at, testId = "approval-badge" }: { app
   const when = at ? new Date(at) : null;
   const stamp = when && !Number.isNaN(when.getTime()) ? `${formatMediumDate(when)} ${lisbonTime(when)}` : "";
   return (
-    <span data-testid={testId} className={`inline-flex max-w-full flex-col items-start rounded px-1.5 py-0.5 text-[10px] leading-tight font-semibold ${STYLES[approval]}`}>
+    <span data-testid={testId} className={`inline-flex max-w-full flex-col items-start rounded px-1.5 py-0.5 text-[14px] leading-tight font-semibold ${STYLES[approval]}`}>
       <span>{APPROVAL_LABEL[approval]}</span>
       {stamp && approval !== "aguarda" ? <span className="font-medium opacity-90">{stamp}</span> : null}
     </span>

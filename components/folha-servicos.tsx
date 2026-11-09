@@ -68,7 +68,7 @@ export function FolhaServicos({
         <a href={backHref} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
         <PrintButton />
       </div>
-      <article data-testid="folha-servicos" className="mx-auto flex min-h-[277mm] max-w-[210mm] flex-col bg-white px-5 py-4 text-[12px] shadow-sm print:min-h-[260mm] print:shadow-none">
+      <article data-testid="folha-servicos" className="print-keep mx-auto flex min-h-[277mm] max-w-[210mm] flex-col bg-white px-5 py-4 text-[12px] shadow-sm print:min-h-[260mm] print:shadow-none">
         <header className="grid grid-cols-[1.2fr_auto_1fr] items-start gap-3">
           <div>
             <p className="text-[15px] font-semibold">Folha de Serviços</p>

@@ -301,17 +301,17 @@ export function FolhaView({
           data-testid="consumidor-final"
           aria-pressed={consumidorFinal}
           onClick={() => onFinalRef.current(!consumidorFinal)}
-          className={`h-7 rounded px-2 text-left text-[11px] font-semibold ${consumidorFinal ? "bg-[#00a9fd] text-white" : "border border-white/20 bg-white/10 text-white hover:bg-white/20"}`}
+          className={`h-7 rounded px-2 text-left text-[16px] font-semibold ${consumidorFinal ? "bg-[#00a9fd] text-white" : "border border-white/20 bg-white/10 text-white hover:bg-white/20"}`}
         >
           {consumidorFinal ? "Consumidor final ativo" : "Consumidor final"}
         </button>
         {consumidorFinal ? (
-          <p className="rounded border border-[#00a9fd] bg-[#00a9fd]/20 px-2 py-1 text-[11px] leading-snug">
+          <p className="rounded border border-[#00a9fd] bg-[#00a9fd]/20 px-2 py-1 text-[16px] leading-snug">
             Faturação: Consumidor final, NIF 999999990, sem morada. Os orçamentos desta folha usam este cliente.
           </p>
         ) : null}
         <div className="flex items-center justify-between gap-1">
-          <p className="text-[10px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
+          <p className="text-[14px] tracking-wide text-white/70 uppercase">Contacto cliente</p>
           <span className="flex items-center gap-1">
           <button
             type="button"
@@ -319,7 +319,7 @@ export function FolhaView({
             title="Novo cliente"
             aria-label="Novo cliente"
             onClick={() => setNewClientOpen(true)}
-            className="inline-flex h-4 items-center gap-0.5 rounded bg-white/10 px-1 text-[10px] font-semibold text-white hover:bg-white/20"
+            className="inline-flex h-7 items-center gap-1 rounded bg-white/10 px-2 text-[14px] font-semibold text-white hover:bg-white/20"
           >
             <Plus className="size-3" />
             Novo
@@ -343,7 +343,7 @@ export function FolhaView({
             value={clientId}
             disabled={locked}
             onChange={(event) => onClientRef.current(event.target.value)}
-            className="h-6 w-full rounded border-0 bg-white px-1 text-[11px] text-[#22272a]"
+            className="h-8 w-full rounded border-0 bg-white px-2 text-[16px] text-[#22272a]"
           >
             <option value="">Escolher cliente…</option>
             {clients.map((item) => (
@@ -351,15 +351,15 @@ export function FolhaView({
             ))}
           </select>
         )}
-        <p className="text-[13px] leading-tight font-semibold">{client?.name || "Sem cliente"}</p>
+        <p className="text-[18px] leading-tight font-semibold">{client?.name || "Sem cliente"}</p>
         <p>{client?.phone || "Sem telefone"}</p>
         <p className="break-all">{client?.email || "Sem e-mail"}</p>
         <p>NIF {client?.nif || "—"}</p>
         <p className="text-white/90">{client?.address || "Sem morada"}</p>
         {client?.postalCode || client?.city ? <p>{[client.postalCode, client.city].filter(Boolean).join(" ")}</p> : null}
-        <p className="mt-2 text-[10px] tracking-wide text-white/70 uppercase">Notas</p>
+        <p className="mt-2 text-[14px] tracking-wide text-white/70 uppercase">Notas</p>
         <p>{client?.notes || "Sem notas do cliente."}</p>
-        <p className="mt-2 text-[10px] tracking-wide text-white/70 uppercase">Histórico notas</p>
+        <p className="mt-2 text-[14px] tracking-wide text-white/70 uppercase">Histórico notas</p>
         <p>{notes || "Sem notas nesta obra."}</p>
       </div>,
     );
@@ -378,28 +378,28 @@ export function FolhaView({
           <span className="text-[#00a9fd]" aria-hidden><DocIcon /></span>
           <span className="text-[#00a9fd]" aria-hidden><DocIcon /></span>
           <div className="min-w-0 leading-tight">
-            <p className="text-[9px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
+            <p className="text-[13px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
             <div className="flex items-center gap-1.5">
-              <p className="truncate text-[12px] font-semibold">{number ?? "Nova"}</p>
+              <p className="truncate text-[17px] font-semibold">{number ?? "Nova"}</p>
               {approval ? <ApprovalBadge approval={approval} at={approvalAt} /> : null}
             </div>
           </div>
         </div>
         <label className="flex min-w-0 flex-1 flex-col justify-center bg-white px-2">
-          <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Dia de chegada</span>
-          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="h-5 w-full border-0 bg-transparent px-0 text-[12px] outline-none" />
+          <span className="text-[13px] tracking-wide text-[#8d939c] uppercase">Dia de chegada</span>
+          <input type="date" value={dateIn} disabled={locked} onChange={(event) => headerActions.current.onDateIn(event.target.value)} className="h-8 w-full border-0 bg-transparent px-0 text-[17px] outline-none" />
         </label>
         <label className="flex min-w-0 flex-[1.3] flex-col justify-center bg-[#f7f8fa] px-2">
-          <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Promessa de orçamento</span>
-          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="h-5 w-full border-0 bg-transparent px-0 text-[12px] outline-none" />
+          <span className="text-[13px] tracking-wide text-[#8d939c] uppercase">Promessa de orçamento</span>
+          <input value={promiseQuote} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseQuote(event.target.value)} className="h-8 w-full border-0 bg-transparent px-0 text-[17px] outline-none" />
         </label>
         <label className="flex min-w-0 flex-[1.3] flex-col justify-center bg-white px-2">
-          <span className="text-[9px] tracking-wide text-[#8d939c] uppercase">Promessa de entrega</span>
-          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="h-5 w-full border-0 bg-transparent px-0 text-[12px] outline-none" />
+          <span className="text-[13px] tracking-wide text-[#8d939c] uppercase">Promessa de entrega</span>
+          <input value={promiseDelivery} disabled={locked} placeholder="00/00/0000 00:00" onChange={(event) => headerActions.current.setPromiseDelivery(event.target.value)} className="h-8 w-full border-0 bg-transparent px-0 text-[17px] outline-none" />
         </label>
         <div className="flex items-center gap-2 bg-[#f4f6f8] px-2">
-          <button type="button" disabled title="Indisponível nesta versão" className="size-6 cursor-not-allowed rounded-full border border-[#e1e2e5] bg-white text-[10px] text-[#8d939c]">i</button>
-          <span className="text-[12px] font-semibold whitespace-nowrap">{userName}</span>
+          <button type="button" disabled title="Indisponível nesta versão" className="size-6 cursor-not-allowed rounded-full border border-[#e1e2e5] bg-white text-[14px] text-[#8d939c]">i</button>
+          <span className="text-[17px] font-semibold whitespace-nowrap">{userName}</span>
         </div>
       </div>,
     );
@@ -486,13 +486,13 @@ export function FolhaView({
   }, [lineEditMode, locked, onRemove, selectedKey]);
 
   return (
-    <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]" onBlur={() => onFlush?.()}>
+    <div className="grid items-start gap-3 pb-16 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(200px,13vw,250px)]" onBlur={() => onFlush?.()}>
       <div className="min-w-0 bg-white text-[#22272a]">
         <SymptomList documentId={documentId || "rascunho"} />
         <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
-          <label className="min-w-48 flex-1 text-[11px]">
+          <label className="min-w-48 flex-1 text-[16px]">
             Observações do cliente
-            <Textarea value={problem} disabled={locked} onChange={(event) => onProblem(event.target.value)} className="mt-0.5 min-h-8 border-[#e1e2e5] text-[12px]" />
+            <Textarea value={problem} disabled={locked} onChange={(event) => onProblem(event.target.value)} className="mt-0.5 min-h-8 border-[#e1e2e5] text-[17px]" />
           </label>
           <MiniSelect label="Chave de segurança" value={keyBox} onChange={setKeyBox} />
           <MiniSelect label="Livro de manutenção" value={book} onChange={setBook} />
@@ -500,10 +500,10 @@ export function FolhaView({
           <div className="ml-auto flex gap-2">
             {documentId || printHref ? (
               <details className="relative">
-                <summary data-testid="imprimir-menu" className="flex h-6 cursor-pointer list-none items-center rounded border border-[#00a9fd] bg-white px-2 text-[11px] font-medium text-[#00a9fd] [&::-webkit-details-marker]:hidden">
+                <summary data-testid="imprimir-menu" className="flex h-9 cursor-pointer list-none items-center rounded border border-[#00a9fd] bg-white px-3 text-[16px] font-medium text-[#00a9fd] [&::-webkit-details-marker]:hidden">
                   Imprimir
                 </summary>
-                <div className="absolute right-0 z-50 mt-1 w-56 rounded border border-[#d5ebed] bg-white p-1 text-[12px] shadow-lg">
+                <div className="absolute right-0 z-50 mt-1 w-56 rounded border border-[#d5ebed] bg-white p-1 text-[17px] shadow-lg">
                   <Link href={printHref || `/ordens/${documentId}/imprimir`} data-testid="imprimir-folha" className="block rounded px-2 py-1.5 hover:bg-[#e7f7f8]">
                     Folha de obra (cliente)
                   </Link>
@@ -517,14 +517,14 @@ export function FolhaView({
                 </div>
               </details>
             ) : (
-              <span className="inline-flex h-6 items-center rounded border border-[#e1e2e5] px-2 text-[11px] text-[#8d939c]">Imprimir</span>
+              <span className="inline-flex h-9 items-center rounded border border-[#e1e2e5] px-3 text-[16px] text-[#8d939c]">Imprimir</span>
             )}
-            <Button type="button" variant="outline" className="h-6 px-2 text-[11px]" disabled={locked || pending} onClick={() => onSave()}>Editor</Button>
+            <Button type="button" variant="outline" className="h-9 px-3 text-[16px]" disabled={locked || pending} onClick={() => onSave()}>Editor</Button>
           </div>
         </div>
         <div className="flex gap-1 border-b border-[#d5ebed] px-2 pt-2">
           {TABS.map((item) => (
-            <button key={item} type="button" onClick={() => setTab(item)} className={`border-b-2 px-2 py-1 text-[12px] ${tab === item ? "border-[#00a9fd] font-semibold text-[#22272a]" : "border-transparent text-[#8d939c]"}`}>
+            <button key={item} type="button" onClick={() => setTab(item)} className={`border-b-2 px-2 py-1 text-[17px] ${tab === item ? "border-[#00a9fd] font-semibold text-[#22272a]" : "border-transparent text-[#8d939c]"}`}>
               {item}
             </button>
           ))}
@@ -548,7 +548,7 @@ export function FolhaView({
         ) : null}
         {tab === "Folha de obra" || tab === "Consumíveis" ? (
           <>
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-2 py-1 text-[11px] text-[#22272a]">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 px-2 py-1 text-[16px] text-[#22272a]">
               <span>Custo {formatEUR(custo)}</span>
               <span>PVP {formatEUR(pvp)}</span>
               <span>Lucro {formatEUR(lucro)}</span>
@@ -558,45 +558,45 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full table-fixed border-collapse text-[11px] text-[#22272a]">
+              <table data-testid="sheet-table" className={`w-full table-fixed border-collapse text-[16px] text-[#22272a] ${lineEditMode ? "min-w-[1452px]" : "min-w-[1420px]"}`}>
                 <colgroup>
-                  <col style={{ width: "24px" }} />
-                  <col style={{ width: "14px" }} />
-                  <col style={{ width: "52px" }} />
-                  <col />
-                  <col style={{ width: "50px" }} />
-                  <col style={{ width: "52px" }} />
-                  <col style={{ width: "56px" }} />
-                  <col style={{ width: "48px" }} />
-                  {lineEditMode ? <col style={{ width: "32px" }} /> : null}
-                  <col style={{ width: "48px" }} />
-                  <col style={{ width: "56px" }} />
-                  <col style={{ width: "40px" }} />
-                  <col style={{ width: "68px" }} />
-                  <col style={{ width: "60px" }} />
-                  <col style={{ width: "24px" }} />
                   <col style={{ width: "36px" }} />
-                  <col style={{ width: "22px" }} />
+                  {lineEditMode ? <col style={{ width: "32px" }} /> : null}
+                  <col style={{ width: "92px" }} />
+                  <col />
+                  <col style={{ width: "120px" }} />
+                  <col style={{ width: "100px" }} />
+                  <col style={{ width: "118px" }} />
+                  <col style={{ width: "76px" }} />
+                  <col style={{ width: "64px" }} />
+                  <col style={{ width: "72px" }} />
+                  <col style={{ width: "88px" }} />
+                  <col style={{ width: "70px" }} />
+                  <col style={{ width: "156px" }} />
+                  <col style={{ width: "108px" }} />
+                  <col style={{ width: "36px" }} />
+                  <col style={{ width: "58px" }} />
+                  <col style={{ width: "36px" }} />
                 </colgroup>
-                <thead className="text-[11px] text-[#22272a]">
+                <thead className="text-[16px] text-[#22272a]">
                   <tr>
-                    <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">O</th>
-                    {lineEditMode ? <th className="bg-[#e1e2e5] px-0.5 py-1" aria-label="Ordenar" /> : null}
-                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Família</th>
-                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Descrição</th>
-                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Obs. internas</th>
-                    <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Ref.</th>
-                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">Lucro s/desc.</th>
-                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">Custo</th>
-                    <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Qtd.</th>
-                    <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Marg.</th>
-                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Base</th>
-                    <th className="bg-[#b3b8c1] px-0.5 py-1 text-right font-semibold">Desc.%</th>
-                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente s/IVA</th>
-                    <th className="bg-[#b3b8c1] px-1 py-1 text-right font-semibold">PVP Cliente</th>
-                    <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">A</th>
-                    <th className="bg-[#e1e2e5] px-0.5 py-1 text-right font-semibold">Stock</th>
-                    <th className="bg-[#e1e2e5] px-0.5 py-1" aria-label="Entrada de stock" />
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-center font-semibold whitespace-nowrap">O</th>
+                    {lineEditMode ? <th className="overflow-hidden bg-[#e1e2e5] px-0.5 py-1.5" aria-label="Ordenar" /> : null}
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Família</th>
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Descrição</th>
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Obs. internas</th>
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Ref.</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Lucro s/desc.</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Custo</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Qtd.</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Marg.</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Base</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Desc.%</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente s/IVA</th>
+                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente</th>
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-center font-semibold whitespace-nowrap">A</th>
+                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Stock</th>
+                    <th className="overflow-hidden bg-[#e1e2e5] px-0.5 py-1.5" aria-label="Entrada de stock" />
                   </tr>
                 </thead>
                 <tbody>
@@ -621,7 +621,7 @@ export function FolhaView({
                               onRemove(row.line.key);
                               if (selectedKey === row.line.key) setSelectedKey(null);
                             }}
-                            className="inline-grid size-4 place-items-center rounded-full bg-[#d64545] text-[11px] leading-none font-bold text-white hover:bg-[#b83838] disabled:opacity-40"
+                            className="inline-grid size-6 place-items-center rounded-full bg-[#d64545] text-[16px] leading-none font-bold text-white hover:bg-[#b83838] disabled:opacity-40"
                           >
                             ×
                           </button>
@@ -632,7 +632,7 @@ export function FolhaView({
                           data-testid="drag-handle"
                           aria-label="Arrastar linha"
                           onPointerDown={(event) => startDrag(event, row.line.key)}
-                          className="cursor-grab touch-none overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[13px] leading-none text-[#22272a] select-none active:cursor-grabbing"
+                          className="cursor-grab touch-none overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[18px] leading-none text-[#22272a] select-none active:cursor-grabbing"
                         >
                           ≡
                         </td>
@@ -682,7 +682,7 @@ export function FolhaView({
                       </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-4 place-items-center rounded-full bg-[#6971f9] text-[9px] text-white">●</span></td>
+                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-5 place-items-center rounded-full bg-[#6971f9] text-[12px] text-white">●</span></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center">
                         {row.line.kind === "peca" ? (
@@ -704,10 +704,10 @@ export function FolhaView({
                   ))}
                   <tr className="border-t border-[#eaeaf2]">
                     <td className="px-0.5 text-center">
-                      <button type="button" className="inline-grid size-4 place-items-center rounded-full bg-[#f5a623] text-[12px] leading-none text-white" disabled={locked || (!draft.description.trim() && !draft.ref.trim())} onClick={addFreeLine} aria-label="Adicionar linha">+</button>
+                      <button type="button" className="inline-grid size-6 place-items-center rounded-full bg-[#f5a623] text-[17px] leading-none text-white" disabled={locked || (!draft.description.trim() && !draft.ref.trim())} onClick={addFreeLine} aria-label="Adicionar linha">+</button>
                     </td>
-                    <td />
-                    <td className="px-1 text-[11px] text-[#8d939c]">Novo</td>
+                    {lineEditMode ? <td /> : null}
+                    <td className="px-1 text-[16px] text-[#8d939c]">Novo</td>
                     <td className="px-1 py-1">
                       <Cell
                         value={draft.description}
@@ -743,8 +743,8 @@ export function FolhaView({
                   </tr>
                 </tbody>
                 <tfoot>
-                  <tr className="text-[11px] font-semibold text-[#22272a]">
-                    <td className="px-1 py-1" colSpan={11}>s/IVA {formatEUR(base)}</td>
+                  <tr className="text-[16px] font-semibold text-[#22272a]">
+                    <td className="px-1 py-1" colSpan={lineEditMode ? 11 : 10}>s/IVA {formatEUR(base)}</td>
                     <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
                     <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
                     <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
@@ -762,12 +762,12 @@ export function FolhaView({
                 aria-pressed={lineEditMode}
                 disabled={locked}
                 onClick={() => (lineEditMode ? leaveLineEdit() : setLineEditMode(true))}
-                className={`grid size-6 cursor-pointer place-items-center rounded text-[14px] disabled:cursor-not-allowed disabled:opacity-40 ${lineEditMode ? "bg-[#00a9fd] text-white" : "text-[#22272a] hover:bg-[#e7f7f8] hover:text-[#00a9fd]"}`}
+                className={`grid size-8 cursor-pointer place-items-center rounded text-[18px] disabled:cursor-not-allowed disabled:opacity-40 ${lineEditMode ? "bg-[#00a9fd] text-white" : "text-[#22272a] hover:bg-[#e7f7f8] hover:text-[#00a9fd]"}`}
               >
                 ✎
               </button>
               {lineEditMode ? (
-                <button type="button" data-testid="concluir-linhas" onClick={leaveLineEdit} className="h-6 rounded border border-[#00a9fd] bg-white px-2 text-[11px] font-semibold text-[#00a9fd]">
+                <button type="button" data-testid="concluir-linhas" onClick={leaveLineEdit} className="h-8 rounded border border-[#00a9fd] bg-white px-3 text-[16px] font-semibold text-[#00a9fd]">
                   Concluir
                 </button>
               ) : null}
@@ -808,11 +808,11 @@ export function FolhaView({
               : null}
           </>
         ) : null}
-        {error ? <p className="px-2 pt-2 text-[12px] text-red-700" role="alert">{error}</p> : null}
-        <div className="no-print fixed bottom-0 left-0 z-30 flex h-9 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[11px] lg:left-[var(--rail)] lg:w-[calc(100%-var(--rail))]">
+        {error ? <p className="px-2 pt-2 text-[17px] text-red-700" role="alert">{error}</p> : null}
+        <div className="no-print fixed bottom-0 left-0 z-30 flex h-12 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[16px] lg:left-[var(--rail)] lg:w-[calc(100%-var(--rail))]">
           <label className="flex items-center gap-2 text-[#8d939c]">
             Atribuída a
-            <select disabled title="Indisponível nesta versão" className="h-6 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-1 text-[#22272a]">
+            <select disabled title="Indisponível nesta versão" className="h-9 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[16px] text-[#22272a]">
               <option>Balcão</option>
             </select>
           </label>
@@ -820,21 +820,21 @@ export function FolhaView({
           <span className="text-[#22272a]">Aprovado</span>
           <span className="ml-auto truncate text-[#8d939c]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
-        <div className="no-print fixed right-2 bottom-11 z-30 grid w-[var(--sheet)] gap-1">
+        <div className="no-print ml-auto grid w-full max-w-xs gap-1.5 pt-3">
           {isNew ? (
-            <Button type="button" data-testid="gravar-obra" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
+            <Button type="button" data-testid="gravar-obra" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
               Criar obra
             </Button>
           ) : (
-            <p data-testid="guardado" className="text-right text-[11px] text-[#8d939c]">
+            <p data-testid="guardado" className="text-right text-[16px] text-[#8d939c]">
               {saveState === "error" ? "Não gravado" : saveState === "saved" ? "Guardado" : "A guardar…"}
             </p>
           )}
-          <Button type="button" data-testid="gerar-orcamento" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={onQuote}>
+          <Button type="button" data-testid="gerar-orcamento" variant="outline" className="h-10 border-[#00a9fd] bg-white text-[17px] text-[#00a9fd]" disabled={locked || pending} onClick={onQuote}>
             Gerar orçamento
           </Button>
           {quoteNumber && quoteHref ? (
-            <Link href={quoteHref} data-testid="abrir-orcamento" className="inline-flex h-8 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[12px] font-medium text-[#00a9fd]">
+            <Link href={quoteHref} data-testid="abrir-orcamento" className="inline-flex h-10 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[17px] font-medium text-[#00a9fd]">
               Abrir orçamento
             </Link>
           ) : null}
@@ -851,36 +851,36 @@ export function FolhaView({
                 aria-pressed={approval === value}
                 disabled={locked || pending || !onApproval}
                 onClick={() => onApproval?.(value)}
-                className={`h-8 rounded-lg border text-[11px] font-semibold disabled:opacity-50 ${approval === value ? filled : outlined}`}
+                className={`h-10 rounded-lg border text-[16px] font-semibold disabled:opacity-50 ${approval === value ? filled : outlined}`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
-          {canInvoice ? <Button type="button" data-testid="faturar" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
+          <Button type="button" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
+          {canInvoice ? <Button type="button" data-testid="faturar" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
           {invoiceNumber && invoiceHref ? (
-            <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-8 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[12px] font-medium text-[#00a9fd]">
+            <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[17px] font-medium text-[#00a9fd]">
               Abrir fatura
             </Link>
           ) : null}
         </div>
       </div>
-      <aside className="rounded border border-[#eaeaf2] bg-white p-2 text-[11px] text-[#22272a]">
+      <aside className="rounded border border-[#eaeaf2] bg-white p-2 text-[16px] text-[#22272a]">
         <label className="block text-center">
-          <span className="text-[10px] tracking-wide text-[#8d939c] uppercase">Matrícula</span>
+          <span className="text-[14px] tracking-wide text-[#8d939c] uppercase">Matrícula</span>
           <input
             aria-label="Matrícula"
             value={plate}
             disabled={locked}
             placeholder="AA-00-AA"
             onChange={(event) => onPlate(event.target.value.toUpperCase())}
-            className="mt-0.5 h-8 w-full border-0 border-b-2 border-[#00a9fd] bg-transparent text-center font-mono text-[18px] font-bold tracking-wide uppercase outline-none"
+            className="mt-0.5 h-10 w-full border-0 border-b-2 border-[#00a9fd] bg-transparent text-center font-mono text-[26px] font-bold tracking-wide uppercase outline-none"
           />
         </label>
-        <button type="button" className="mt-1 h-6 w-full text-[11px] text-[#00a9fd]" disabled={locked} onClick={onLookup}>Procurar</button>
+        <button type="button" className="mt-1 h-8 w-full text-[16px] text-[#00a9fd]" disabled={locked} onClick={onLookup}>Procurar</button>
         <CarSide color={carColor(plate || "x")} className="mx-auto h-12 w-36" />
-        <p className="mb-1 text-center text-[11px] text-[#8d939c]">{brand} {model}</p>
+        <p className="mb-1 text-center text-[16px] text-[#8d939c]">{brand} {model}</p>
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
           <Spec label="N.º chassi" value={vin} onChange={onVin} disabled={locked} wide />
           <Spec label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
@@ -897,7 +897,7 @@ export function FolhaView({
           <Spec label="Próxima revisão" value={nextService} onChange={onNextService} disabled={locked} />
         </div>
         <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
-          <p className="text-[10px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
+          <p className="text-[14px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
           <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
         </div>
       </aside>
@@ -975,11 +975,11 @@ function SymptomList({ documentId }: { documentId: string }) {
 
   return (
     <div className="px-2 pt-2">
-      <p className="text-[12px] font-semibold leading-none">Sintomas/Requisitos do Cliente</p>
+      <p className="text-[17px] font-semibold leading-none">Sintomas/Requisitos do Cliente</p>
       {items.length ? (
         <ul className="mt-1 grid gap-0.5">
           {items.map((item) => (
-            <li key={item.id} data-testid="symptom-item" className="flex items-center gap-1.5 text-[12px]">
+            <li key={item.id} data-testid="symptom-item" className="flex items-center gap-1.5 text-[17px]">
               <input
                 type="checkbox"
                 checked={item.done}
@@ -1000,7 +1000,7 @@ function SymptomList({ documentId }: { documentId: string }) {
                       finishEdit(item.id);
                     }
                   }}
-                  className="h-6 min-w-0 flex-1 rounded border border-[#00a9fd] bg-white px-1.5 text-[12px] outline-none"
+                  className="h-8 min-w-0 flex-1 rounded border border-[#00a9fd] bg-white px-2 text-[17px] outline-none"
                 />
               ) : (
                 <button
@@ -1018,7 +1018,7 @@ function SymptomList({ documentId }: { documentId: string }) {
                 type="button"
                 aria-label="Tirar sintoma"
                 onClick={() => commit(items.filter((current) => current.id !== item.id))}
-                className="inline-grid size-4 shrink-0 place-items-center rounded-full bg-[#6971f9] text-[9px] leading-none text-white"
+                className="inline-grid size-5 shrink-0 place-items-center rounded-full bg-[#6971f9] text-[12px] leading-none text-white"
               >
                 ×
               </button>
@@ -1038,7 +1038,7 @@ function SymptomList({ documentId }: { documentId: string }) {
             add();
           }
         }}
-        className="mt-1 h-6 w-full rounded border border-[#e1e2e5] bg-white px-2 text-[12px] text-[#22272a] outline-none placeholder:text-[#8d939c]"
+        className="mt-1 h-9 w-full rounded border border-[#e1e2e5] bg-white px-2 text-[17px] text-[#22272a] outline-none placeholder:text-[#8d939c]"
       />
     </div>
   );
@@ -1056,7 +1056,7 @@ function DocIcon() {
 function HeaderField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <p className="text-[10px] tracking-wide text-[#4d6d73] uppercase">{label}</p>
+      <p className="text-[14px] tracking-wide text-[#4d6d73] uppercase">{label}</p>
       <div className="font-medium">{children}</div>
     </div>
   );
@@ -1104,7 +1104,7 @@ function Cell({
         onChange(event.target.value);
         onFocus?.(event.currentTarget);
       }}
-      className={`box-border h-6 max-w-full min-w-0 bg-transparent px-0.5 outline-none ${narrow ? "w-full text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
+      className={`box-border h-8 max-w-full min-w-0 bg-transparent px-0.5 text-[16px] outline-none ${narrow ? "w-full text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
     />
   );
 }
@@ -1154,7 +1154,7 @@ function NumberCell({
           event.currentTarget.blur();
         }
       }}
-      className="box-border h-6 w-full min-w-0 bg-transparent px-0 text-right outline-none"
+      className="box-border h-8 w-full min-w-0 bg-transparent px-0 text-right text-[16px] outline-none"
     />
   );
 }
@@ -1170,8 +1170,8 @@ function pt2(value: number) {
 function Spec({ label, value, onChange, disabled, wide }: { label: string; value: string; onChange: (value: string) => void; disabled?: boolean; wide?: boolean }) {
   return (
     <label className={wide ? "col-span-2 block min-w-0" : "block min-w-0"}>
-      <span className="block text-[9px] tracking-wide text-[#8d939c] uppercase">{label}</span>
-      <input aria-label={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-5 w-full border-0 border-b border-[#eaeaf2] bg-transparent px-0 text-[11px] outline-none disabled:text-[#22272a]" />
+      <span className="block text-[13px] tracking-wide text-[#8d939c] uppercase">{label}</span>
+      <input aria-label={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)} className="h-8 w-full border-0 border-b border-[#eaeaf2] bg-transparent px-0 text-[16px] outline-none disabled:text-[#22272a]" />
     </label>
   );
 }
