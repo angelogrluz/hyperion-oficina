@@ -94,6 +94,32 @@ function num(value: number) {
   return String(value).replace(".", ",");
 }
 
+function reorderSheetLines(lines: Line[], dragKey: string, beforeKey: string | null) {
+  const index = lines.findIndex((line) => line.key === dragKey);
+  if (index < 0) return lines;
+  const line = lines[index];
+  const next = lines[index + 1];
+  const previous = lines[index - 1];
+  const block = line.ref.toUpperCase() === ECOLUB_REF && previous && line.note === `eco:${previous.key}`
+    ? [previous.key, line.key]
+    : next && next.ref.toUpperCase() === ECOLUB_REF && next.note === `eco:${line.key}`
+      ? [line.key, next.key]
+      : [line.key];
+  let target = beforeKey;
+  const targetLine = lines.find((item) => item.key === beforeKey);
+  if (targetLine && targetLine.ref.toUpperCase() === ECOLUB_REF && targetLine.note.startsWith("eco:")) {
+    target = targetLine.note.slice(4);
+  }
+  if (target && block.includes(target)) return lines;
+  const moving = block.map((key) => lines.find((item) => item.key === key)).filter((item): item is Line => Boolean(item));
+  const rest = lines.filter((item) => !block.includes(item.key));
+  const at = target ? rest.findIndex((item) => item.key === target) : rest.length;
+  if (at < 0) return lines;
+  rest.splice(at, 0, ...moving);
+  const unchanged = rest.length === lines.length && rest.every((item, position) => item.key === lines[position]?.key);
+  return unchanged ? lines : rest;
+}
+
 export function DocumentEditor({
   mode,
   documentId,
@@ -577,44 +603,48 @@ export function DocumentEditor({
     };
   }, [documentId, dirty, locked, mode]);
 
+  function lineIsOil(line: Line) {
+    if (line.ref.toUpperCase() === ECOLUB_REF) return false;
+    const article = articleList.find((item) => item.id === line.articleId) ?? articleList.find((item) => item.ref === line.ref);
+    return isOilArticle({ family: article?.family, ref: line.ref, isOil: article?.isOil });
+  }
+
   useEffect(() => {
     if (locked) return;
     setLines((current) => {
-      const litres = current.reduce((sum, line) => {
-        if (line.ref.toUpperCase() === ECOLUB_REF) return sum;
-        const article = articleList.find((item) => item.id === line.articleId) ?? articleList.find((item) => item.ref === line.ref);
-        if (!isOilArticle({ family: article?.family, ref: line.ref, isOil: article?.isOil })) return sum;
-        return sum + (parseDecimal(line.quantity) ?? 0);
-      }, 0);
-      const rest = current.filter((line) => line.ref.toUpperCase() !== ECOLUB_REF);
-      if (litres <= 0) return rest.length === current.length ? current : rest;
       const known = articleList.find((item) => item.ref === ECOLUB_REF);
       const price = String(ecolubRate).replace(".", ",");
-      const existing = current.find((line) => line.ref.toUpperCase() === ECOLUB_REF);
-      const eco: Line = {
-        key: existing?.key ?? crypto.randomUUID(),
-        kind: "peca",
-        description: known?.description ?? ecolubDefaults.description,
-        quantity: String(litres).replace(".", ","),
-        unitPrice: price,
-        unitCost: price,
-        discount: "0",
-        vatRate: "23",
-        note: "",
-        articleId: known?.id ?? null,
-        ref: ECOLUB_REF,
-      };
-      if (existing && existing.quantity === eco.quantity && existing.unitPrice === eco.unitPrice && existing.unitCost === eco.unitCost && rest.length + 1 === current.length) {
-        return current;
+      const pool = current.filter((line) => line.ref.toUpperCase() === ECOLUB_REF);
+      const used = new Set<string>();
+      const next: Line[] = [];
+      for (const line of current) {
+        if (line.ref.toUpperCase() === ECOLUB_REF) continue;
+        next.push(line);
+        if (!lineIsOil(line)) continue;
+        const claimed = pool.find((item) => item.note === `eco:${line.key}` && !used.has(item.key))
+          ?? pool.find((item) => !used.has(item.key));
+        const eco: Line = {
+          key: claimed?.key ?? crypto.randomUUID(),
+          kind: "peca",
+          description: known?.description ?? ecolubDefaults.description,
+          quantity: line.quantity,
+          unitPrice: price,
+          unitCost: price,
+          discount: "0",
+          vatRate: "23",
+          note: `eco:${line.key}`,
+          articleId: known?.id ?? claimed?.articleId ?? null,
+          ref: ECOLUB_REF,
+          stockEntry: null,
+        };
+        if (claimed) used.add(claimed.key);
+        next.push(eco);
       }
-      const oilKeys = new Set(rest.filter((line) => {
-        const article = articleList.find((item) => item.id === line.articleId);
-        return isOilArticle({ family: article?.family, ref: line.ref, isOil: article?.isOil });
-      }).map((line) => line.key));
-      const anchor = rest.findLastIndex((line) => oilKeys.has(line.key));
-      const next = [...rest];
-      next.splice(anchor >= 0 ? anchor + 1 : next.length, 0, eco);
-      return next;
+      const same = next.length === current.length && next.every((line, index) => {
+        const previous = current[index];
+        return previous && previous.key === line.key && previous.quantity === line.quantity && previous.unitPrice === line.unitPrice && previous.unitCost === line.unitCost && previous.note === line.note && previous.ref === line.ref;
+      });
+      return same ? current : next;
     });
   }, [lines, ecolubRate, articleList, locked]);
 
@@ -828,7 +858,11 @@ export function DocumentEditor({
           onNotes={(value) => { touch(); setNotes(value); }}
           onDateIn={(value) => { touch(); setDateIn(value); }}
           onLine={(key, patch) => updateLine(key, patch)}
-          onRemove={(key) => { touch(); setLines((current) => current.filter((item) => item.key !== key)); }}
+          onRemove={(key) => { touch(); setLines((current) => current.filter((item) => item.key !== key && item.note !== `eco:${key}`)); }}
+          onReorder={(dragKey, beforeKey) => {
+            touch();
+            setLines((current) => reorderSheetLines(current, dragKey, beforeKey));
+          }}
           onAdd={addDraft}
           onPlate={(value) => { touch(); setPlate(value); }}
           onBrand={(value) => { touch(); setBrand(value); }}

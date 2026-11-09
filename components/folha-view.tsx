@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { PackagePlus, Pencil, Plus } from "lucide-react";
@@ -73,6 +73,7 @@ export function FolhaView({
   onDateIn,
   onLine,
   onRemove,
+  onReorder,
   onAdd,
   onPlate,
   onBrand,
@@ -147,6 +148,7 @@ export function FolhaView({
   onDateIn: (value: string) => void;
   onLine: (key: string, patch: Partial<SheetLine>) => void;
   onRemove: (key: string) => void;
+  onReorder?: (dragKey: string, beforeKey: string | null) => void;
   onAdd: (draft: {
     description: string;
     ref: string;
@@ -221,6 +223,8 @@ export function FolhaView({
   const [stockKey, setStockKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [lineEditMode, setLineEditMode] = useState(false);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+  const dropKeyRef = useRef<string | null>(null);
   const openClientRef = useRef<() => void>(() => {});
   const onFinalRef = useRef(onConsumidorFinal);
   useEffect(() => {
@@ -437,6 +441,37 @@ export function FolhaView({
     setSelectedKey(null);
   }
 
+  function startDrag(event: ReactPointerEvent<HTMLElement>, key: string) {
+    if (!lineEditMode || locked || !onReorder) return;
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const handle = event.currentTarget;
+    handle.setPointerCapture(event.pointerId);
+    dropKeyRef.current = null;
+    setDropKey(null);
+    const move = (pointer: PointerEvent) => {
+      const element = document.elementFromPoint(pointer.clientX, pointer.clientY);
+      const row = element?.closest("[data-line-key]");
+      const target = row?.getAttribute("data-line-key") ?? null;
+      dropKeyRef.current = target === key ? null : target;
+      setDropKey(dropKeyRef.current);
+    };
+    const finish = (pointer: PointerEvent) => {
+      if (handle.hasPointerCapture(pointer.pointerId)) handle.releasePointerCapture(pointer.pointerId);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      const target = dropKeyRef.current;
+      dropKeyRef.current = null;
+      setDropKey(null);
+      if (target) onReorder(key, target);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  }
+
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
       if (event.key !== "Delete" || locked || !lineEditMode || !selectedKey) return;
@@ -569,8 +604,9 @@ export function FolhaView({
                     <tr
                       key={row.line.key}
                       data-testid="sheet-line"
+                      data-line-key={row.line.key}
                       onClick={() => { if (lineEditMode) setSelectedKey(row.line.key); }}
-                      className={`${row.line.kind === "peca" ? "bg-[#f5f6fa]" : "bg-white"} ${lineEditMode && selectedKey === row.line.key ? "outline outline-2 outline-[#00a9fd]" : ""}`}
+                      className={`${row.line.kind === "peca" ? "bg-[#f5f6fa]" : "bg-white"} ${lineEditMode && selectedKey === row.line.key ? "outline outline-2 outline-[#00a9fd]" : ""} ${dropKey === row.line.key ? "shadow-[inset_0_3px_0_#00a9fd]" : ""}`}
                     >
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center">
                         {lineEditMode ? (
@@ -591,7 +627,14 @@ export function FolhaView({
                           </button>
                         ) : null}
                       </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[8px] tracking-tighter" aria-hidden>||||</td>
+                      <td
+                        data-testid="drag-handle"
+                        aria-label={lineEditMode ? "Arrastar linha" : undefined}
+                        onPointerDown={(event) => startDrag(event, row.line.key)}
+                        className={`overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[13px] leading-none select-none ${lineEditMode ? "cursor-grab touch-none text-[#22272a] active:cursor-grabbing" : "cursor-default text-[#c5c8ce]"}`}
+                      >
+                        ≡
+                      </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.description} disabled={locked} onChange={(value) => onLine(row.line.key, { description: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
