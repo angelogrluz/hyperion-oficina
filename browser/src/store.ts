@@ -1398,6 +1398,15 @@ async function buildDemo(): Promise<Snapshot> {
   vehicles.forEach((vehicle) => {
     if (!isValidPlate(vehicle.plate) || !isValidVin(vehicle.vin)) throw new Error(vehicle.plate);
   });
+  const displacements: Record<string, string> = {
+    "v-208": "1199 cc",
+    "v-golf": "1598 cc",
+    "v-a": "1332 cc",
+    "v-master": "2299 cc",
+    "v-bmw": "1995 cc",
+    "v-yaris": "1490 cc",
+  };
+  for (const vehicle of vehicles) vehicle.version = displacements[vehicle.id] ?? vehicle.version;
   const suppliers: Supplier[] = [
     ["s-delta", "AutoDelta Peças, Lda", nif("50933127"), "225 301 440", "encomendas@autodelta.pt", "Rua do Engenho, 90, 4300-215 Porto"],
     ["s-lubri", "LubriNorte, Lda", nif("50881246"), "223 770 215", "vendas@lubrinorte.pt", "Zona Industrial de Canelas, 4410-125 Vila Nova de Gaia"],

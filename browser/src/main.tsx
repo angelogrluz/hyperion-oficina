@@ -1,7 +1,7 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Toaster } from "sonner";
 import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
@@ -17,6 +17,7 @@ import { DocumentEditor } from "@/components/document-editor";
 import { DocumentPaper } from "@/components/document-paper";
 import { EcolubSettings } from "@/components/ecolub-settings";
 import { FolhaPrint } from "@/components/folha-print";
+import { FolhaServicos } from "@/components/folha-servicos";
 import { PrintButton } from "@/components/print-button";
 import { lineAmounts, salePrice, sumTotals } from "@/lib/domain";
 import { orderToPrintable } from "@/lib/printable";
@@ -547,6 +548,46 @@ function SheetPrint() {
   );
 }
 
+function SheetServices() {
+  const { id } = useParams();
+  const params = useSearchParams();
+  const snap = useSnap();
+  const session = readSession();
+  if (!snap || !id) return null;
+  const order = snap.orders.find((item) => item.id === id);
+  if (!order) return <p className="p-6">Folha não encontrada.</p>;
+  const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId) ?? null;
+  const lines = snap.lines
+    .filter((line) => line.orderId === order.id)
+    .sort((a, b) => a.position - b.position)
+    .map((line) => ({
+      description: line.description,
+      ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? "",
+      quantity: line.quantity,
+    }));
+  return (
+    <FolhaServicos
+      autoPrint
+      backHref={`${import.meta.env.BASE_URL}ordens/${order.id}`}
+      documentId={order.id}
+      number={order.number}
+      enteredAt={order.createdAt || order.dateIn}
+      promiseDelivery={params.get("promessa") ?? ""}
+      userName={session?.name ?? "Oficina"}
+      vehicle={vehicle ? {
+        plate: vehicle.plate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        year: vehicle.year,
+        vin: vehicle.vin,
+        version: vehicle.version,
+        km: order.km,
+      } : null}
+      lines={lines}
+    />
+  );
+}
+
 function SettingsPage() {
   return (
     <div className="max-w-xl rounded-xl border border-[#d5ebed] bg-white p-4">
@@ -563,6 +604,7 @@ function AppRoutes() {
       <Route path="/" element={<Frame><Home /></Frame>} />
       <Route path="/ordens/nova" element={<Frame><NewOrder /></Frame>} />
       <Route path="/ordens/:id/imprimir" element={<SheetPrint />} />
+      <Route path="/ordens/:id/servicos" element={<SheetServices />} />
       <Route path="/ordens/:id/orcamento" element={<BillingView kind="orcamento" />} />
       <Route path="/ordens/:id/fatura" element={<BillingView kind="fatura" />} />
       <Route path="/ordens/:id" element={<Frame><OrderScreen /></Frame>} />

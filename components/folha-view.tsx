@@ -444,9 +444,23 @@ export function FolhaView({
           <MiniSelect label="Documentos" value={docs} onChange={setDocs} />
           <div className="ml-auto flex gap-2">
             {documentId || printHref ? (
-              <Link href={printHref || `/ordens/${documentId}/imprimir`} data-testid="imprimir-folha" className="inline-flex h-6 items-center rounded border border-[#00a9fd] bg-white px-2 text-[11px] font-medium text-[#00a9fd]">
-                Imprimir
-              </Link>
+              <details className="relative">
+                <summary data-testid="imprimir-menu" className="flex h-6 cursor-pointer list-none items-center rounded border border-[#00a9fd] bg-white px-2 text-[11px] font-medium text-[#00a9fd] [&::-webkit-details-marker]:hidden">
+                  Imprimir
+                </summary>
+                <div className="absolute right-0 z-50 mt-1 w-56 rounded border border-[#d5ebed] bg-white p-1 text-[12px] shadow-lg">
+                  <Link href={printHref || `/ordens/${documentId}/imprimir`} data-testid="imprimir-folha" className="block rounded px-2 py-1.5 hover:bg-[#e7f7f8]">
+                    Folha de obra (cliente)
+                  </Link>
+                  <Link
+                    href={`/ordens/${documentId}/servicos${promiseDelivery ? `?promessa=${encodeURIComponent(promiseDelivery)}` : ""}`}
+                    data-testid="imprimir-servicos"
+                    className="block rounded px-2 py-1.5 hover:bg-[#e7f7f8]"
+                  >
+                    Folha de serviços (oficina)
+                  </Link>
+                </div>
+              </details>
             ) : (
               <span className="inline-flex h-6 items-center rounded border border-[#e1e2e5] px-2 text-[11px] text-[#8d939c]">Imprimir</span>
             )}
