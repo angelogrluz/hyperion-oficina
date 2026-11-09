@@ -55,7 +55,6 @@ export function FolhaServicos({
   lines: ServicoLine[];
 }) {
   const symptoms = useSyncExternalStore(subscribeSymptoms, () => readSymptoms(documentId), () => readSymptoms(""));
-  const blanks = Math.max(10, 16 - lines.length);
 
   useEffect(() => {
     if (!autoPrint) return;
@@ -138,14 +137,6 @@ export function FolhaServicos({
                 <td className="border border-black px-1 py-1 font-mono">{line.ref ?? ""}</td>
                 <td className="border border-black px-1 py-1 text-right tabular-nums">{formatQty(line.quantity)}</td>
                 <td className="border border-black px-1 py-1 text-center"><input type="checkbox" aria-label={`Concluído ${line.description}`} className="size-3.5" /></td>
-              </tr>
-            ))}
-            {Array.from({ length: blanks }, (_, index) => (
-              <tr key={`blank-${index}`}>
-                <td className="h-7 border border-black" />
-                <td className="border border-black" />
-                <td className="border border-black" />
-                <td className="border border-black text-center"><input type="checkbox" aria-label={`Linha em branco ${index + 1}`} className="size-3.5" /></td>
               </tr>
             ))}
           </tbody>
