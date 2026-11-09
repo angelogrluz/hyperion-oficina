@@ -568,7 +568,7 @@ export function FolhaView({
                   <col style={{ width: "52px" }} />
                   <col style={{ width: "56px" }} />
                   <col style={{ width: "48px" }} />
-                  <col style={{ width: "32px" }} />
+                  {lineEditMode ? <col style={{ width: "32px" }} /> : null}
                   <col style={{ width: "48px" }} />
                   <col style={{ width: "56px" }} />
                   <col style={{ width: "40px" }} />
@@ -581,7 +581,7 @@ export function FolhaView({
                 <thead className="text-[11px] text-[#22272a]">
                   <tr>
                     <th className="bg-[#e1e2e5] px-0.5 py-1 text-center font-semibold">O</th>
-                    <th className="bg-[#e1e2e5] px-0.5 py-1" aria-label="Código de barras" />
+                    {lineEditMode ? <th className="bg-[#e1e2e5] px-0.5 py-1" aria-label="Ordenar" /> : null}
                     <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Família</th>
                     <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Descrição</th>
                     <th className="bg-[#e1e2e5] px-1 py-1 text-left font-semibold">Obs. internas</th>
@@ -627,14 +627,16 @@ export function FolhaView({
                           </button>
                         ) : null}
                       </td>
-                      <td
-                        data-testid="drag-handle"
-                        aria-label={lineEditMode ? "Arrastar linha" : undefined}
-                        onPointerDown={(event) => startDrag(event, row.line.key)}
-                        className={`overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[13px] leading-none select-none ${lineEditMode ? "cursor-grab touch-none text-[#22272a] active:cursor-grabbing" : "cursor-default text-[#c5c8ce]"}`}
-                      >
-                        ≡
-                      </td>
+                      {lineEditMode ? (
+                        <td
+                          data-testid="drag-handle"
+                          aria-label="Arrastar linha"
+                          onPointerDown={(event) => startDrag(event, row.line.key)}
+                          className="cursor-grab touch-none overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[13px] leading-none text-[#22272a] select-none active:cursor-grabbing"
+                        >
+                          ≡
+                        </td>
+                      ) : null}
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.description} disabled={locked} onChange={(value) => onLine(row.line.key, { description: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
