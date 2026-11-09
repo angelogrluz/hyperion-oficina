@@ -723,9 +723,23 @@ export function FolhaView({
             </Link>
           ) : null}
           <div className="grid gap-1">
-            <Button type="button" data-testid="approval-aguarda" variant="outline" className={`h-8 text-[11px] ${approval === "aguarda" ? "border-[#f5a524] bg-[#f5a524] text-[#3a2a00] hover:bg-[#e0961c]" : "border-[#f5a524] bg-white text-[#8a5a00]"}`} disabled={locked || pending || !onApproval} onClick={() => onApproval?.("aguarda")}>Aguarda aprovação</Button>
-            <Button type="button" data-testid="approval-aprovado" className={`h-8 text-[11px] ${approval === "aprovado" ? "bg-[#1f9d55] hover:bg-[#188848]" : "bg-white text-[#1f9d55] ring-1 ring-[#1f9d55] hover:bg-[#eefaf3]"}`} disabled={locked || pending || !onApproval} onClick={() => onApproval?.("aprovado")}>Aprovado</Button>
-            <Button type="button" data-testid="approval-recusado" className={`h-8 text-[11px] ${approval === "recusado" ? "bg-[#d64545] hover:bg-[#c23838]" : "bg-white text-[#d64545] ring-1 ring-[#d64545] hover:bg-[#fff1f1]"}`} disabled={locked || pending || !onApproval} onClick={() => onApproval?.("recusado")}>Não aprovado</Button>
+            {([
+              ["aguarda", "Aguarda aprovação", "border-[#f5a524] bg-[#f5a524] text-[#3a2a00]", "border-[#f5a524] bg-white text-[#8a5a00]"],
+              ["aprovado", "Aprovado", "border-[#1f9d55] bg-[#1f9d55] text-white", "border-[#1f9d55] bg-white text-[#1f9d55]"],
+              ["recusado", "Não aprovado", "border-[#d64545] bg-[#d64545] text-white", "border-[#d64545] bg-white text-[#d64545]"],
+            ] as const).map(([value, label, filled, outlined]) => (
+              <button
+                key={value}
+                type="button"
+                data-testid={`approval-${value}`}
+                aria-pressed={approval === value}
+                disabled={locked || pending || !onApproval}
+                onClick={() => onApproval?.(value)}
+                className={`h-8 rounded-lg border text-[11px] font-semibold disabled:opacity-50 ${approval === value ? filled : outlined}`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
           {canInvoice ? <Button type="button" data-testid="faturar" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
