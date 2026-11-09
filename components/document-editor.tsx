@@ -29,6 +29,7 @@ import { markUnsaved, registerSaveFlush } from "@/lib/unsaved";
 import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, platesMatch, salePrice, sumTotals } from "@/lib/domain";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
+import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
 import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
 
 export type EditorArticle = {
@@ -138,6 +139,8 @@ export function DocumentEditor({
     problem: string;
     notes: string;
     status: string;
+    approval?: string;
+    approvalAt?: string | null;
     lines: Line[];
   };
 }) {
@@ -173,6 +176,8 @@ export function DocumentEditor({
   const [problem, setProblem] = useState(draft?.problem ?? initial.problem);
   const [notes, setNotes] = useState(draft?.notes ?? initial.notes);
   const [status, setStatus] = useState(draft?.status ?? initial.status);
+  const [approval, setApproval] = useState<Approval>(normalizeApproval(draft?.approval ?? initial.approval, draft?.status ?? initial.status));
+  const [approvalAt, setApprovalAt] = useState<string | null>(draft?.approvalAt ?? initial.approvalAt ?? null);
   const [lines, setLines] = useState<Line[]>((draft?.lines as Line[] | undefined) ?? initial.lines);
   const [partQuery, setPartQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -322,7 +327,7 @@ export function DocumentEditor({
     setKm(String(vehicle.km));
   }
 
-  type SaveOptions = { statusOverride?: string; silent?: boolean; navigate?: boolean };
+  type SaveOptions = { statusOverride?: string; silent?: boolean; navigate?: boolean; approval?: Approval; approvalAt?: string | null };
 
   function sheetDraft(id: string): SheetDraft {
     return {
@@ -347,6 +352,8 @@ export function DocumentEditor({
       problem,
       notes,
       status,
+      approval,
+      approvalAt,
       lines,
     };
   }
@@ -374,7 +381,13 @@ export function DocumentEditor({
       return { ok: false };
     }
     const nextStatus = options?.statusOverride ?? status;
+    const nextApproval = options?.approval ?? approval;
+    const nextApprovalAt = options && "approval" in options ? options.approvalAt ?? null : approvalAt;
     if (options?.statusOverride) setStatus(options.statusOverride);
+    if (options?.approval) {
+      setApproval(options.approval);
+      setApprovalAt(nextApprovalAt);
+    }
     const seen = revisionRef.current;
     setSaveState("saving");
     let nextVehicleId = vehicleId;
@@ -437,6 +450,8 @@ export function DocumentEditor({
       problem,
       notes,
       status: nextStatus,
+      approval: nextApproval,
+      approvalAt: nextApprovalAt,
       lines: parsedLines,
     };
     const result =
@@ -456,7 +471,9 @@ export function DocumentEditor({
       clearSheetDraft(documentId ?? "nova");
       clearSheetDraft(savedId);
     }
-    if (!options?.silent) toast.success(mode === "order" ? "Ordem guardada." : "Orçamento guardado.");
+    if (!options?.silent) {
+      toast.success(options?.approval ? APPROVAL_LABEL[options.approval] : mode === "order" ? "Ordem guardada." : "Orçamento guardado.");
+    }
     if (!documentId && options?.navigate !== false) {
       if (mode === "order") moveSymptoms("rascunho", savedId);
       clearSheetDraft("nova");
@@ -476,6 +493,14 @@ export function DocumentEditor({
 
   function save(statusOverride?: string) {
     void flush({ statusOverride, silent: false });
+  }
+
+  function chooseApproval(next: Approval) {
+    const at = next === "aguarda" ? null : new Date().toISOString();
+    setApproval(next);
+    setApprovalAt(at);
+    touch();
+    void flush({ silent: false, navigate: false, approval: next, approvalAt: at });
   }
 
   useEffect(() => {
@@ -793,6 +818,9 @@ export function DocumentEditor({
             });
           }}
           onSave={save}
+          approval={approval}
+          approvalAt={approvalAt}
+          onApproval={chooseApproval}
           onFlush={() => {
             if (documentId) void flush({ silent: true, navigate: false });
           }}

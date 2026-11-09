@@ -1,136 +1,171 @@
-import { formatEUR, formatPercent, formatQty } from "@/lib/format";
-import type { PrintableDocument, WorkshopProfile } from "@/lib/printable";
+import { CompanyBlock } from "@/components/company-block";
+import { company } from "@/src/config";
+import { round2 } from "@/lib/domain";
+import { formatEUR, formatQty } from "@/lib/format";
+import type { PrintableDocument } from "@/lib/printable";
 
-export function DocumentPaper({ doc, workshop }: { doc: PrintableDocument; workshop: WorkshopProfile }) {
+function dashDate(value: string) {
+  const match = value.match(/(\d{1,2})[\/.](\d{1,2})[\/.](\d{4})/);
+  if (!match) return value;
+  return `${match[1].padStart(2, "0")}-${match[2].padStart(2, "0")}-${match[3]}`;
+}
+
+function taxGroups(doc: PrintableDocument) {
+  const groups = new Map<number, { base: number; vat: number }>();
+  for (const line of doc.lines) {
+    const current = groups.get(line.vatRate) ?? { base: 0, vat: 0 };
+    current.base = round2(current.base + line.base);
+    current.vat = round2(current.vat + (line.total - line.base));
+    groups.set(line.vatRate, current);
+  }
+  return [...groups.entries()].sort((a, b) => a[0] - b[0]);
+}
+
+function taxLabel(rate: number) {
+  return rate === 23 ? "Normal (Continente)- Taxa de Iva 23%" : `Taxa de IVA ${formatQty(rate)}%`;
+}
+
+export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
+  const issued = dashDate(doc.primaryDate);
+  const groups = taxGroups(doc);
+  const quote = doc.kind === "quote";
+  const title = quote ? "Orçamento" : "Fatura";
+  const yourRef = doc.sheetNumber || "—";
+  const linked = doc.relatedNumber || "—";
+  const addressLines = [doc.client.address, [doc.client.postalCode, doc.client.city].filter(Boolean).join(" ")].filter(Boolean);
+
   return (
-    <article className="mx-auto max-w-[210mm] bg-white px-8 py-8 text-neutral-900 shadow-sm ring-1 ring-black/10 print:shadow-none print:ring-0">
-      <div className="flex items-start justify-between gap-6 border-b border-neutral-200 pb-4">
+    <article data-testid="documento-moloni" className="mx-auto max-w-[210mm] bg-white px-6 py-6 text-[11px] leading-snug text-black shadow-sm ring-1 ring-black/10 print:shadow-none print:ring-0">
+      <div className="grid grid-cols-2 items-start gap-6">
+        <CompanyBlock />
         <div>
-          <p className="text-xl font-semibold tracking-tight">{workshop.tradeName}</p>
-          <p className="text-sm text-neutral-500">Oficina de reparação automóvel</p>
-          <p className="mt-2 text-sm">
-            {workshop.address}
-            <br />
-            {workshop.postalCode} {workshop.city}
-            <br />
-            NIF {workshop.nif} · {workshop.phone}
-            <br />
-            {workshop.email}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-semibold tracking-[0.16em] text-[#0b8f9c] uppercase">{doc.title}</p>
-          <p className="mt-1 text-2xl font-semibold">{doc.number}</p>
-          <p className="text-sm text-neutral-500">{doc.statusLabel}</p>
+          <p className="text-right text-[10px]">Original</p>
+          <p className="text-right text-[15px] font-bold">{title} N.º {doc.number}</p>
+          <p className="text-right">Data de Emissão: {issued}</p>
+          <div className="mt-6">
+            <p className="font-bold">{doc.client.name}</p>
+            {addressLines.length ? addressLines.map((line) => <p key={line}>{line}</p>) : <p>Sem morada</p>}
+            <p>Portugal</p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <section className="rounded-lg border border-neutral-200 p-3">
-          <p className="text-[11px] font-semibold tracking-wide text-[#0b8f9c] uppercase">Cliente</p>
-          <p className="mt-1 font-medium">{doc.client.name}</p>
-          <p className="text-sm text-neutral-600">NIF {doc.client.nif}</p>
-          <p className="text-sm text-neutral-600">{doc.client.address || "Sem morada"}</p>
-          <p className="text-sm text-neutral-600">{[doc.client.phone, doc.client.email].filter(Boolean).join(" · ")}</p>
-        </section>
-        <section className="rounded-lg border border-neutral-200 p-3">
-          <p className="text-[11px] font-semibold tracking-wide text-[#0b8f9c] uppercase">Viatura</p>
-          <p className="mt-1 font-mono font-semibold">{doc.vehicle.plate}</p>
-          <p className="text-sm text-neutral-600">
-            {doc.vehicle.brand} {doc.vehicle.model} · {doc.vehicle.year}
-          </p>
-          <p className="text-sm text-neutral-600">
-            {doc.vehicle.fuel} · {formatQty(doc.km)} km
-          </p>
-          <p className="text-sm text-neutral-600">{doc.vehicle.vin ? `VIN ${doc.vehicle.vin}` : "VIN não indicado"}</p>
-        </section>
-      </div>
-
-      <p className="mt-4 text-sm text-neutral-600">
-        {doc.primaryDateLabel}: {doc.primaryDate}
-        <span className="px-3">·</span>
-        {doc.secondaryDateLabel}: {doc.secondaryDate}
-      </p>
-
-      <h2 className="mt-4 text-xs font-semibold tracking-wide text-[#0b8f9c] uppercase">{doc.problemLabel}</h2>
-      <p className="mt-1 text-sm">{doc.problem}</p>
-
-      <table className="mt-4 w-full border-collapse text-sm">
+      <table className="mt-4 w-full border-collapse border border-neutral-500 text-[10px]">
         <thead>
-          <tr className="border-y border-neutral-200 text-left text-xs tracking-wide text-neutral-500 uppercase">
-            <th className="py-2 font-medium">Descrição</th>
-            <th className="py-2 text-right font-medium">Qtd</th>
-            <th className="py-2 text-right font-medium">Preço</th>
-            <th className="py-2 text-right font-medium">IVA</th>
-            <th className="py-2 text-right font-medium">Total</th>
+          <tr className="bg-neutral-100 text-left">
+            {["Contribuinte", "Cliente", "V/ Ref.ª", "Enc./Orç.", "Moeda", "Prazo de venc.", "Data Vencimento", "Pág."].map((label) => (
+              <th key={label} className="border border-neutral-400 px-1 py-1 font-semibold">{label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {[doc.client.nif || "—", doc.client.nif || "—", yourRef, linked, "EUR", "Pronto Pgto.", issued, "1/1"].map((value, index) => (
+              <td key={index} className="border border-neutral-400 px-1 py-1">{value}</td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+
+      <table className="mt-3 w-full border-collapse text-[10px]">
+        <thead>
+          <tr className="border-y border-neutral-600 text-left">
+            <th className="py-1 pr-2 font-semibold">Ref.ª Artigo</th>
+            <th className="py-1 pr-2 font-semibold">Designação</th>
+            <th className="py-1 text-right font-semibold">Qtd.</th>
+            <th className="py-1 text-right font-semibold">Uni.</th>
+            <th className="py-1 text-right font-semibold">Preço</th>
+            <th className="py-1 text-right font-semibold">Imposto</th>
+            <th className="py-1 text-right font-semibold">Total Líquido</th>
           </tr>
         </thead>
         <tbody>
           {doc.lines.length === 0 ? (
             <tr>
-              <td colSpan={5} className="py-3 text-neutral-500">
-                Sem linhas lançadas.
-              </td>
+              <td colSpan={7} className="py-2 text-neutral-600">Sem linhas lançadas.</td>
             </tr>
           ) : (
             doc.lines.map((line, index) => (
-              <tr key={`${line.description}-${index}`} className="border-b border-neutral-100">
-                <td className="py-2">
-                  {line.ref ? <span className="mr-2 font-mono text-xs">{line.ref}</span> : null}
-                  {line.description}
-                  {line.kind === "mao_de_obra" ? <span className="ml-2 text-xs text-neutral-500">mão de obra</span> : null}
+              <tr key={`${line.description}-${index}`} className="align-top">
+                <td className="py-1 pr-2 font-mono">{line.ref || (line.kind === "mao_de_obra" ? "MO" : "—")}</td>
+                <td className="py-1 pr-2">
+                  <p>{line.description}</p>
+                  <p className="text-neutral-600">{line.kind === "mao_de_obra" ? "MO" : "Prod"}</p>
                 </td>
-                <td className="py-2 text-right tabular-nums">
-                  {formatQty(line.quantity)}
-                  {line.kind === "mao_de_obra" ? " h" : ""}
-                </td>
-                <td className="py-2 text-right tabular-nums">{formatEUR(line.unitPrice)}</td>
-                <td className="py-2 text-right tabular-nums">{formatPercent(line.vatRate)}</td>
-                <td className="py-2 text-right tabular-nums">{formatEUR(line.total)}</td>
+                <td className="py-1 text-right tabular-nums">{formatQty(line.quantity)}</td>
+                <td className="py-1 text-right">{line.kind === "mao_de_obra" ? "h" : "Unid"}</td>
+                <td className="py-1 text-right tabular-nums">{formatEUR(line.unitPrice)}</td>
+                <td className="py-1 text-right tabular-nums">{formatQty(line.vatRate)}%</td>
+                <td className="py-1 text-right tabular-nums">{formatEUR(line.total)}</td>
               </tr>
             ))
           )}
         </tbody>
       </table>
 
-      <div className="mt-4 ml-auto w-full max-w-xs space-y-1 text-sm">
-        <div className="flex justify-between">
-          <span className="text-neutral-500">Base s/ IVA</span>
-          <span className="tabular-nums">{formatEUR(doc.totals.base)}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-neutral-500">IVA</span>
-          <span className="tabular-nums">{formatEUR(doc.totals.vat)}</span>
-        </div>
-        <div className="flex justify-between border-t border-neutral-200 pt-2 text-base font-semibold">
-          <span>Total</span>
-          <span className="tabular-nums">{formatEUR(doc.totals.total)}</span>
-        </div>
-      </div>
-
-      {doc.paymentMethod ? <p className="mt-3 text-sm">Modo de pagamento: {doc.paymentMethod}</p> : null}
-
-      {doc.invoice ? (
-        <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-          <p className="font-semibold">
-            {doc.invoice.simulated ? "Fatura simulada" : "Fatura"} {doc.invoice.number}
-          </p>
-          <p>
-            {doc.invoice.provider}. Este número não tem validade fiscal e não foi comunicado à Autoridade Tributária.
-          </p>
-        </div>
-      ) : null}
-
-      {doc.notes ? <p className="mt-4 text-sm text-neutral-600">Notas: {doc.notes}</p> : null}
-
-      <div className="mt-10 grid grid-cols-2 gap-8 text-sm text-neutral-500">
-        <div className="border-t border-neutral-300 pt-2">O cliente</div>
-        <div className="border-t border-neutral-300 pt-2">A oficina</div>
-      </div>
-      <p className="mt-8 text-center text-[11px] text-neutral-500">
-        Documento interno de oficina. A faturação certificada não está ativa. Um número de fatura em modo de simulação
-        não substitui uma fatura emitida por software certificado pela AT.
+      <p className="mt-4 text-[10px]">
+        {quote
+          ? `Este documento não serve de fatura e foi criado a ${issued}.`
+          : "Documento simulado. Não tem validade fiscal nem foi comunicado à Autoridade Tributária."}
       </p>
+
+      <div className="mt-3 grid grid-cols-[minmax(0,1fr)_220px] items-start gap-4">
+        <table className="w-full border-collapse text-[10px]">
+          <caption className="mb-1 text-left font-bold">Resumo de Impostos</caption>
+          <thead>
+            <tr className="border-b border-neutral-500 text-left">
+              <th className="py-1 font-semibold">Designação</th>
+              <th className="py-1 text-right font-semibold">Valor</th>
+              <th className="py-1 text-right font-semibold">Incidência</th>
+              <th className="py-1 text-right font-semibold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="py-1">Sem imposto.</td>
+              </tr>
+            ) : (
+              groups.map(([rate, group]) => (
+                <tr key={rate}>
+                  <td className="py-1">{taxLabel(rate)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatQty(rate)}%</td>
+                  <td className="py-1 text-right tabular-nums">{formatEUR(group.base)}</td>
+                  <td className="py-1 text-right tabular-nums">{formatEUR(group.vat)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+        <div className="border border-neutral-500 p-2 text-[11px]">
+          <div className="flex justify-between gap-3"><span>Total Ilíq.</span><span className="tabular-nums">{formatEUR(doc.totals.base)}</span></div>
+          {groups.map(([rate, group]) => (
+            <div key={rate} className="mt-1 flex justify-between gap-3">
+              <span>{taxLabel(rate)}</span>
+              <span className="tabular-nums">{formatEUR(group.vat)}</span>
+            </div>
+          ))}
+          <div className="mt-2 flex justify-between gap-3 border-t border-neutral-400 pt-1 text-[13px] font-bold">
+            <span>Total a pagar</span>
+            <span className="tabular-nums">{formatEUR(doc.totals.total)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <p className="font-bold">Observações</p>
+        <p>Matrícula: {doc.vehicle.plate}</p>
+        <p>Marca: {doc.vehicle.brand}</p>
+        <p>Modelo: {doc.vehicle.model}</p>
+        <p>Kms: {formatQty(doc.km)}</p>
+      </div>
+
+      <div className="mt-4">
+        <p className="font-bold">Informação Bancária</p>
+        <p>{company.ibanBank}</p>
+        <p>{company.iban}</p>
+        {doc.paymentMethod ? <p className="mt-1">Modo de pagamento: {doc.paymentMethod}</p> : null}
+      </div>
     </article>
   );
 }

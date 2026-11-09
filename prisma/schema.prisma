@@ -124,6 +124,8 @@ model RepairOrder {
   kmOut            Int?
   problem          String
   status           String         @default("aberta")
+  approval         String         @default("aguarda")
+  approvalAt       DateTime?
   notes            String         @default("")
   invoiceNumber    String?
   invoiceProvider  String?
@@ -210,8 +212,9 @@ model PurchaseLine {
   id          String   @id @default(cuid())
   purchaseId  String
   purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  articleId   String
-  article     Article  @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  articleId   String?
+  article     Article? @relation(fields: [articleId], references: [id], onDelete: Restrict)
+  tipologia   String   @default("produto")
   ref         String
   description String
   quantity    Float

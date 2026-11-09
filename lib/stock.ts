@@ -10,6 +10,7 @@ import {
   stockDelta,
 } from "@/lib/domain";
 import { dateOnly } from "@/lib/format";
+import { purchaseTypeMovesStock } from "@/src/config";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 
 export type IncomingPurchaseLine = {
@@ -25,6 +26,7 @@ export type IncomingPurchaseLine = {
   vat: number;
   margin: number;
   family: string;
+  tipologia?: string;
   isOil?: boolean;
   minStock?: number;
 };
@@ -57,8 +59,28 @@ export async function postPurchases(tx: Prisma.TransactionClient, lines: Incomin
     purchaseIds.push(purchase.id);
 
     for (const [position, line] of group.entries()) {
-      const ref = normalizeRef(line.ref);
+      const tipologia = line.tipologia || "produto";
       const description = normalizeArticleDescription(line.description);
+      if (!purchaseTypeMovesStock(tipologia)) {
+        await tx.purchaseLine.create({
+          data: {
+            purchaseId: purchase.id,
+            articleId: null,
+            tipologia,
+            ref: line.ref.trim(),
+            description,
+            quantity: line.quantity,
+            cost: line.cost,
+            vatRate: line.vat,
+            margin: line.margin,
+            position,
+            stockBefore: 0,
+            costBefore: 0,
+          },
+        });
+        continue;
+      }
+      const ref = normalizeRef(line.ref);
       const oil = Boolean(line.isOil) || isOilArticle({ family: line.family, ref });
       let article = await tx.article.findUnique({ where: { ref } });
       if (!article) {
@@ -97,6 +119,7 @@ export async function postPurchases(tx: Prisma.TransactionClient, lines: Incomin
         data: {
           purchaseId: purchase.id,
           articleId: article.id,
+          tipologia,
           ref,
           description,
           quantity: line.quantity,
@@ -125,6 +148,7 @@ export async function voidPurchase(tx: Prisma.TransactionClient, purchaseId: str
   if (purchase.voided) throw new Error("Esta compra já foi anulada.");
 
   for (const line of purchase.lines) {
+    if (!line.articleId) continue;
     const article = await tx.article.findUnique({ where: { id: line.articleId } });
     if (!article) continue;
     const delta = stockDelta(purchase.documentType, line.quantity);
@@ -138,7 +162,9 @@ export async function voidPurchase(tx: Prisma.TransactionClient, purchaseId: str
     where: { id: purchaseId },
     data: { voided: true, voidedAt: new Date() },
   });
-  for (const line of purchase.lines) await refreshLastCost(tx, line.articleId);
+  for (const line of purchase.lines) {
+    if (line.articleId) await refreshLastCost(tx, line.articleId);
+  }
 }
 
 export async function refreshLastCost(tx: Prisma.TransactionClient, articleId: string) {
@@ -196,7 +222,7 @@ export async function upsertSheetStock(tx: Prisma.TransactionClient, input: Stoc
     throw new Error("A entrada de stock já não existe.");
   }
   if (existing) {
-    const previous = await tx.article.findUnique({ where: { id: existing.articleId } });
+    const previous = existing.articleId ? await tx.article.findUnique({ where: { id: existing.articleId } }) : null;
     if (previous) {
       const delta = stockDelta(existing.purchase.documentType, existing.quantity);
       await tx.article.update({
@@ -257,6 +283,7 @@ export async function upsertSheetStock(tx: Prisma.TransactionClient, input: Stoc
       id: existing?.id,
       purchaseId: purchase.id,
       articleId: article.id,
+      tipologia: "produto",
       ref,
       description,
       quantity,
@@ -293,7 +320,7 @@ export async function upsertSheetStock(tx: Prisma.TransactionClient, input: Stoc
 export async function removeSheetStock(tx: Prisma.TransactionClient, purchaseLineId: string) {
   const line = await tx.purchaseLine.findUnique({ where: { id: purchaseLineId }, include: { purchase: true } });
   if (!line || line.purchase.voided) return { article: null as StockArticle | null };
-  const current = await tx.article.findUnique({ where: { id: line.articleId } });
+  const current = line.articleId ? await tx.article.findUnique({ where: { id: line.articleId } }) : null;
   let article: StockArticle | null = null;
   if (current) {
     const delta = stockDelta(line.purchase.documentType, line.quantity);

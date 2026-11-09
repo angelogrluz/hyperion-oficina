@@ -39,6 +39,8 @@ const orderSchema = z.object({
   problem: z.string().trim().max(2000),
   notes: z.string().max(2000),
   status: z.enum(["aberta", "em_curso", "concluida"]),
+  approval: z.enum(["aguarda", "aprovado", "recusado"]).optional(),
+  approvalAt: z.string().nullable().optional(),
   lines: z.array(lineSchema).max(80),
 });
 
@@ -122,6 +124,10 @@ export async function saveOrder(id: string | null, payload: unknown): Promise<Re
         problem: parsed.data.problem,
         notes: parsed.data.notes,
         status: parsed.data.status,
+        approval: parsed.data.approval ?? "aguarda",
+        approvalAt: parsed.data.approval && parsed.data.approval !== "aguarda" && parsed.data.approvalAt
+          ? new Date(parsed.data.approvalAt)
+          : null,
       };
       if (!id) {
         const number = await nextDocumentNumber(tx, "OR");

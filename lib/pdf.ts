@@ -1,6 +1,7 @@
 import { createWriteStream } from "node:fs";
 import path from "node:path";
 import PDFDocument from "pdfkit";
+import { company } from "@/src/config";
 import { formatEUR, formatPercent, formatQty } from "@/lib/format";
 import type { PrintableDocument, WorkshopProfile } from "@/lib/printable";
 
@@ -17,12 +18,16 @@ function render(doc: PDFKit.PDFDocument, printable: PrintableDocument, workshop:
   const width = 515;
 
   doc.rect(0, 0, 595.28, 10).fill(pine);
-  doc.fillColor(ink).font("bold").fontSize(18).text(workshop.tradeName, left, 28, { width: 300 });
-  doc.font("body").fontSize(9).fillColor(muted).text("Oficina de reparação automóvel", left, 50, { width: 300 });
-  doc.text(`${workshop.address}`, left, 64, { width: 280 });
-  doc.text(`${workshop.postalCode} ${workshop.city}`, left, 76, { width: 280 });
-  doc.text(`NIF ${workshop.nif} · ${workshop.phone}`, left, 88, { width: 280 });
-  doc.text(workshop.email, left, 100, { width: 280 });
+  void workshop;
+  doc.fillColor(ink).font("bold").fontSize(9).text(company.legalName, left, 24, { width: 300 });
+  doc.font("body").fontSize(8).fillColor(muted);
+  doc.text(company.address, left, 40, { width: 280 });
+  doc.text(`${company.postalCode} ${company.city}`, left, 50, { width: 280 });
+  doc.text(`Tel./WhatsApp ${company.phone}`, left, 60, { width: 280 });
+  doc.text(company.email, left, 70, { width: 280 });
+  doc.text(company.site, left, 80, { width: 280 });
+  doc.text(`NIF ${company.nif}`, left, 90, { width: 280 });
+  doc.text(`IBAN ${company.ibanBank}: ${company.iban}`, left, 100, { width: 280 });
 
   doc.fillColor(copper).font("bold").fontSize(11).text(printable.title.toUpperCase(), 330, 32, { width: 225, align: "right" });
   doc.fillColor(ink).fontSize(16).text(printable.number, 330, 48, { width: 225, align: "right" });

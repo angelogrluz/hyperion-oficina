@@ -141,8 +141,8 @@ export function priceWithVat(net: number, vatRate = DEFAULT_VAT) {
   return round2(net * (1 + vatRate / 100));
 }
 
-export function ecolubAmount(litres: number) {
-  return round2(litres * ECOLUB_UNIT_COST);
+export function ecolubAmount(litres: number, rate = ECOLUB_UNIT_COST) {
+  return round2(litres * rate);
 }
 
 export type MoneyLine = {

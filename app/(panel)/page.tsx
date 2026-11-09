@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/empty-state";
 import { SimulationBanner } from "@/components/simulation-banner";
 import { prisma } from "@/lib/db";
 import { formatMediumDate, lisbonTime } from "@/lib/format";
+import { normalizeApproval } from "@/lib/approval";
 import { jobPresentation, orderTotal } from "@/lib/job-status";
 
 export const metadata = { title: "Obras em curso" };
@@ -35,7 +36,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
               plate: order.vehicle?.plate ?? "",
               model: `${order.vehicle?.brand ?? ""} ${order.vehicle?.model ?? ""}`.trim(),
               status: status.label,
-              approved: status.approved,
+              approval: normalizeApproval(order.approval, order.status),
+              approvalAt: order.approvalAt?.toISOString() ?? null,
+              approved: normalizeApproval(order.approval, order.status) === "aprovado",
               total: orderTotal(order.lines),
               date: `${formatMediumDate(order.dateIn)} ${lisbonTime(order.dateIn)}`,
             };

@@ -15,10 +15,12 @@ import { TableShell, Td, Th } from "@/components/table-shell";
 import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
 import { DocumentPaper } from "@/components/document-paper";
+import { FolhaPrint } from "@/components/folha-print";
 import { PrintButton } from "@/components/print-button";
-import { salePrice } from "@/lib/domain";
+import { lineAmounts, salePrice, sumTotals } from "@/lib/domain";
 import { orderToPrintable } from "@/lib/printable";
 import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } from "@/lib/format";
+import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
 import { saveClient, saveVehicle } from "./shims/records";
@@ -88,6 +90,7 @@ function Frame({ children }: { children: ReactNode }) {
 
 function Home() {
   const snap = useSnap();
+  const [filter, setFilter] = useState<Approval | "todas">("todas");
   if (!snap) return null;
   const jobs = snap.orders
     .filter((order) => order.status !== "faturada")
@@ -95,21 +98,42 @@ function Home() {
       const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
       const lines = snap.lines.filter((line) => line.orderId === order.id);
       const status = jobPresentation(order.status);
+      const approval = normalizeApproval(order.approval, order.status);
       return {
         id: order.id,
         href: `/ordens/${order.id}`,
         plate: vehicle?.plate ?? "",
         model: `${vehicle?.brand ?? ""} ${vehicle?.model ?? ""}`.trim(),
         status: status.label,
-        approved: status.approved,
+        approval,
+        approvalAt: order.approvalAt,
+        approved: approval === "aprovado",
         total: orderTotal(lines),
         date: `${formatMediumDate(new Date(order.dateIn))} ${lisbonTime(new Date(order.dateIn))}`,
       };
-    });
+    })
+    .filter((job) => filter === "todas" || job.approval === filter);
+  const filters: Array<Approval | "todas"> = ["todas", "aguarda", "aprovado", "recusado"];
   return (
     <div>
       <SimulationBanner />
-      <div className="mt-4"><JobBoard jobs={jobs} /></div>
+      <div className="mt-4 flex flex-wrap gap-2" data-testid="approval-filters">
+        {filters.map((item) => (
+          <button
+            key={item}
+            type="button"
+            data-testid={`filter-${item}`}
+            aria-pressed={filter === item}
+            onClick={() => setFilter(item)}
+            className={`h-8 rounded-full px-3 text-[12px] font-semibold ${filter === item ? "bg-[#22272a] text-white" : "bg-white text-[#22272a] ring-1 ring-[#e1e2e5]"}`}
+          >
+            {item === "todas" ? "Todas" : APPROVAL_LABEL[item]}
+          </button>
+        ))}
+      </div>
+      <div className="mt-4">
+        {jobs.length === 0 ? <p className="text-sm text-[#8d939c]">Nenhuma obra neste estado.</p> : <JobBoard jobs={jobs} />}
+      </div>
     </div>
   );
 }
@@ -229,6 +253,8 @@ function OrderScreen() {
         problem: order.problem,
         notes: order.notes,
         status: order.status,
+        approval: order.approval,
+        approvalAt: order.approvalAt,
         lines: vitrine ? syntheticLines() : linesFor(snap, order.id),
       }}
     />
@@ -450,20 +476,72 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" }) {
   });
   doc.title = kind === "orcamento" ? "Orçamento" : "Fatura";
   doc.kind = kind === "orcamento" ? "quote" : "order";
+  doc.sheetNumber = order.number;
+  doc.relatedNumber = kind === "fatura" ? order.quoteNumber || "—" : "—";
   doc.number = number;
   doc.statusLabel = "Simulação Moloni";
   doc.paymentMethod = kind === "fatura" ? order.paymentMethod ?? null : null;
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
-      <div className="mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3 print:hidden">
+      <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3">
         <a href={`${import.meta.env.BASE_URL}ordens/${order.id}`} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
         <PrintButton />
       </div>
-      <p className="mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 print:hidden">
+      <p className="no-print mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
         Documento simulado pela Moloni. Não tem validade fiscal nem foi comunicado à Autoridade Tributária.
       </p>
-      <DocumentPaper doc={doc} workshop={snap.workshop} />
+      <DocumentPaper doc={doc} />
     </main>
+  );
+}
+
+function SheetPrint() {
+  const { id } = useParams();
+  const snap = useSnap();
+  if (!snap || !id) return null;
+  const order = snap.orders.find((item) => item.id === id);
+  if (!order) return <p className="p-6">Folha não encontrada.</p>;
+  const client = snap.clients.find((item) => item.id === order.clientId) ?? null;
+  const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId) ?? null;
+  const raw = snap.lines.filter((line) => line.orderId === order.id).sort((a, b) => a.position - b.position);
+  const money = raw.map((line) => ({
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    unitCost: line.unitCost,
+    vatRate: line.vatRate,
+    discountPercent: line.discountPercent,
+  }));
+  const totals = sumTotals(money);
+  return (
+    <FolhaPrint
+      autoPrint
+      backHref={`${import.meta.env.BASE_URL}ordens/${order.id}`}
+      documentId={order.id}
+      number={order.number}
+      dateLabel={formatMediumDate(new Date(order.dateIn))}
+      client={client}
+      vehicle={vehicle ? {
+        plate: vehicle.plate,
+        brand: vehicle.brand,
+        model: vehicle.model,
+        year: vehicle.year,
+        vin: vehicle.vin,
+        fuel: vehicle.fuel,
+        km: order.km,
+        kmOut: order.kmOut ?? null,
+        oil: vehicle.oil ?? "",
+      } : null}
+      problem={order.problem}
+      lines={raw.map((line, index) => ({
+        kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
+        description: line.description,
+        ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? null,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        total: lineAmounts(money[index]).total,
+      }))}
+      totals={{ base: totals.base, vat: totals.vat, total: totals.total }}
+    />
   );
 }
 
@@ -473,6 +551,7 @@ function AppRoutes() {
       <Route path="/entrar" element={<LoginPage />} />
       <Route path="/" element={<Frame><Home /></Frame>} />
       <Route path="/ordens/nova" element={<Frame><NewOrder /></Frame>} />
+      <Route path="/ordens/:id/imprimir" element={<SheetPrint />} />
       <Route path="/ordens/:id/orcamento" element={<BillingView kind="orcamento" />} />
       <Route path="/ordens/:id/fatura" element={<BillingView kind="fatura" />} />
       <Route path="/ordens/:id" element={<Frame><OrderScreen /></Frame>} />

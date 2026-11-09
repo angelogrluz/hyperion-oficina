@@ -20,6 +20,7 @@ import {
   stockDelta,
 } from "@/lib/domain";
 import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
+import { purchaseTypeMovesStock } from "@/src/config";
 import { issueMoloniInvoice, issueMoloniQuote, SHEET_PAYMENTS } from "@/lib/moloni/service";
 import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
@@ -117,6 +118,8 @@ export type Order = {
   kmOut?: number | null;
   problem: string;
   status: string;
+  approval?: string;
+  approvalAt?: string | null;
   notes: string;
   invoiceNumber: string | null;
   invoiceProvider: string | null;
@@ -161,7 +164,8 @@ export type Purchase = {
 export type PurchaseLine = {
   id: string;
   purchaseId: string;
-  articleId: string;
+  articleId: string | null;
+  tipologia?: string;
   ref: string;
   description: string;
   quantity: number;
@@ -581,6 +585,8 @@ export async function saveOrderRecord(id: string | null, input: {
   problem: string;
   notes: string;
   status: string;
+  approval?: string;
+  approvalAt?: string | null;
   lines: IncomingLine[];
 }) {
   if (input.dateOut && input.dateOut < input.dateIn) {
@@ -616,6 +622,8 @@ export async function saveOrderRecord(id: string | null, input: {
         problem: input.problem.trim(),
         notes: input.notes,
         status: input.status,
+        approval: input.approval || "aguarda",
+        approvalAt: input.approval && input.approval !== "aguarda" ? input.approvalAt ?? null : null,
         updatedAt: stamp(),
       };
       if (!id) {
@@ -907,6 +915,7 @@ type PurchaseInput = {
   vat: number;
   margin: number;
   family: string;
+  tipologia?: string;
   isOil?: boolean;
 };
 
@@ -942,8 +951,27 @@ export async function savePurchasesRecord(lines: PurchaseInput[]) {
         snap.purchases.push(purchase);
         count += 1;
         group.forEach((line, position) => {
-          const ref = normalizeRef(line.ref);
+          const tipologia = line.tipologia || "produto";
           const description = normalizeArticleDescription(line.description);
+          if (!purchaseTypeMovesStock(tipologia)) {
+            snap.purchaseLines.push({
+              id: uid(),
+              purchaseId: purchase.id,
+              articleId: null,
+              tipologia,
+              ref: line.ref.trim(),
+              description,
+              quantity: line.quantity,
+              cost: line.cost,
+              vatRate: line.vat,
+              margin: line.margin,
+              position,
+              stockBefore: 0,
+              costBefore: 0,
+            });
+            return;
+          }
+          const ref = normalizeRef(line.ref);
           const oil = Boolean(line.isOil) || isOilArticle({ family: line.family, ref });
           let article = snap.articles.find((item) => item.ref === ref);
           if (!article) {
@@ -978,6 +1006,7 @@ export async function savePurchasesRecord(lines: PurchaseInput[]) {
             id: uid(),
             purchaseId: purchase.id,
             articleId: article.id,
+            tipologia,
             ref,
             description,
             quantity: line.quantity,
@@ -1008,6 +1037,7 @@ export async function cancelPurchaseRecord(id: string) {
       if (purchase.voided) throw new Error("Esta compra já foi anulada.");
       const lines = snap.purchaseLines.filter((line) => line.purchaseId === id).sort((a, b) => b.position - a.position);
       for (const line of lines) {
+        if (!line.articleId) continue;
         const article = snap.articles.find((item) => item.id === line.articleId);
         if (!article) continue;
         const delta = stockDelta(purchase.documentType, line.quantity);
@@ -1016,7 +1046,9 @@ export async function cancelPurchaseRecord(id: string) {
       }
       purchase.voided = true;
       purchase.voidedAt = stamp();
-      for (const line of lines) syncLastCost(snap, line.articleId);
+      for (const line of lines) {
+        if (line.articleId) syncLastCost(snap, line.articleId);
+      }
     });
     return { ok: true as const };
   } catch (error) {
@@ -1144,6 +1176,7 @@ export async function commitStockEntryRecord(input: StockEntryInput) {
         id: purchaseLineId,
         purchaseId: purchase.id,
         articleId: article.id,
+        tipologia: "produto",
         ref,
         description,
         quantity,
@@ -1637,6 +1670,7 @@ function applyPurchases(snap: Snapshot, lines: PurchaseInput[]) {
         id: uid(),
         purchaseId: purchase.id,
         articleId: article.id,
+        tipologia: line.tipologia || "produto",
         ref,
         description,
         quantity: line.quantity,

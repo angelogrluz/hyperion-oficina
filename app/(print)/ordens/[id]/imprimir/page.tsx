@@ -1,30 +1,54 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { DocumentPaper } from "@/components/document-paper";
-import { PrintButton } from "@/components/print-button";
+import { FolhaPrint } from "@/components/folha-print";
 import { requireUser } from "@/lib/auth";
-import { getOrder, getWorkshop } from "@/lib/loaders";
-import { orderToPrintable } from "@/lib/printable";
+import { lineAmounts, sumTotals } from "@/lib/domain";
+import { formatMediumDate } from "@/lib/format";
+import { getOrder } from "@/lib/loaders";
 
-export const metadata = { title: "Imprimir ordem" };
+export const metadata = { title: "Imprimir folha de obra" };
 
 export default async function PrintOrderPage({ params }: { params: Promise<{ id: string }> }) {
   await requireUser();
   const { id } = await params;
-  const [order, workshop] = await Promise.all([getOrder(id), getWorkshop()]);
-  if (!order || !workshop || !order.client || !order.vehicle) notFound();
-  const client = order.client;
-  const vehicle = order.vehicle;
+  const order = await getOrder(id);
+  if (!order) notFound();
+  const money = order.lines.map((line) => ({
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    unitCost: line.unitCost,
+    vatRate: line.vatRate,
+    discountPercent: line.discountPercent,
+  }));
+  const totals = sumTotals(money);
   return (
-    <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
-      <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between">
-        <Link href={`/ordens/${order.id}`} className="text-sm font-medium">Voltar à ordem</Link>
-        <div className="flex gap-2">
-          <a href={`/api/ordens/${order.id}/pdf`} className="inline-flex h-10 items-center rounded-lg bg-white px-3 text-sm ring-1 ring-black/10">Exportar PDF</a>
-          <PrintButton />
-        </div>
-      </div>
-      <DocumentPaper doc={orderToPrintable({ ...order, client, vehicle })} workshop={workshop} />
-    </main>
+    <FolhaPrint
+      autoPrint
+      backHref={`/ordens/${order.id}`}
+      documentId={order.id}
+      number={order.number}
+      dateLabel={formatMediumDate(order.dateIn)}
+      client={order.client}
+      vehicle={order.vehicle ? {
+        plate: order.vehicle.plate,
+        brand: order.vehicle.brand,
+        model: order.vehicle.model,
+        year: order.vehicle.year,
+        vin: order.vehicle.vin,
+        fuel: order.vehicle.fuel,
+        km: order.km,
+        kmOut: order.kmOut,
+        oil: order.vehicle.oil,
+      } : null}
+      problem={order.problem}
+      lines={order.lines.map((line, index) => ({
+        kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
+        description: line.description,
+        ref: line.article?.ref ?? null,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        total: lineAmounts(money[index]).total,
+      }))}
+      totals={{ base: totals.base, vat: totals.vat, total: totals.total }}
+    />
   );
 }

@@ -17,6 +17,8 @@ export type PrintableDocument = {
   kind: "order" | "quote";
   title: string;
   number: string;
+  sheetNumber?: string;
+  relatedNumber?: string;
   statusLabel: string;
   primaryDateLabel: string;
   primaryDate: string;
@@ -26,7 +28,7 @@ export type PrintableDocument = {
   problemLabel: string;
   problem: string;
   notes: string;
-  client: { name: string; nif: string; address: string; phone: string; email: string };
+  client: { name: string; nif: string; address: string; phone: string; email: string; postalCode?: string; city?: string };
   vehicle: {
     plate: string;
     brand: string;

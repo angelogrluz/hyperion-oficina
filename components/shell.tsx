@@ -179,14 +179,14 @@ export function Shell({
     <SheetSidebarProvider>
       {(sidebar, header) => (
     <div className="min-h-screen bg-white font-['Source_Sans_Pro',sans-serif] text-[#22272a] [--rail:clamp(150px,11.7vw,230px)]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[var(--rail)] flex-col bg-[#22272a] text-white lg:flex">
+      <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-[var(--rail)] flex-col bg-[#22272a] text-white lg:flex">
         <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
       <div className="lg:pl-[var(--rail)]">
         {header ? (
-          <header className="sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">{header}</header>
+          <header className="no-print sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">{header}</header>
         ) : (
-        <header className="sticky top-0 z-40 flex h-11 items-center gap-0.5 border-b border-[#eaeaf2] bg-white px-1">
+        <header className="no-print sticky top-0 z-40 flex h-11 items-center gap-0.5 border-b border-[#eaeaf2] bg-white px-1">
           <button type="button" className="grid size-10 place-items-center rounded-lg text-[#0b8f9c] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu />
           </button>

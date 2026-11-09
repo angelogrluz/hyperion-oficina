@@ -22,6 +22,8 @@ export type SheetDraft = {
   problem: string;
   notes: string;
   status: string;
+  approval?: string;
+  approvalAt?: string | null;
   lines: unknown[];
 };
 

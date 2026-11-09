@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { toast } from "sonner";
 import { savePurchases } from "@/app/actions/purchases";
 import { saveSupplier } from "@/app/actions/records";
@@ -22,7 +22,9 @@ import {
   sumTotals,
 } from "@/lib/domain";
 import { formatEUR, formatQty } from "@/lib/format";
+import { readEcolubRate, subscribeEcolubRate } from "@/lib/ecolub-settings";
 import { DOCUMENT_TYPES, FAMILIES, PAYMENT_METHODS } from "@/lib/labels";
+import { ecolubDefaults, purchaseTypeMovesStock, purchaseTypes } from "@/src/config";
 
 export type GridArticle = {
   id: string;
@@ -52,6 +54,7 @@ type Line = {
   vat: string;
   margin: string;
   family: string;
+  tipologia: string;
   articleId: string | null;
   isNew: boolean;
   isOil: boolean;
@@ -73,6 +76,7 @@ function blankLine(today: string, previous?: Line): Line {
     vat: "23",
     margin: "40",
     family: "Produto",
+    tipologia: "produto",
     articleId: null,
     isNew: false,
     isOil: false,
@@ -101,6 +105,7 @@ export function PurchaseGrid({
   const [createIndex, setCreateIndex] = useState<number | null>(null);
   const [createFamily, setCreateFamily] = useState("Produto");
   const saveRef = useRef<() => void>(() => {});
+  const ecolubRate = useSyncExternalStore(subscribeEcolubRate, readEcolubRate, () => ecolubDefaults.rate);
 
   const activeLine = activeRef === null ? null : lines[activeRef];
   const suggestions = useMemo(() => {
@@ -138,6 +143,67 @@ export function PurchaseGrid({
     setLines((current) => current.map((line, lineIndex) => (lineIndex === index ? { ...line, ...partial } : line)));
   }
 
+  function addLine(after?: number) {
+    setLines((current) => {
+      const index = after ?? Math.max(current.length - 1, 0);
+      const next = blankLine(today, current[index]);
+      const copy = [...current];
+      copy.splice(index + 1, 0, next);
+      return copy;
+    });
+    setActiveRef(null);
+    focusCell((after ?? Math.max(lines.length - 1, 0)) + 1, "ref");
+  }
+
+  function removeLine(index: number) {
+    setLines((current) => {
+      const next = current.filter((_, lineIndex) => lineIndex !== index);
+      return next.length ? next : [blankLine(today)];
+    });
+    if (offer === index) setOffer(null);
+  }
+
+  useEffect(() => {
+    setLines((current) => {
+      const litres = current.reduce((sum, line) => {
+        if (line.ref.toUpperCase() === ECOLUB_REF) return sum;
+        if (line.tipologia !== "oleo" && !line.isOil) return sum;
+        return sum + (parseDecimal(line.quantity) ?? 0);
+      }, 0);
+      const source = [...current].reverse().find((line) => line.ref.toUpperCase() !== ECOLUB_REF && (line.tipologia === "oleo" || line.isOil));
+      const known = catalog.find((article) => article.ref === ECOLUB_REF);
+      const header = inheritedPurchaseHeader(today, source);
+      const eco: Line = {
+        key: current.find((line) => line.ref.toUpperCase() === ECOLUB_REF)?.key ?? crypto.randomUUID(),
+        ...header,
+        ref: ECOLUB_REF,
+        description: known?.description ?? ecolubDefaults.description,
+        quantity: num(litres),
+        cost: num(ecolubRate),
+        vat: "23",
+        margin: "0",
+        family: "Eco Taxa",
+        tipologia: "oleo",
+        articleId: known?.id ?? null,
+        isNew: !known,
+        isOil: false,
+      };
+      const rest = current.filter((line) => line.ref.toUpperCase() !== ECOLUB_REF);
+      if (litres <= 0) return rest.length === current.length ? current : rest;
+      const existing = current.find((line) => line.ref.toUpperCase() === ECOLUB_REF);
+      const same = existing
+        && existing.quantity === eco.quantity
+        && existing.cost === eco.cost
+        && existing.margin === "0"
+        && rest.length + 1 === current.length;
+      if (same) return current;
+      const anchor = rest.findIndex((line) => line.key === source?.key);
+      const next = [...rest];
+      next.splice(anchor >= 0 ? anchor + 1 : next.length, 0, eco);
+      return next;
+    });
+  }, [lines, ecolubRate, catalog, today]);
+
   function focusCell(row: number, col: string) {
     requestAnimationFrame(() => {
       document.querySelector<HTMLElement>(`[data-cell="${row}:${col}"]`)?.focus();
@@ -145,13 +211,10 @@ export function PurchaseGrid({
   }
 
   function move(row: number, col: string) {
-    const order = ["date", "supplierId", "documentType", "invoiceNumber", "paymentMethod", "ref", "description", "quantity", "cost", "vat", "margin"];
+    const order = ["date", "supplierId", "documentType", "invoiceNumber", "paymentMethod", "ref", "description", "quantity", "cost", "vat", "margin", "tipologia"];
     const colIndex = order.indexOf(col);
-    if (col === "margin") {
-      const next = blankLine(today, lines[row]);
-      setLines((current) => [...current.slice(0, row + 1), next, ...current.slice(row + 1)]);
-      setActiveRef(null);
-      focusCell(row + 1, "ref");
+    if (col === "tipologia") {
+      addLine(row);
       return;
     }
     focusCell(row, order[colIndex + 1] ?? "ref");
@@ -166,6 +229,7 @@ export function PurchaseGrid({
       vat: num(article.vatRate),
       margin: num(article.marginPercent),
       family: article.family,
+      tipologia: oil ? "oleo" : "produto",
       articleId: article.id,
       isNew: false,
       isOil: oil,
@@ -195,6 +259,7 @@ export function PurchaseGrid({
       vat: "23",
       margin: "0",
       family: "Eco Taxa",
+      tipologia: "oleo",
       articleId: known?.id ?? null,
       isNew: !known,
       isOil: false,
@@ -219,6 +284,7 @@ export function PurchaseGrid({
       vat: number;
       margin: number;
       family: string;
+      tipologia: string;
     }> = [];
     for (const line of lines) {
       const empty = !line.ref.trim() && !line.description.trim() && !line.quantity.trim();
@@ -226,9 +292,13 @@ export function PurchaseGrid({
       const quantity = parseDecimal(line.quantity);
       const cost = parseDecimal(line.cost);
       const vat = parseDecimal(line.vat);
-      const margin = parseDecimal(line.margin);
-      if (quantity === null || cost === null || vat === null || margin === null) {
-        setError("Há linhas com quantidade, custo, IVA ou margem inválidos.");
+      const margin = parseDecimal(line.margin) ?? 0;
+      if (quantity === null || cost === null || vat === null) {
+        setError("Há linhas com quantidade, custo ou IVA inválidos.");
+        return;
+      }
+      if (!purchaseTypeMovesStock(line.tipologia) && line.description.trim().length < 2) {
+        setError("Indique a descrição da despesa.");
         return;
       }
       payload.push({
@@ -238,12 +308,13 @@ export function PurchaseGrid({
         invoiceNumber: line.invoiceNumber.trim(),
         paymentMethod: line.paymentMethod,
         ref: line.ref,
-        description: line.description,
+        description: line.description || line.ref,
         quantity,
         cost,
         vat,
         margin,
         family: line.family,
+        tipologia: line.tipologia,
       });
     }
     if (payload.length === 0) {
@@ -272,8 +343,7 @@ export function PurchaseGrid({
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Enter avança o campo. No fim da linha cria outra, herdando data, fornecedor, documento, número e pagamento. A
-          quantidade nunca é herdada. Ctrl+S grava.
+          Enter avança o campo. Enter na tipologia, ou + Linha, acrescenta outra linha. Só Produto e Óleo mexem no stock. A taxa ECOLUB acompanha os litros de óleo.
         </p>
         <Button type="button" variant="outline" className="h-10" onClick={() => setSupplierOpen(true)}>
           Novo fornecedor
@@ -379,15 +449,35 @@ export function PurchaseGrid({
               <Field label="Margem %" className="xl:col-span-1">
                 <Input data-cell={`${index}:margin`} value={line.margin} inputMode="decimal" className="h-10 bg-background" onKeyDown={(event) => onEnter(event, index, "margin")} onChange={(event) => patch(index, { margin: event.target.value })} />
               </Field>
+              <Field label="Tipologia" className="xl:col-span-2">
+                <Select
+                  data-cell={`${index}:tipologia`}
+                  data-testid={`tipologia-${index}`}
+                  value={line.tipologia}
+                  disabled={line.ref.toUpperCase() === ECOLUB_REF}
+                  onKeyDown={(event) => onEnter(event, index, "tipologia")}
+                  onChange={(event) => {
+                    const tipologia = event.target.value;
+                    patch(index, {
+                      tipologia,
+                      isOil: tipologia === "oleo",
+                      margin: tipologia === "oleo" ? "30" : tipologia === "produto" ? "40" : line.margin,
+                      family: tipologia === "oleo" ? "Óleo" : line.family,
+                    });
+                  }}
+                >
+                  {purchaseTypes.map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
+                </Select>
+              </Field>
               <Field label="PVP s/ IVA" className="xl:col-span-2">
                 <div className="flex h-10 items-center px-1 font-medium tabular-nums">{formatEUR(pvp)}</div>
               </Field>
             </div>
-            {line.isOil && offer === index ? (
+            {false && line.isOil && offer === index ? (
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
                 <p>
                   Linha de óleo. Adicionar ECOLUB a {formatEUR(ECOLUB_UNIT_COST)} × {litres ?? 0} L
-                  {litres ? ` = ${formatEUR(ecolubAmount(litres))}` : ""}, margem 0%?
+                  {litres ? ` = ${formatEUR(ecolubAmount(litres ?? 0))}` : ""}, margem 0%?
                 </p>
                 <div className="flex gap-2">
                   <Button type="button" className="h-9" disabled={!litres} onClick={() => addEcolub(index)}>Adicionar ECOLUB</Button>
@@ -399,11 +489,8 @@ export function PurchaseGrid({
               <Button
                 type="button"
                 variant="ghost"
-                disabled={lines.length === 1}
-                onClick={() => {
-                  setLines((current) => current.filter((_, lineIndex) => lineIndex !== index));
-                  if (offer === index) setOffer(null);
-                }}
+                data-testid={`remove-line-${index}`}
+                onClick={() => removeLine(index)}
               >
                 Remover linha
               </Button>
@@ -417,8 +504,25 @@ export function PurchaseGrid({
         <div className="text-sm">
           <p>Custo s/ IVA {formatEUR(totals.base)} · IVA {formatEUR(totals.vat)}</p>
           <p className="text-base font-semibold">Total do lançamento {formatEUR(totals.total)}</p>
+          <p data-testid="totais-tipologia" className="mt-1 text-xs">
+            {purchaseTypes.map((type) => {
+              const amount = lines.reduce((sum, line) => {
+                if (line.tipologia !== type.id) return sum;
+                if (!line.ref.trim() && !line.description.trim()) return sum;
+                const quantity = parseDecimal(line.quantity) ?? 0;
+                const cost = parseDecimal(line.cost) ?? 0;
+                const vat = parseDecimal(line.vat) ?? 0;
+                return sum + quantity * cost * (1 + vat / 100);
+              }, 0);
+              if (amount <= 0) return null;
+              return <span key={type.id} className="mr-3">{type.label}: {formatEUR(amount)}</span>;
+            })}
+          </p>
         </div>
         <div className="flex gap-2">
+          <Button type="button" data-testid="add-line" variant="outline" className="h-10 bg-transparent text-sidebar-foreground" onClick={() => addLine()}>
+            + Linha
+          </Button>
           <Button type="button" variant="outline" className="h-10 bg-transparent text-sidebar-foreground" onClick={() => { setLines([blankLine(today)]); setOffer(null); }}>
             Limpar
           </Button>

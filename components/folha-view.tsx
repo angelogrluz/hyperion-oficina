@@ -10,6 +10,8 @@ import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sideba
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ApprovalBadge } from "@/components/approval-badge";
+import { type Approval } from "@/lib/approval";
 import { readSymptoms, subscribeSymptoms, writeSymptoms, type SymptomItem } from "@/lib/browser-cache";
 import { defaultMargin, includesSearch, isOilArticle, lineAmounts, marginFromCost, normalizeArticleDescription, parseDecimal, prefillUnitCost, round2, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
@@ -88,6 +90,9 @@ export function FolhaView({
   onNextService,
   onLookup,
   onSave,
+  approval,
+  approvalAt,
+  onApproval,
   onFlush,
   isNew,
   saveState,
@@ -167,6 +172,9 @@ export function FolhaView({
   onNextService: (value: string) => void;
   onLookup: () => void;
   onSave: (status?: string) => void;
+  approval?: Approval;
+  approvalAt?: string | null;
+  onApproval?: (next: Approval) => void;
   onFlush?: () => void;
   isNew?: boolean;
   saveState?: "saved" | "saving" | "dirty" | "error";
@@ -365,7 +373,10 @@ export function FolhaView({
           <span className="text-[#00a9fd]" aria-hidden><DocIcon /></span>
           <div className="min-w-0 leading-tight">
             <p className="text-[9px] tracking-wide text-[#8d939c] uppercase">Folha de Obra</p>
-            <p className="truncate text-[12px] font-semibold">{number ?? "Nova"}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-[12px] font-semibold">{number ?? "Nova"}</p>
+              {approval ? <ApprovalBadge approval={approval} at={approvalAt} /> : null}
+            </div>
           </div>
         </div>
         <label className="flex min-w-0 flex-1 flex-col justify-center bg-white px-2">
@@ -387,7 +398,7 @@ export function FolhaView({
       </div>,
     );
     return () => setHeader(null);
-  }, [setHeader, number, dateIn, promiseQuote, promiseDelivery, userName, locked]);
+  }, [setHeader, number, dateIn, promiseQuote, promiseDelivery, userName, locked, approval, approvalAt]);
 
   const computed = lines.map((line) => {
     const quantity = parseDecimal(line.quantity) ?? 0;
@@ -432,7 +443,13 @@ export function FolhaView({
           <MiniSelect label="Livro de manutenção" value={book} onChange={setBook} />
           <MiniSelect label="Documentos" value={docs} onChange={setDocs} />
           <div className="ml-auto flex gap-2">
-            {printHref ? <a href={printHref} className="inline-flex h-6 items-center rounded border border-[#e1e2e5] px-2 text-[11px]">Imprimir</a> : null}
+            {documentId || printHref ? (
+              <Link href={printHref || `/ordens/${documentId}/imprimir`} data-testid="imprimir-folha" className="inline-flex h-6 items-center rounded border border-[#00a9fd] bg-white px-2 text-[11px] font-medium text-[#00a9fd]">
+                Imprimir
+              </Link>
+            ) : (
+              <span className="inline-flex h-6 items-center rounded border border-[#e1e2e5] px-2 text-[11px] text-[#8d939c]">Imprimir</span>
+            )}
             <Button type="button" variant="outline" className="h-6 px-2 text-[11px]" disabled={locked || pending} onClick={() => onSave()}>Editor</Button>
           </div>
         </div>
@@ -676,7 +693,7 @@ export function FolhaView({
           </>
         ) : null}
         {error ? <p className="px-2 pt-2 text-[12px] text-red-700" role="alert">{error}</p> : null}
-        <div className="fixed bottom-0 left-0 z-30 flex h-9 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[11px] lg:left-[var(--rail)] lg:w-[calc(100%-var(--rail))]">
+        <div className="no-print fixed bottom-0 left-0 z-30 flex h-9 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[11px] lg:left-[var(--rail)] lg:w-[calc(100%-var(--rail))]">
           <label className="flex items-center gap-2 text-[#8d939c]">
             Atribuída a
             <select disabled title="Indisponível nesta versão" className="h-6 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-1 text-[#22272a]">
@@ -687,7 +704,7 @@ export function FolhaView({
           <span className="text-[#22272a]">Aprovado</span>
           <span className="ml-auto truncate text-[#8d939c]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
-        <div className="fixed right-2 bottom-11 z-30 grid w-[var(--sheet)] gap-1">
+        <div className="no-print fixed right-2 bottom-11 z-30 grid w-[var(--sheet)] gap-1">
           {isNew ? (
             <Button type="button" data-testid="gravar-obra" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
               Criar obra
@@ -705,9 +722,10 @@ export function FolhaView({
               Abrir orçamento
             </Link>
           ) : null}
-          <div className="grid grid-cols-2 gap-1">
-            <Button type="button" variant="outline" className="h-8 border-[#00a9fd] bg-white text-[12px] text-[#00a9fd]" disabled={locked || pending} onClick={() => onSave("aberta")}>Por Aprovar</Button>
-            <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("em_curso")}>Aprovado</Button>
+          <div className="grid gap-1">
+            <Button type="button" data-testid="approval-aguarda" variant="outline" className={`h-8 text-[11px] ${approval === "aguarda" ? "border-[#f5a524] bg-[#f5a524] text-[#3a2a00] hover:bg-[#e0961c]" : "border-[#f5a524] bg-white text-[#8a5a00]"}`} disabled={locked || pending || !onApproval} onClick={() => onApproval?.("aguarda")}>Aguarda aprovação</Button>
+            <Button type="button" data-testid="approval-aprovado" className={`h-8 text-[11px] ${approval === "aprovado" ? "bg-[#1f9d55] hover:bg-[#188848]" : "bg-white text-[#1f9d55] ring-1 ring-[#1f9d55] hover:bg-[#eefaf3]"}`} disabled={locked || pending || !onApproval} onClick={() => onApproval?.("aprovado")}>Aprovado</Button>
+            <Button type="button" data-testid="approval-recusado" className={`h-8 text-[11px] ${approval === "recusado" ? "bg-[#d64545] hover:bg-[#c23838]" : "bg-white text-[#d64545] ring-1 ring-[#d64545] hover:bg-[#fff1f1]"}`} disabled={locked || pending || !onApproval} onClick={() => onApproval?.("recusado")}>Não aprovado</Button>
           </div>
           <Button type="button" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
           {canInvoice ? <Button type="button" data-testid="faturar" className="h-8 bg-[#00a9fd] text-[12px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
