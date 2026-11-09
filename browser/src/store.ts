@@ -593,6 +593,7 @@ export async function saveOrderRecord(id: string | null, input: {
     return { ok: false as const, error: "A data de saída não pode ser anterior à entrada." };
   }
   let savedId = "";
+  const stock: Record<string, number> = {};
   try {
     await update((snap) => {
       const clientId = input.clientId || null;
@@ -607,6 +608,11 @@ export async function saveOrderRecord(id: string | null, input: {
       }
       if (vehicle && clientId) vehicle.clientId = clientId;
       if (vehicle && input.km > vehicle.km) vehicle.km = input.km;
+      const previousLines = id ? snap.lines.filter((line) => line.orderId === id) : [];
+      for (const articleId of adjustOilStock(snap, previousLines, input.lines)) {
+        const article = snap.articles.find((item) => item.id === articleId);
+        if (article) stock[articleId] = article.stockQty;
+      }
       const dateOut = input.dateOut
         ? dateOnly(input.dateOut).toISOString()
         : input.status === "concluida"
@@ -662,7 +668,35 @@ export async function saveOrderRecord(id: string | null, input: {
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível guardar a ordem." };
   }
-  return { ok: true as const, id: savedId };
+  return { ok: true as const, id: savedId, stock };
+}
+
+function oilTaken(snap: Snapshot, lines: Array<{ articleId: string | null; quantity: number }>) {
+  const taken = new Map<string, number>();
+  for (const line of lines) {
+    if (!line.articleId) continue;
+    const article = snap.articles.find((item) => item.id === line.articleId);
+    if (!article) continue;
+    if (article.ref !== "ECOLUB" && !article.isOil && !isOilArticle(article)) continue;
+    taken.set(article.id, round2((taken.get(article.id) ?? 0) + line.quantity));
+  }
+  return taken;
+}
+
+function adjustOilStock(snap: Snapshot, before: Array<{ articleId: string | null; quantity: number }>, after: Array<{ articleId: string | null; quantity: number }>) {
+  const previous = oilTaken(snap, before);
+  const next = oilTaken(snap, after);
+  const touched: string[] = [];
+  for (const articleId of new Set([...previous.keys(), ...next.keys()])) {
+    const article = snap.articles.find((item) => item.id === articleId);
+    if (!article) continue;
+    const delta = (next.get(articleId) ?? 0) - (previous.get(articleId) ?? 0);
+    if (!delta) continue;
+    article.stockQty = round2(article.stockQty - delta);
+    article.updatedAt = stamp();
+    touched.push(articleId);
+  }
+  return touched;
 }
 
 export async function saveQuoteRecord(id: string | null, input: {

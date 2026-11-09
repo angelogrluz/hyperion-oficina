@@ -359,6 +359,10 @@ export function StockEntryDialog({
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">
+            Tipologia
+            <Input value="Produto (stock)" readOnly className="h-9 bg-[#f7f8fa]" />
+          </label>
+          <label className="grid gap-1 text-xs">
             Referência
             <Input value={line.ref} readOnly className="h-9 bg-[#f7f8fa] font-mono" />
           </label>

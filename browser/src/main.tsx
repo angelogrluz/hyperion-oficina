@@ -15,6 +15,7 @@ import { TableShell, Td, Th } from "@/components/table-shell";
 import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
 import { DocumentPaper } from "@/components/document-paper";
+import { EcolubSettings } from "@/components/ecolub-settings";
 import { FolhaPrint } from "@/components/folha-print";
 import { PrintButton } from "@/components/print-button";
 import { lineAmounts, salePrice, sumTotals } from "@/lib/domain";
@@ -178,6 +179,7 @@ function editorCatalog(snap: Snapshot) {
       vatRate: article.vatRate,
       stockQty: article.stockQty,
       family: article.family,
+      isOil: article.isOil,
     })),
     suppliers: snap.suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name })),
   };
@@ -545,6 +547,15 @@ function SheetPrint() {
   );
 }
 
+function SettingsPage() {
+  return (
+    <div className="max-w-xl rounded-xl border border-[#d5ebed] bg-white p-4">
+      <h1 className="mb-3 text-lg font-semibold">Parametrização</h1>
+      <EcolubSettings />
+    </div>
+  );
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -561,6 +572,7 @@ function AppRoutes() {
       <Route path="/viaturas/nova" element={<Frame><NewVehicle /></Frame>} />
       <Route path="/artigos" element={<Frame><Articles /></Frame>} />
       <Route path="/compras" element={<Frame><Purchases /></Frame>} />
+      <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

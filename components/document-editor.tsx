@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { toast } from "sonner";
 import { convertQuote, issueInvoice, issueQuote, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
@@ -26,7 +26,9 @@ import { isConsumidorFinal } from "@/lib/consumidor";
 import { SHEET_PAYMENTS } from "@/lib/moloni/service";
 import { clearSheetDraft, readSheetDraft, writeSheetDraft, type SheetDraft } from "@/lib/sheet-draft";
 import { markUnsaved, registerSaveFlush } from "@/lib/unsaved";
-import { defaultMargin, includesSearch, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, platesMatch, salePrice, sumTotals } from "@/lib/domain";
+import { ECOLUB_REF, defaultMargin, includesSearch, isOilArticle, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, platesMatch, salePrice, sumTotals } from "@/lib/domain";
+import { ecolubDefaults } from "@/src/config";
+import { readEcolubRate, subscribeEcolubRate } from "@/lib/ecolub-settings";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
@@ -41,6 +43,7 @@ export type EditorArticle = {
   vatRate: number;
   stockQty: number;
   family?: string;
+  isOil?: boolean;
 };
 
 export type EditorClient = {
@@ -178,6 +181,7 @@ export function DocumentEditor({
   const [status, setStatus] = useState(draft?.status ?? initial.status);
   const [approval, setApproval] = useState<Approval>(normalizeApproval(draft?.approval ?? initial.approval, draft?.status ?? initial.status));
   const [approvalAt, setApprovalAt] = useState<string | null>(draft?.approvalAt ?? initial.approvalAt ?? null);
+  const ecolubRate = useSyncExternalStore(subscribeEcolubRate, readEcolubRate, () => ecolubDefaults.rate);
   const [lines, setLines] = useState<Line[]>((draft?.lines as Line[] | undefined) ?? initial.lines);
   const [partQuery, setPartQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -471,6 +475,10 @@ export function DocumentEditor({
       clearSheetDraft(documentId ?? "nova");
       clearSheetDraft(savedId);
     }
+    if ("stock" in result && result.stock) {
+      const stock = result.stock as Record<string, number>;
+      setArticleList((current) => current.map((article) => (stock[article.id] == null ? article : { ...article, stockQty: stock[article.id] })));
+    }
     if (!options?.silent) {
       toast.success(options?.approval ? APPROVAL_LABEL[options.approval] : mode === "order" ? "Ordem guardada." : "Orçamento guardado.");
     }
@@ -568,6 +576,47 @@ export function DocumentEditor({
       document.removeEventListener("visibilitychange", onHide);
     };
   }, [documentId, dirty, locked, mode]);
+
+  useEffect(() => {
+    if (locked) return;
+    setLines((current) => {
+      const litres = current.reduce((sum, line) => {
+        if (line.ref.toUpperCase() === ECOLUB_REF) return sum;
+        const article = articleList.find((item) => item.id === line.articleId) ?? articleList.find((item) => item.ref === line.ref);
+        if (!isOilArticle({ family: article?.family, ref: line.ref, isOil: article?.isOil })) return sum;
+        return sum + (parseDecimal(line.quantity) ?? 0);
+      }, 0);
+      const rest = current.filter((line) => line.ref.toUpperCase() !== ECOLUB_REF);
+      if (litres <= 0) return rest.length === current.length ? current : rest;
+      const known = articleList.find((item) => item.ref === ECOLUB_REF);
+      const price = String(ecolubRate).replace(".", ",");
+      const existing = current.find((line) => line.ref.toUpperCase() === ECOLUB_REF);
+      const eco: Line = {
+        key: existing?.key ?? crypto.randomUUID(),
+        kind: "peca",
+        description: known?.description ?? ecolubDefaults.description,
+        quantity: String(litres).replace(".", ","),
+        unitPrice: price,
+        unitCost: price,
+        discount: "0",
+        vatRate: "23",
+        note: "",
+        articleId: known?.id ?? null,
+        ref: ECOLUB_REF,
+      };
+      if (existing && existing.quantity === eco.quantity && existing.unitPrice === eco.unitPrice && existing.unitCost === eco.unitCost && rest.length + 1 === current.length) {
+        return current;
+      }
+      const oilKeys = new Set(rest.filter((line) => {
+        const article = articleList.find((item) => item.id === line.articleId);
+        return isOilArticle({ family: article?.family, ref: line.ref, isOil: article?.isOil });
+      }).map((line) => line.key));
+      const anchor = rest.findLastIndex((line) => oilKeys.has(line.key));
+      const next = [...rest];
+      next.splice(anchor >= 0 ? anchor + 1 : next.length, 0, eco);
+      return next;
+    });
+  }, [lines, ecolubRate, articleList, locked]);
 
   function addDraft(draft: {
     description: string;

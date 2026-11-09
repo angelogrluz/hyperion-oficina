@@ -1,3 +1,4 @@
+import { EcolubSettings } from "@/components/ecolub-settings";
 import { prisma } from "@/lib/db";
 import { formatEUR } from "@/lib/format";
 
@@ -11,6 +12,7 @@ export default async function SettingsPage() {
     ["Preço/Hora Serviço da Empresa", formatEUR(workshop.labourRate)],
     ["Contacto", `${workshop.phone} · ${workshop.email}`],
     ["Faturação", "Adaptador Moloni em simulação. Sem certificação da AT."],
+    ["ECOLUB", "Taxa por litro nas compras e nas folhas de óleo."],
     ["Consulta de matrículas", "Adaptador simulado. Uma API paga portuguesa pode substituí-lo."],
   ];
   return (
@@ -23,6 +25,9 @@ export default async function SettingsPage() {
             <p className="mt-2 text-sm text-[#4d6d73]">{body}</p>
           </details>
         ))}
+      </div>
+      <div className="mt-4 rounded-xl border border-[#d5ebed] bg-white p-4">
+        <EcolubSettings />
       </div>
     </section>
   );

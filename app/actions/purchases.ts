@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { isValidRef, normalizeArticleDescription, normalizeRef } from "@/lib/domain";
 import { DOCUMENT_TYPES, PAYMENT_METHODS } from "@/lib/labels";
+import { purchaseTypeMovesStock } from "@/src/config";
 import { postPurchases, removeSheetStock, upsertSheetStock, voidPurchase } from "@/lib/stock";
 import type { StockEntryInput } from "@/lib/stock-entry";
 
@@ -24,6 +25,7 @@ const lineSchema = z.object({
   vat: z.number().min(0).max(100),
   margin: z.number().min(0).max(500),
   family: z.string().trim().min(1).max(40),
+  tipologia: z.string().optional(),
 });
 
 export async function savePurchases(payload: unknown): Promise<Result<{ count: number; articles: number }>> {
@@ -39,8 +41,10 @@ export async function savePurchases(payload: unknown): Promise<Result<{ count: n
     if (!(PAYMENT_METHODS as readonly string[]).includes(line.paymentMethod)) {
       return { ok: false, error: "Modo de pagamento inválido." };
     }
-    const ref = normalizeRef(line.ref);
-    if (!isValidRef(ref)) return { ok: false, error: `Referência inválida: ${line.ref || "(vazia)"}.` };
+    const stockMove = purchaseTypeMovesStock(line.tipologia || "produto");
+    const ref = stockMove ? normalizeRef(line.ref) : line.ref.trim();
+    if (stockMove && !isValidRef(ref)) return { ok: false, error: `Referência inválida: ${line.ref || "(vazia)"}.` };
+    if (!stockMove && line.description.trim().length < 2) return { ok: false, error: "Indique a descrição da despesa." };
     const supplier = await prisma.supplier.findUnique({ where: { id: line.supplierId } });
     if (!supplier) return { ok: false, error: "Fornecedor não encontrado." };
     lines.push({ ...line, ref });
