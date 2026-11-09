@@ -383,11 +383,12 @@ export function PurchaseGrid({
               </Field>
             </div>
             <div className="mt-2 grid gap-2 md:grid-cols-6 xl:grid-cols-12">
-              <Field label="REF" className="relative md:col-span-2 xl:col-span-2">
+              <Field label="REF" className="relative min-w-[9rem] md:col-span-2 xl:col-span-2">
                 <Input
                   data-cell={`${index}:ref`}
+                  data-testid={`compra-ref-${index}`}
                   value={line.ref}
-                  className="h-10 bg-background font-mono uppercase"
+                  className="h-10 min-w-[8rem] bg-background font-mono uppercase"
                   autoComplete="off"
                   onFocus={() => { setActiveRef(index); setHighlight(0); }}
                   onKeyDown={(event) => onRefKey(event, index)}

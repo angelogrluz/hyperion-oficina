@@ -23,6 +23,7 @@ import { lineAmounts, salePrice, sumTotals } from "@/lib/domain";
 import { orderToPrintable } from "@/lib/printable";
 import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } from "@/lib/format";
 import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval";
+import { resolveLineIdentity } from "@/lib/line-ref";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
 import { saveClient, saveVehicle } from "./shims/records";
@@ -190,20 +191,23 @@ function linesFor(snap: Snapshot, orderId: string) {
   return snap.lines
     .filter((line) => line.orderId === orderId)
     .sort((a, b) => a.position - b.position)
-    .map((line) => ({
-      key: line.id,
-      kind: line.kind === "mao_de_obra" ? "mao_de_obra" as const : "peca" as const,
-      description: line.description,
-      quantity: String(line.quantity).replace(".", ","),
-      unitPrice: String(line.unitPrice).replace(".", ","),
-      unitCost: String(line.unitCost).replace(".", ","),
-      discount: String(line.discountPercent ?? 0).replace(".", ","),
-      vatRate: String(line.vatRate).replace(".", ","),
-      note: line.internalNote ?? "",
-      articleId: line.articleId,
-      ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? "",
-      stockEntry: line.stockEntry ?? null,
-    }));
+    .map((line) => {
+      const identity = resolveLineIdentity(line, snap.articles, snap.purchaseLines);
+      return {
+        key: line.id,
+        kind: line.kind === "mao_de_obra" ? "mao_de_obra" as const : "peca" as const,
+        description: line.description,
+        quantity: String(line.quantity).replace(".", ","),
+        unitPrice: String(line.unitPrice).replace(".", ","),
+        unitCost: String(line.unitCost).replace(".", ","),
+        discount: String(line.discountPercent ?? 0).replace(".", ","),
+        vatRate: String(line.vatRate).replace(".", ","),
+        note: line.internalNote ?? "",
+        articleId: identity.articleId,
+        ref: identity.ref,
+        stockEntry: line.stockEntry ?? null,
+      };
+    });
 }
 
 function syntheticLines() {
@@ -453,15 +457,19 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" }) {
   const lines = snap.lines
     .filter((line) => line.orderId === order.id)
     .sort((a, b) => a.position - b.position)
-    .map((line) => ({
-      kind: line.kind,
-      description: line.description,
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      vatRate: line.vatRate,
-      discountPercent: line.discountPercent,
-      article: snap.articles.find((article) => article.id === line.articleId) ?? null,
-    }));
+    .map((line) => {
+      const identity = resolveLineIdentity(line, snap.articles, snap.purchaseLines);
+      const article = snap.articles.find((item) => item.id === identity.articleId) ?? null;
+      return {
+        kind: line.kind,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        vatRate: line.vatRate,
+        discountPercent: line.discountPercent,
+        article: article ?? (identity.ref ? { ref: identity.ref } : null),
+      };
+    });
   const doc = orderToPrintable({
     number: order.number,
     status: order.status,
@@ -538,7 +546,7 @@ function SheetPrint() {
       lines={raw.map((line, index) => ({
         kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
         description: line.description,
-        ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? null,
+        ref: resolveLineIdentity(line, snap.articles, snap.purchaseLines).ref || null,
         quantity: line.quantity,
         unitPrice: line.unitPrice,
         total: lineAmounts(money[index]).total,
@@ -562,7 +570,7 @@ function SheetServices() {
     .sort((a, b) => a.position - b.position)
     .map((line) => ({
       description: line.description,
-      ref: snap.articles.find((article) => article.id === line.articleId)?.ref ?? "",
+      ref: resolveLineIdentity(line, snap.articles, snap.purchaseLines).ref,
       quantity: line.quantity,
     }));
   return (

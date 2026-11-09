@@ -208,7 +208,15 @@ export function DocumentEditor({
   const [approval, setApproval] = useState<Approval>(normalizeApproval(draft?.approval ?? initial.approval, draft?.status ?? initial.status));
   const [approvalAt, setApprovalAt] = useState<string | null>(draft?.approvalAt ?? initial.approvalAt ?? null);
   const ecolubRate = useSyncExternalStore(subscribeEcolubRate, readEcolubRate, () => ecolubDefaults.rate);
-  const [lines, setLines] = useState<Line[]>((draft?.lines as Line[] | undefined) ?? initial.lines);
+  const [lines, setLines] = useState<Line[]>(() => {
+    const saved = new Map(initial.lines.map((line) => [line.key, line]));
+    return ((draft?.lines as Line[] | undefined) ?? initial.lines).map((line) => {
+      if (line.ref?.trim()) return line;
+      const fresh = saved.get(line.key);
+      if (!fresh?.ref) return line;
+      return { ...line, ref: fresh.ref, articleId: line.articleId ?? fresh.articleId };
+    });
+  });
   const [partQuery, setPartQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(Boolean(draft && documentId));
@@ -321,6 +329,7 @@ export function DocumentEditor({
         vatRate,
         internalNote: line.note ?? "",
         articleId: line.articleId,
+        ref: line.ref.trim(),
         stockEntry: line.kind === "peca" ? line.stockEntry ?? null : null,
       };
     });
@@ -857,7 +866,17 @@ export function DocumentEditor({
           onProblem={(value) => { touch(); setProblem(value); }}
           onNotes={(value) => { touch(); setNotes(value); }}
           onDateIn={(value) => { touch(); setDateIn(value); }}
-          onLine={(key, patch) => updateLine(key, patch)}
+          onLine={(key, patch) => {
+            if (patch.ref === undefined) {
+              updateLine(key, patch);
+              return;
+            }
+            const typed = patch.ref.trim();
+            const article = articleList.find((item) => item.ref.toLocaleLowerCase("pt-PT") === typed.toLocaleLowerCase("pt-PT"));
+            updateLine(key, article
+              ? { ...patch, ref: article.ref, articleId: article.id, kind: "peca" }
+              : { ...patch, ...(typed ? {} : { articleId: null }) });
+          }}
           onRemove={(key) => { touch(); setLines((current) => current.filter((item) => item.key !== key && item.note !== `eco:${key}`)); }}
           onReorder={(dragKey, beforeKey) => {
             touch();

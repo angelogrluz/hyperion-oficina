@@ -486,7 +486,7 @@ export function FolhaView({
   }, [lineEditMode, locked, onRemove, selectedKey]);
 
   return (
-    <div className="grid items-start gap-3 pb-16 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(200px,13vw,250px)]" onBlur={() => onFlush?.()}>
+    <div className="grid items-start gap-3 pb-16 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(230px,15vw,280px)]" onBlur={() => onFlush?.()}>
       <div className="min-w-0 bg-white text-[#22272a]">
         <SymptomList documentId={documentId || "rascunho"} />
         <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
@@ -558,25 +558,25 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table data-testid="sheet-table" className={`w-full table-fixed border-collapse text-[16px] text-[#22272a] ${lineEditMode ? "min-w-[1452px]" : "min-w-[1420px]"}`}>
+              <table data-testid="sheet-table" className={`w-full table-fixed border-collapse text-[16px] text-[#22272a] ${lineEditMode ? "min-w-[1404px]" : "min-w-[1372px]"}`}>
                 <colgroup>
                   <col style={{ width: "36px" }} />
                   {lineEditMode ? <col style={{ width: "32px" }} /> : null}
-                  <col style={{ width: "92px" }} />
-                  <col />
-                  <col style={{ width: "120px" }} />
-                  <col style={{ width: "100px" }} />
-                  <col style={{ width: "118px" }} />
-                  <col style={{ width: "76px" }} />
-                  <col style={{ width: "64px" }} />
-                  <col style={{ width: "72px" }} />
                   <col style={{ width: "88px" }} />
-                  <col style={{ width: "70px" }} />
-                  <col style={{ width: "156px" }} />
-                  <col style={{ width: "108px" }} />
-                  <col style={{ width: "36px" }} />
-                  <col style={{ width: "58px" }} />
-                  <col style={{ width: "36px" }} />
+                  <col />
+                  <col style={{ width: "112px" }} />
+                  <col style={{ width: "128px" }} />
+                  <col style={{ width: "112px" }} />
+                  <col style={{ width: "72px" }} />
+                  <col style={{ width: "60px" }} />
+                  <col style={{ width: "68px" }} />
+                  <col style={{ width: "84px" }} />
+                  <col style={{ width: "68px" }} />
+                  <col style={{ width: "148px" }} />
+                  <col style={{ width: "104px" }} />
+                  <col style={{ width: "32px" }} />
+                  <col style={{ width: "56px" }} />
+                  <col style={{ width: "32px" }} />
                 </colgroup>
                 <thead className="text-[16px] text-[#22272a]">
                   <tr>
@@ -640,7 +640,9 @@ export function FolhaView({
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.description} disabled={locked} onChange={(value) => onLine(row.line.key, { description: value })} /></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.ref}><Cell value={row.line.ref} disabled={locked} onChange={(value) => onLine(row.line.key, { ref: value })} /></td>
+                      <td className="border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.ref}>
+                        <Cell value={row.line.ref} disabled={locked} label="Referência" testId="line-ref" onChange={(value) => onLine(row.line.key, { ref: value.toUpperCase() })} />
+                      </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5">
                         <NumberCell
@@ -724,6 +726,7 @@ export function FolhaView({
                         value={draft.ref}
                         disabled={locked}
                         label="Referência"
+                        testId="new-line-ref"
                         onFocus={(element) => { setHighlight(0); placeSuggest("ref", element); }}
                         onKeyDown={onSuggestKey}
                         onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, ref: value.toUpperCase() })); }}
@@ -820,7 +823,44 @@ export function FolhaView({
           <span className="text-[#22272a]">Aprovado</span>
           <span className="ml-auto truncate text-[#8d939c]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
-        <div className="no-print ml-auto grid w-full max-w-xs gap-1.5 pt-3">
+      </div>
+      <aside className="sticky top-2 flex max-h-[calc(100dvh-8.5rem)] flex-col gap-2">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded border border-[#eaeaf2] bg-white p-2 text-[16px] text-[#22272a]">
+        <label className="block text-center">
+          <span className="text-[14px] tracking-wide text-[#8d939c] uppercase">Matrícula</span>
+          <input
+            aria-label="Matrícula"
+            value={plate}
+            disabled={locked}
+            placeholder="AA-00-AA"
+            onChange={(event) => onPlate(event.target.value.toUpperCase())}
+            className="mt-0.5 h-10 w-full border-0 border-b-2 border-[#00a9fd] bg-transparent text-center font-mono text-[26px] font-bold tracking-wide uppercase outline-none"
+          />
+        </label>
+        <button type="button" className="mt-1 h-8 w-full text-[16px] text-[#00a9fd]" disabled={locked} onClick={onLookup}>Procurar</button>
+        <CarSide color={carColor(plate || "x")} className="mx-auto h-12 w-36" />
+        <p className="mb-1 text-center text-[16px] text-[#8d939c]">{brand} {model}</p>
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+          <Spec label="N.º chassi" value={vin} onChange={onVin} disabled={locked} wide />
+          <Spec label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
+          <Spec label="Potência" value={engine} onChange={onEngine} disabled={locked} />
+          <Spec label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
+          <Spec label="Código Motor" value={engineCode} onChange={onEngineCode} disabled={locked} />
+          <Spec label="Óleo do motor" value={oil} onChange={onOil} disabled={locked} />
+          <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
+          <Spec label="Marca" value={brand} onChange={onBrand} disabled={locked} />
+          <Spec label="Modelo" value={model} onChange={onModel} disabled={locked} />
+          <Spec label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
+          <Spec label="Kms saída" value={kmOut} onChange={onKmOut} disabled={locked} />
+          <Spec label="Próxima IPO" value={nextInspection} onChange={onNextInspection} disabled={locked} />
+          <Spec label="Próxima revisão" value={nextService} onChange={onNextService} disabled={locked} />
+        </div>
+        <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
+          <p className="text-[14px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
+          <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
+        </div>
+        </div>
+        <div className="no-print grid w-full shrink-0 gap-1.5 rounded border border-[#eaeaf2] bg-white p-2">
           {isNew ? (
             <Button type="button" data-testid="gravar-obra" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
               Criar obra
@@ -865,41 +905,6 @@ export function FolhaView({
             </Link>
           ) : null}
         </div>
-      </div>
-      <aside className="rounded border border-[#eaeaf2] bg-white p-2 text-[16px] text-[#22272a]">
-        <label className="block text-center">
-          <span className="text-[14px] tracking-wide text-[#8d939c] uppercase">Matrícula</span>
-          <input
-            aria-label="Matrícula"
-            value={plate}
-            disabled={locked}
-            placeholder="AA-00-AA"
-            onChange={(event) => onPlate(event.target.value.toUpperCase())}
-            className="mt-0.5 h-10 w-full border-0 border-b-2 border-[#00a9fd] bg-transparent text-center font-mono text-[26px] font-bold tracking-wide uppercase outline-none"
-          />
-        </label>
-        <button type="button" className="mt-1 h-8 w-full text-[16px] text-[#00a9fd]" disabled={locked} onClick={onLookup}>Procurar</button>
-        <CarSide color={carColor(plate || "x")} className="mx-auto h-12 w-36" />
-        <p className="mb-1 text-center text-[16px] text-[#8d939c]">{brand} {model}</p>
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-          <Spec label="N.º chassi" value={vin} onChange={onVin} disabled={locked} wide />
-          <Spec label="Cilindrada" value={version} onChange={onVersion} disabled={locked} />
-          <Spec label="Potência" value={engine} onChange={onEngine} disabled={locked} />
-          <Spec label="Combustível" value={fuel} onChange={onFuel} disabled={locked} />
-          <Spec label="Código Motor" value={engineCode} onChange={onEngineCode} disabled={locked} />
-          <Spec label="Óleo do motor" value={oil} onChange={onOil} disabled={locked} />
-          <Spec label="Ano" value={year} onChange={onYear} disabled={locked} />
-          <Spec label="Marca" value={brand} onChange={onBrand} disabled={locked} />
-          <Spec label="Modelo" value={model} onChange={onModel} disabled={locked} />
-          <Spec label="Kms entrada" value={km} onChange={onKm} disabled={locked} />
-          <Spec label="Kms saída" value={kmOut} onChange={onKmOut} disabled={locked} />
-          <Spec label="Próxima IPO" value={nextInspection} onChange={onNextInspection} disabled={locked} />
-          <Spec label="Próxima revisão" value={nextService} onChange={onNextService} disabled={locked} />
-        </div>
-        <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
-          <p className="text-[14px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
-          <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
-        </div>
       </aside>
       {clientOpen && client ? (
         <ClientEditDialog
@@ -927,14 +932,16 @@ export function FolhaView({
           onCreateSupplier={onCreateSupplier}
           onRemove={() => onRemoveStock(stockLine.key, stockLine.stockEntry?.purchaseLineId ?? "")}
           onSave={(input) => {
-            const article = articles.find((item) => item.id === stockLine.articleId) ?? articles.find((item) => item.ref === stockLine.ref);
-            const family = article?.family || (isOilArticle({ ref: stockLine.ref }) ? "Óleo" : "Produto");
+            const article = articles.find((item) => item.ref.toLocaleLowerCase("pt-PT") === input.ref.toLocaleLowerCase("pt-PT"))
+              ?? articles.find((item) => item.id === stockLine.articleId);
+            const family = article?.family || (isOilArticle({ ref: input.ref }) ? "Óleo" : "Produto");
+            onLine(stockLine.key, { ref: input.ref, ...(article ? { articleId: article.id, kind: "peca" } : {}) });
             return onCommitStock({
               lineKey: stockLine.key,
-              ref: stockLine.ref,
+              ref: input.ref,
               description: stockLine.description,
               family,
-              margin: article?.marginPercent ?? defaultMargin({ family, ref: stockLine.ref }),
+              margin: article?.marginPercent ?? defaultMargin({ family, ref: input.ref }),
               purchaseLineId: stockLine.stockEntry?.purchaseLineId,
               quantity: input.quantity,
               supplierId: input.supplierId,
@@ -1079,6 +1086,7 @@ function Cell({
   align,
   narrow,
   label,
+  testId,
   onFocus,
   onKeyDown,
   onChange,
@@ -1088,6 +1096,7 @@ function Cell({
   align?: "right";
   narrow?: boolean;
   label?: string;
+  testId?: string;
   onFocus?: (element: HTMLInputElement) => void;
   onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
   onChange: (value: string) => void;
@@ -1096,6 +1105,7 @@ function Cell({
     <input
       value={value}
       disabled={disabled}
+      data-testid={testId}
       aria-label={label}
       aria-autocomplete={onKeyDown ? "list" : undefined}
       onFocus={(event) => onFocus?.(event.currentTarget)}
@@ -1104,7 +1114,7 @@ function Cell({
         onChange(event.target.value);
         onFocus?.(event.currentTarget);
       }}
-      className={`box-border h-8 max-w-full min-w-0 bg-transparent px-0.5 text-[16px] outline-none ${narrow ? "w-full text-center" : "w-full px-1"} ${align === "right" ? "text-right" : ""}`}
+      className={`box-border h-8 w-full min-w-0 bg-transparent px-1 text-[16px] text-[#22272a] outline-none ${narrow ? "text-center" : ""} ${align === "right" ? "text-right" : ""}`}
     />
   );
 }

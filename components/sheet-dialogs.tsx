@@ -247,6 +247,7 @@ export function StockEntryDialog({
   onClose: () => void;
   onCreateSupplier: (name: string) => Promise<{ ok: true; id: string; name: string } | { ok: false; error: string }>;
   onSave: (input: {
+    ref: string;
     quantity: number;
     supplierId: string;
     invoiceNumber: string;
@@ -260,6 +261,7 @@ export function StockEntryDialog({
   const entry = line.stockEntry;
   const memory = entry ? null : readPurchaseMemory();
   const initialSupplier = entry?.supplierId || memory?.supplierId || "";
+  const [ref, setRef] = useState(line.ref);
   const [quantity, setQuantity] = useState(entry ? String(entry.quantity).replace(".", ",") : line.quantity);
   const [invoice, setInvoice] = useState(entry?.invoiceNumber || memory?.invoiceNumber || "");
   const [date, setDate] = useState(entry?.date || lisbonParts().iso);
@@ -291,6 +293,10 @@ export function StockEntryDialog({
   }
 
   async function save() {
+    if (ref.trim().length < 2) {
+      setError("Indique a referência do artigo.");
+      return;
+    }
     const parsedQty = parseDecimal(quantity);
     const parsedCost = parseDecimal(cost);
     const parsedVat = parseDecimal(vat);
@@ -320,6 +326,7 @@ export function StockEntryDialog({
     }
     setPending(true);
     const result = await onSave({
+      ref: ref.trim().toUpperCase(),
       quantity: parsedQty,
       supplierId,
       invoiceNumber: invoice.trim(),
@@ -364,7 +371,7 @@ export function StockEntryDialog({
           </label>
           <label className="grid gap-1 text-xs">
             Referência
-            <Input value={line.ref} readOnly className="h-9 bg-[#f7f8fa] font-mono" />
+            <Input value={ref} onChange={(event) => setRef(event.target.value.toUpperCase())} className="h-9 bg-white font-mono uppercase" aria-label="Referência" />
           </label>
           <label className="grid gap-1 text-xs">
             Descrição

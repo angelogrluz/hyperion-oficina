@@ -101,6 +101,7 @@ export type DocLine = {
   vatRate: number;
   internalNote?: string;
   articleId: string | null;
+  ref?: string;
   orderId: string | null;
   quoteId: string | null;
   position: number;
@@ -551,6 +552,7 @@ type IncomingLine = {
   vatRate: number;
   internalNote?: string;
   articleId: string | null;
+  ref?: string;
   stockEntry?: StockLink | null;
 };
 
@@ -567,6 +569,7 @@ function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string 
       vatRate: line.vatRate,
       internalNote: line.internalNote ?? "",
       articleId: line.kind === "peca" ? line.articleId : null,
+      ref: line.ref?.trim() ?? "",
       orderId: parent.orderId ?? null,
       quoteId: parent.quoteId ?? null,
       position,

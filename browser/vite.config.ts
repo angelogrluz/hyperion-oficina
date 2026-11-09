@@ -16,7 +16,7 @@ function versionJson(): Plugin {
     closeBundle() {
       writeFileSync(
         path.resolve(__dirname, "dist/version.json"),
-        `${JSON.stringify({ id: buildId, builtAt: buildId, revision: 2 }, null, 2)}\n`,
+        `${JSON.stringify({ id: buildId, builtAt: buildId, revision: 3 }, null, 2)}\n`,
       );
     },
   };
