@@ -8,7 +8,6 @@ import { CarSide, carColor } from "@/components/car-side";
 import { ClientEditDialog, NewClientDialog, StockEntryDialog, type ClientForm } from "@/components/sheet-dialogs";
 import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ApprovalBadge } from "@/components/approval-badge";
@@ -221,7 +220,7 @@ export function FolhaView({
   const [newClientOpen, setNewClientOpen] = useState(false);
   const [stockKey, setStockKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [editKey, setEditKey] = useState<string | null>(null);
+  const [lineEditMode, setLineEditMode] = useState(false);
   const openClientRef = useRef<() => void>(() => {});
   const onFinalRef = useRef(onConsumidorFinal);
   useEffect(() => {
@@ -432,21 +431,24 @@ export function FolhaView({
   const iva = round2(computed.reduce((sum, row) => sum + row.amounts.vat, 0));
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
   const stockLine = lines.find((item) => item.key === stockKey && item.kind === "peca") ?? null;
-  const editLine = lines.find((item) => item.key === editKey) ?? null;
+
+  function leaveLineEdit() {
+    setLineEditMode(false);
+    setSelectedKey(null);
+  }
 
   useEffect(() => {
     const onKey = (event: globalThis.KeyboardEvent) => {
-      if (event.key !== "Delete" || locked || !selectedKey) return;
+      if (event.key !== "Delete" || locked || !lineEditMode || !selectedKey) return;
       const target = event.target as HTMLElement | null;
       if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
       event.preventDefault();
       onRemove(selectedKey);
       setSelectedKey(null);
-      if (editKey === selectedKey) setEditKey(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editKey, locked, onRemove, selectedKey]);
+  }, [lineEditMode, locked, onRemove, selectedKey]);
 
   return (
     <div className="grid items-start gap-2 pb-12 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(148px,12vw,236px)]" onBlur={() => onFlush?.()}>
@@ -567,25 +569,27 @@ export function FolhaView({
                     <tr
                       key={row.line.key}
                       data-testid="sheet-line"
-                      onClick={() => setSelectedKey(row.line.key)}
-                      className={`${row.line.kind === "peca" ? "bg-[#f5f6fa]" : "bg-white"} ${selectedKey === row.line.key ? "outline outline-2 outline-[#00a9fd]" : ""}`}
+                      onClick={() => { if (lineEditMode) setSelectedKey(row.line.key); }}
+                      className={`${row.line.kind === "peca" ? "bg-[#f5f6fa]" : "bg-white"} ${lineEditMode && selectedKey === row.line.key ? "outline outline-2 outline-[#00a9fd]" : ""}`}
                     >
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center">
-                        <button
-                          type="button"
-                          data-testid="delete-line"
-                          disabled={locked}
-                          title="Apagar linha"
-                          aria-label={`Apagar ${row.line.description || "linha"}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            onRemove(row.line.key);
-                            if (selectedKey === row.line.key) setSelectedKey(null);
-                          }}
-                          className="inline-grid size-4 place-items-center rounded-full bg-[#d64545] text-[11px] leading-none font-bold text-white hover:bg-[#b83838] disabled:opacity-40"
-                        >
-                          ×
-                        </button>
+                        {lineEditMode ? (
+                          <button
+                            type="button"
+                            data-testid="delete-line"
+                            disabled={locked}
+                            title="Apagar linha"
+                            aria-label={`Apagar ${row.line.description || "linha"}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onRemove(row.line.key);
+                              if (selectedKey === row.line.key) setSelectedKey(null);
+                            }}
+                            className="inline-grid size-4 place-items-center rounded-full bg-[#d64545] text-[11px] leading-none font-bold text-white hover:bg-[#b83838] disabled:opacity-40"
+                          >
+                            ×
+                          </button>
+                        ) : null}
                       </td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center text-[8px] tracking-tighter" aria-hidden>||||</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5">{row.family}</td>
@@ -708,19 +712,20 @@ export function FolhaView({
               <button
                 type="button"
                 data-testid="edit-line"
-                title="Editar a linha selecionada"
-                aria-label="Editar linha"
-                disabled={locked || visible.length === 0}
-                onClick={() => {
-                  const key = selectedKey && visible.some((row) => row.line.key === selectedKey) ? selectedKey : visible[0]?.line.key;
-                  if (!key) return;
-                  setSelectedKey(key);
-                  setEditKey(key);
-                }}
-                className="cursor-pointer text-[14px] text-[#22272a] hover:text-[#00a9fd] disabled:cursor-not-allowed disabled:opacity-40"
+                title={lineEditMode ? "Concluir edição das linhas" : "Editar linhas"}
+                aria-label={lineEditMode ? "Concluir edição das linhas" : "Editar linhas"}
+                aria-pressed={lineEditMode}
+                disabled={locked}
+                onClick={() => (lineEditMode ? leaveLineEdit() : setLineEditMode(true))}
+                className={`grid size-6 cursor-pointer place-items-center rounded text-[14px] disabled:cursor-not-allowed disabled:opacity-40 ${lineEditMode ? "bg-[#00a9fd] text-white" : "text-[#22272a] hover:bg-[#e7f7f8] hover:text-[#00a9fd]"}`}
               >
                 ✎
               </button>
+              {lineEditMode ? (
+                <button type="button" data-testid="concluir-linhas" onClick={leaveLineEdit} className="h-6 rounded border border-[#00a9fd] bg-white px-2 text-[11px] font-semibold text-[#00a9fd]">
+                  Concluir
+                </button>
+              ) : null}
               <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed text-[14px]">⤢</button>
             </div>
             {suggestField && matches.length && suggestBox
@@ -868,17 +873,6 @@ export function FolhaView({
         />
       ) : null}
       {newClientOpen ? <NewClientDialog onClose={() => setNewClientOpen(false)} onSave={onCreateClient} /> : null}
-      {editLine ? (
-        <LineEditDialog
-          key={editLine.key}
-          line={editLine}
-          onClose={() => setEditKey(null)}
-          onSave={(patch) => {
-            onLine(editLine.key, patch);
-            setEditKey(null);
-          }}
-        />
-      ) : null}
       {stockLine ? (
         <StockEntryDialog
           key={`${stockLine.key}:${stockLine.stockEntry?.purchaseLineId ?? "new"}`}
@@ -1137,65 +1131,3 @@ function Spec({ label, value, onChange, disabled, wide }: { label: string; value
   );
 }
 
-function LineEditDialog({
-  line,
-  onClose,
-  onSave,
-}: {
-  line: SheetLine;
-  onClose: () => void;
-  onSave: (patch: Partial<SheetLine>) => void;
-}) {
-  const [description, setDescription] = useState(line.description);
-  const [ref, setRef] = useState(line.ref);
-  const [note, setNote] = useState(line.note);
-  const [quantity, setQuantity] = useState(line.quantity);
-  const [unitCost, setUnitCost] = useState(line.unitCost);
-  const [unitPrice, setUnitPrice] = useState(line.unitPrice);
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Editar linha</DialogTitle>
-        </DialogHeader>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1 text-xs sm:col-span-2">
-            Descrição
-            <Input aria-label="Descrição da linha" value={description} onChange={(event) => setDescription(event.target.value)} className="h-9" />
-          </label>
-          <label className="grid gap-1 text-xs">
-            Referência
-            <Input aria-label="Referência da linha" value={ref} onChange={(event) => setRef(event.target.value)} className="h-9 font-mono" />
-          </label>
-          <label className="grid gap-1 text-xs">
-            Quantidade
-            <Input aria-label="Quantidade da linha" value={quantity} onChange={(event) => setQuantity(event.target.value)} className="h-9" />
-          </label>
-          <label className="grid gap-1 text-xs">
-            Custo
-            <Input aria-label="Custo da linha" value={unitCost} onChange={(event) => setUnitCost(event.target.value)} className="h-9" />
-          </label>
-          <label className="grid gap-1 text-xs">
-            Preço
-            <Input aria-label="Preço da linha" value={unitPrice} onChange={(event) => setUnitPrice(event.target.value)} className="h-9" />
-          </label>
-          <label className="grid gap-1 text-xs sm:col-span-2">
-            Observações internas
-            <Input aria-label="Observações da linha" value={note} onChange={(event) => setNote(event.target.value)} className="h-9" />
-          </label>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button
-            type="button"
-            data-testid="save-line-edit"
-            className="bg-[#00a9fd] hover:bg-[#0096e0]"
-            onClick={() => onSave({ description, ref, note, quantity, unitCost, unitPrice })}
-          >
-            Guardar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
