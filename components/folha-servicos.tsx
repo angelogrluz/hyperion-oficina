@@ -144,7 +144,7 @@ export function FolhaServicos({
 
         <footer className="mt-auto flex items-end justify-between gap-4 pt-4">
           <div className="flex flex-wrap gap-3">
-            {["Esguicho", "Anticong.", "Óleo", "Ar", "Pressão pneus", "Luzes"].map((label) => (
+            {["Esguicho", "Anticong.", "Óleo", "Pressão pneus", "Luzes"].map((label) => (
               <label key={label} className="flex items-center gap-1">
                 <input type="checkbox" className="size-3.5" />
                 {label}
