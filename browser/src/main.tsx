@@ -8,6 +8,7 @@ import { LoginForm } from "@/components/login-form";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
+import { StockMovements } from "@/components/stock-movements";
 import { SaveForm } from "@/components/save-form";
 import { Shell } from "@/components/shell";
 import { SimulationBanner } from "@/components/simulation-banner";
@@ -398,6 +399,66 @@ function Articles() {
   );
 }
 
+function Movements() {
+  const snap = useSnap();
+  if (!snap) return null;
+  const clients = new Map(snap.clients.map((client) => [client.id, client.name]));
+  const vehicles = new Map(snap.vehicles.map((vehicle) => [vehicle.id, vehicle.plate]));
+  const suppliers = new Map(snap.suppliers.map((supplier) => [supplier.id, supplier.name]));
+  return (
+    <StockMovements
+      data={{
+        articles: snap.articles.filter((article) => article.active).map((article) => ({
+          id: article.id,
+          ref: article.ref,
+          description: article.description,
+          family: article.family,
+          isOil: article.isOil,
+          stockQty: article.stockQty,
+        })),
+        purchases: snap.purchases.map((purchase) => ({
+          id: purchase.id,
+          date: purchase.date,
+          createdAt: purchase.createdAt,
+          documentType: purchase.documentType,
+          invoiceNumber: purchase.invoiceNumber,
+          voided: purchase.voided,
+          supplierName: suppliers.get(purchase.supplierId) ?? "",
+        })),
+        purchaseLines: snap.purchaseLines.map((line) => ({
+          id: line.id,
+          purchaseId: line.purchaseId,
+          articleId: line.articleId,
+          tipologia: line.tipologia,
+          ref: line.ref,
+          quantity: line.quantity,
+          cost: line.cost,
+          position: line.position,
+        })),
+        orders: snap.orders.map((order) => ({
+          id: order.id,
+          number: order.number,
+          dateIn: order.dateIn,
+          createdAt: order.createdAt,
+          invoiceNumber: order.invoiceNumber,
+          clientName: order.clientId ? clients.get(order.clientId) ?? "" : "",
+          plate: order.vehicleId ? vehicles.get(order.vehicleId) ?? "" : "",
+        })),
+        lines: snap.lines.map((line) => ({
+          id: line.id,
+          orderId: line.orderId,
+          articleId: line.articleId,
+          ref: line.ref,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          position: line.position,
+          stockEntryPurchaseId: line.stockEntry?.purchaseId ?? null,
+        })),
+      }}
+    />
+  );
+}
+
 function Purchases() {
   const snap = useSnap();
   if (!snap) return null;
@@ -622,6 +683,7 @@ function AppRoutes() {
       <Route path="/viaturas/nova" element={<Frame><NewVehicle /></Frame>} />
       <Route path="/artigos" element={<Frame><Articles /></Frame>} />
       <Route path="/compras" element={<Frame><Purchases /></Frame>} />
+      <Route path="/movimentos" element={<Frame><Movements /></Frame>} />
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -34,7 +34,7 @@ export type ShellTotals = {
 
 const STOCK_LINKS = [
   { href: "/compras", label: "Compras a Fornecedores" },
-  { href: "/compras?vista=linhas", label: "Movimento de Stocks" },
+  { href: "/movimentos", label: "Movimentos de stock" },
   { href: "/artigos?separador=consumiveis", label: "Venda de Produtos e Serviços" },
   { href: "/artigos", label: "Inventário de Stock" },
   { href: "/artigos?separador=servicos", label: "Catálogo de Serviços" },

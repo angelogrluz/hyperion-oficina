@@ -674,21 +674,20 @@ export async function saveOrderRecord(id: string | null, input: {
   return { ok: true as const, id: savedId, stock };
 }
 
-function oilTaken(snap: Snapshot, lines: Array<{ articleId: string | null; quantity: number }>) {
+function stockTaken(snap: Snapshot, lines: Array<{ articleId: string | null; quantity: number }>) {
   const taken = new Map<string, number>();
   for (const line of lines) {
     if (!line.articleId) continue;
     const article = snap.articles.find((item) => item.id === line.articleId);
     if (!article) continue;
-    if (article.ref !== "ECOLUB" && !article.isOil && !isOilArticle(article)) continue;
     taken.set(article.id, round2((taken.get(article.id) ?? 0) + line.quantity));
   }
   return taken;
 }
 
 function adjustOilStock(snap: Snapshot, before: Array<{ articleId: string | null; quantity: number }>, after: Array<{ articleId: string | null; quantity: number }>) {
-  const previous = oilTaken(snap, before);
-  const next = oilTaken(snap, after);
+  const previous = stockTaken(snap, before);
+  const next = stockTaken(snap, after);
   const touched: string[] = [];
   for (const articleId of new Set([...previous.keys(), ...next.keys()])) {
     const article = snap.articles.find((item) => item.id === articleId);
@@ -1455,12 +1454,16 @@ async function buildDemo(): Promise<Snapshot> {
     purchaseLine("s-delta", "2026-10-18", "AD-2026/441", "VEL-NGK", "VELA DE IGNIÇÃO NGK", 12, 8.75, 40, "Ignição"),
     purchaseLine("s-delta", "2026-10-18", "AD-2026/441", "COR-DST", "KIT CORREIA DE DISTRIBUIÇÃO", 1, 62, 40, "Produto"),
     purchaseLine("s-delta", "2026-10-18", "AD-2026/441", "LIQ-DOT4", "LÍQUIDO DE TRAVÕES DOT4 (L)", 8, 4.9, 40, "Produto"),
+    purchaseLine("s-lubri", "2026-09-02", "LN-880", "OLEO-5W30", "ÓLEO MOTOR 5W30 (L)", 10, 6.5, 30, "Óleo"),
+    purchaseLine("s-lubri", "2026-09-02", "LN-880", "ECOLUB", "ECO TAXA LUBRIFICANTES", 10, 0.09, 0, "Eco Taxa"),
     purchaseLine("s-lubri", "2026-10-28", "LN-1092", "OLEO-5W30", "ÓLEO MOTOR 5W30 (L)", 22, 6.8, 30, "Óleo"),
     purchaseLine("s-lubri", "2026-10-28", "LN-1092", "ECOLUB", "ECO TAXA LUBRIFICANTES", 22, 0.09, 0, "Eco Taxa"),
     purchaseLine("s-lubri", "2026-10-28", "LN-1092", "OLEO-5W40", "ÓLEO MOTOR 5W40 (L)", 3, 7.1, 30, "Óleo"),
     purchaseLine("s-lubri", "2026-10-28", "LN-1092", "ECOLUB", "ECO TAXA LUBRIFICANTES", 3, 0.09, 0, "Eco Taxa"),
+    purchaseLine("s-travo", "2026-09-15", "TM-090", "PST-DIANT", "PASTILHAS DE TRAVÃO DIANTEIRAS", 6, 21, 40, "Travões"),
     purchaseLine("s-travo", "2026-11-03", "TM-778", "PST-DIANT", "PASTILHAS DE TRAVÃO DIANTEIRAS", 4, 22.5, 40, "Travões"),
     purchaseLine("s-travo", "2026-11-03", "TM-778", "DSC-DIANT", "DISCOS DE TRAVÃO DIANTEIROS (PAR)", 2, 48, 40, "Travões"),
+    { ...purchaseLine("s-travo", "2026-11-06", "NC-14", "PST-DIANT", "PASTILHAS DE TRAVÃO DIANTEIRAS", 1, 22.5, 40, "Travões"), documentType: "Nota de crédito" },
   ]);
 
   const byRef = new Map(snap.articles.map((article) => [article.ref, article]));
@@ -1648,6 +1651,13 @@ async function buildDemo(): Promise<Snapshot> {
       updatedAt: stampAt,
     };
   };
+  for (const line of snap.lines) {
+    if (!line.orderId || !line.articleId || line.kind === "mao_de_obra") continue;
+    const article = snap.articles.find((item) => item.id === line.articleId);
+    if (!article) continue;
+    article.stockQty = round2(article.stockQty - line.quantity);
+  }
+
   snap.appointments = [
     slot("2026-11-05", "08:30", 90, "c-silva", "v-master", "Distribuição da Renault Master", "Viatura já na oficina."),
     slot("2026-11-05", "15:00", 60, "c-marta", "v-yaris", "Diagnóstico de suspensão", "Vem sem marcação de peças."),
