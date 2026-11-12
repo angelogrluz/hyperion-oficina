@@ -21,9 +21,16 @@ export function readSession(): Session | null {
   }
 }
 
+function officeNameMatch(user: { name: string; login: string }, query: string) {
+  const full = user.name.trim().toLocaleLowerCase("pt-PT");
+  const first = full.split(/\s+/)[0] ?? "";
+  const login = user.login.trim().toLocaleLowerCase("pt-PT");
+  return query === full || (first !== "" && query === first) || (login !== "" && query === login);
+}
+
 export function loginWithNamePin(name: string, pin: string): { error: string } | { session: Session } {
   const query = name.trim().toLocaleLowerCase("pt-PT");
-  const user = readUsers().find((item) => item.active && (item.name.toLocaleLowerCase("pt-PT") === query || item.login.toLocaleLowerCase("pt-PT") === query));
+  const user = readUsers().find((item) => item.active && officeNameMatch(item, query));
   if (!user || user.role === "mecanico") return { error: "Utilizador ou PIN incorretos." };
   if (!user.pin) return { error: "Este utilizador ainda não tem PIN. Peça a um administrador para o definir." };
   if (!pinMatches(user.id, pin)) return { error: "Utilizador ou PIN incorretos." };

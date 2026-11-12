@@ -96,15 +96,36 @@ export function readUsers(): WorkshopUser[] {
   }
   try {
     const parsed = JSON.parse(raw) as WorkshopUser[];
-    usersSnap = parsed.length ? parsed.map((user) => ({
-      ...installationUsers[0],
-      ...user,
-      role: ROLES.some((role) => role.id === user.role) ? user.role : "mecanico",
-      pin: user.pin ?? "",
-      technician: Boolean(user.technician),
-      clocksIn: Boolean(user.clocksIn),
-      active: user.active !== false,
-    })) : installationUsers;
+    if (!parsed.length) {
+      usersSnap = installationUsers;
+      return usersSnap;
+    }
+    const defaults = new Map(installationUsers.map((user) => [user.id, user.pin]));
+    let persist = false;
+    usersSnap = parsed.map((user) => {
+      const stored = typeof user.pin === "string" ? user.pin : "";
+      const pin = stored.trim() ? stored : (defaults.get(user.id) ?? "");
+      if (pin !== stored) persist = true;
+      return {
+        ...installationUsers[0],
+        ...user,
+        role: ROLES.some((role) => role.id === user.role) ? user.role : "mecanico",
+        pin,
+        technician: Boolean(user.technician),
+        clocksIn: Boolean(user.clocksIn),
+        active: user.active !== false,
+      };
+    });
+    if (persist && typeof localStorage !== "undefined") {
+      const patched = parsed.map((user) => {
+        const stored = typeof user.pin === "string" ? user.pin : "";
+        const pin = stored.trim() ? stored : (defaults.get(user.id) ?? "");
+        return pin === stored ? user : { ...user, pin };
+      });
+      const nextRaw = JSON.stringify(patched);
+      localStorage.setItem(USERS_KEY, nextRaw);
+      usersRaw = nextRaw;
+    }
   } catch {
     usersSnap = installationUsers;
   }
