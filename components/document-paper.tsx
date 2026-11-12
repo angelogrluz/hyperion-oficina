@@ -1,5 +1,8 @@
-import { CompanyBlock } from "@/components/company-block";
-import { company } from "@/src/config";
+"use client";
+
+import { useSyncExternalStore } from "react";
+import { CompanyBlock, CompanyFooter } from "@/components/company-block";
+import { installationCompany, readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
 import { round2 } from "@/lib/domain";
 import { formatEUR, formatQty } from "@/lib/format";
 import type { PrintableDocument } from "@/lib/printable";
@@ -26,6 +29,7 @@ function taxLabel(rate: number) {
 }
 
 export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
+  const company = useSyncExternalStore(subscribeCompanySettings, readCompanySettings, () => installationCompany);
   const issued = dashDate(doc.primaryDate);
   const groups = taxGroups(doc);
   const quote = doc.kind === "quote";
@@ -162,10 +166,11 @@ export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
 
       <div className="mt-4">
         <p className="font-bold">Informação Bancária</p>
-        <p>{company.ibanBank}</p>
-        <p>{company.iban}</p>
+        {company.bank.trim() ? <p>{company.bank}</p> : null}
+        {company.iban.trim() ? <p>{company.iban}</p> : null}
         {doc.paymentMethod ? <p className="mt-1">Modo de pagamento: {doc.paymentMethod}</p> : null}
       </div>
+      <CompanyFooter />
     </article>
   );
 }

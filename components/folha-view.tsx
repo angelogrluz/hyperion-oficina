@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { can, readCurrentUserId, readUsers, subscribeAccess } from "@/lib/user-settings";
+import { assignTechnician, formatClock, subscribeOps, technicianOf, workedMs } from "@/lib/workshop-ops";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { PackagePlus, Pencil, Plus } from "lucide-react";
@@ -215,6 +217,16 @@ export function FolhaView({
   const [docs, setDocs] = useState("Não");
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
+  useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "u-angelo");
+  useSyncExternalStore(subscribeOps, () => workedMs(documentId || ""), () => 0);
+  const showCosts = can("precos.ver");
+  const showContacts = can("clientes.contactos");
+  const allowDelete = can("obras.apagar");
+  const allowApprove = can("obras.aprovar");
+  const allowClose = can("obras.fechar");
+  const allowQuote = can("orcamentos.criar");
+  const allowInvoice = can("faturacao.faturar");
+  const technicians = readUsers().filter((user) => user.active && user.technician);
   const [suggestField, setSuggestField] = useState<"ref" | "description" | null>(null);
   const [highlight, setHighlight] = useState(0);
   const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -352,11 +364,11 @@ export function FolhaView({
           </select>
         )}
         <p className="text-[18px] leading-tight font-semibold">{client?.name || "Sem cliente"}</p>
-        <p>{client?.phone || "Sem telefone"}</p>
-        <p className="break-all">{client?.email || "Sem e-mail"}</p>
-        <p>NIF {client?.nif || "—"}</p>
-        <p className="text-white/90">{client?.address || "Sem morada"}</p>
-        {client?.postalCode || client?.city ? <p>{[client.postalCode, client.city].filter(Boolean).join(" ")}</p> : null}
+        {showContacts ? <p>{client?.phone || "Sem telefone"}</p> : null}
+        {showContacts ? <p className="break-all">{client?.email || "Sem e-mail"}</p> : null}
+        {showContacts ? <p>NIF {client?.nif || "—"}</p> : null}
+        {showContacts ? <p className="text-white/90">{client?.address || "Sem morada"}</p> : null}
+        {showContacts && (client?.postalCode || client?.city) ? <p>{[client.postalCode, client.city].filter(Boolean).join(" ")}</p> : null}
         <p className="mt-2 text-[14px] tracking-wide text-white/70 uppercase">Notas</p>
         <p>{client?.notes || "Sem notas do cliente."}</p>
         <p className="mt-2 text-[14px] tracking-wide text-white/70 uppercase">Histórico notas</p>
@@ -364,7 +376,7 @@ export function FolhaView({
       </div>,
     );
     return () => setSidebar(null);
-  }, [setSidebar, locked, clientId, clients, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.postalCode, client?.city, client?.notes, notes]);
+  }, [setSidebar, locked, clientId, clients, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.postalCode, client?.city, client?.notes, notes, showContacts]);
 
   const setHeader = useSetSheetHeader();
   const headerActions = useRef({ onDateIn, setPromiseQuote, setPromiseDelivery });
@@ -566,14 +578,14 @@ export function FolhaView({
                   <col />
                   <col style={{ width: "112px" }} />
                   <col style={{ width: "128px" }} />
-                  <col style={{ width: "112px" }} />
-                  <col style={{ width: "72px" }} />
+                  {showCosts ? <col style={{ width: "112px" }} /> : null}
+                  {showCosts ? <col style={{ width: "72px" }} /> : null}
                   <col style={{ width: "60px" }} />
-                  <col style={{ width: "68px" }} />
-                  <col style={{ width: "84px" }} />
-                  <col style={{ width: "68px" }} />
-                  <col style={{ width: "148px" }} />
-                  <col style={{ width: "104px" }} />
+                  {showCosts ? <col style={{ width: "68px" }} /> : null}
+                  {showCosts ? <col style={{ width: "84px" }} /> : null}
+                  {showCosts ? <col style={{ width: "68px" }} /> : null}
+                  {showCosts ? <col style={{ width: "148px" }} /> : null}
+                  {showCosts ? <col style={{ width: "104px" }} /> : null}
                   <col style={{ width: "32px" }} />
                   <col style={{ width: "56px" }} />
                   <col style={{ width: "32px" }} />
@@ -586,14 +598,14 @@ export function FolhaView({
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Descrição</th>
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Obs. internas</th>
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Ref.</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Lucro s/desc.</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Custo</th>
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Lucro s/desc.</th> : null}
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Custo</th> : null}
                     <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Qtd.</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Marg.</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Base</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Desc.%</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente s/IVA</th>
-                    <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente</th>
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Marg.</th> : null}
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Base</th> : null}
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Desc.%</th> : null}
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente s/IVA</th> : null}
+                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente</th> : null}
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-center font-semibold whitespace-nowrap">A</th>
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Stock</th>
                     <th className="overflow-hidden bg-[#e1e2e5] px-0.5 py-1.5" aria-label="Entrada de stock" />
@@ -609,7 +621,7 @@ export function FolhaView({
                       className={`${row.line.kind === "peca" ? "bg-[#f5f6fa]" : "bg-white"} ${lineEditMode && selectedKey === row.line.key ? "outline outline-2 outline-[#00a9fd]" : ""} ${dropKey === row.line.key ? "shadow-[inset_0_3px_0_#00a9fd]" : ""}`}
                     >
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center">
-                        {lineEditMode ? (
+                        {lineEditMode && allowDelete ? (
                           <button
                             type="button"
                             data-testid="delete-line"
@@ -643,8 +655,8 @@ export function FolhaView({
                       <td className="border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.ref}>
                         <Cell value={row.line.ref} disabled={locked} label="Referência" testId="line-ref" onChange={(value) => onLine(row.line.key, { ref: value.toUpperCase() })} />
                       </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5">
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td> : null}
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5">
                         <NumberCell
                           value={row.unitCost}
                           disabled={locked}
@@ -659,11 +671,11 @@ export function FolhaView({
                             onLine(row.line.key, { unitCost: moneyInput(cost), unitPrice: moneyInput(salePrice(cost, margin)) });
                           }}
                         />
-                      </td>
+                      </td> : null}
                       <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#f6b26b] px-0.5 py-0.5">
                         <NumberCell value={row.quantity} disabled={locked} label="Quantidade" testId="line-qty" onCommit={(quantity) => onLine(row.line.key, { quantity: moneyInput(quantity) })} />
                       </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">
                         {row.line.kind === "peca" ? (
                           <NumberCell
                             value={row.markup}
@@ -675,15 +687,15 @@ export function FolhaView({
                         ) : (
                           <span>{pt2(row.margin)}%</span>
                         )}
-                      </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
-                        <NumberCell value={row.unitPrice} disabled={locked} label="PVP base" testId="line-price" onCommit={(price) => onLine(row.line.key, { unitPrice: moneyInput(price) })} />
-                      </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
-                        <NumberCell value={parseDecimal(row.line.discount) ?? 0} disabled={locked} label="Desconto" testId="line-discount" onCommit={(discount) => onLine(row.line.key, { discount: moneyInput(discount) })} />
-                      </td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td>
+                      </td> : null}
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
+                        <NumberCell value={row.unitPrice} disabled={locked || !can("precos.alterar")} label="PVP base" testId="line-price" onCommit={(price) => onLine(row.line.key, { unitPrice: moneyInput(price) })} />
+                      </td> : null}
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
+                        <NumberCell value={parseDecimal(row.line.discount) ?? 0} disabled={locked || !can("precos.alterar")} label="Desconto" testId="line-discount" onCommit={(discount) => onLine(row.line.key, { discount: moneyInput(discount) })} />
+                      </td> : null}
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td> : null}
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td> : null}
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-5 place-items-center rounded-full bg-[#6971f9] text-[12px] text-white">●</span></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center">
@@ -732,14 +744,14 @@ export function FolhaView({
                         onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, ref: value.toUpperCase() })); }}
                       />
                     </td>
-                    <td />
-                    <td className="bg-[#d7ebf8]" />
+                    {showCosts ? <td /> : null}
+                    {showCosts ? <td className="bg-[#d7ebf8]" /> : null}
                     <td className="bg-[#f6b26b] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
-                    <td />
-                    <td className="px-0.5 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td>
-                    <td />
-                    <td className="bg-[#e1e2e5]" />
-                    <td className="bg-[#e1e2e5]" />
+                    {showCosts ? <td /> : null}
+                    {showCosts ? <td className="px-0.5 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" narrow onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td> : null}
+                    {showCosts ? <td /> : null}
+                    {showCosts ? <td className="bg-[#e1e2e5]" /> : null}
+                    {showCosts ? <td className="bg-[#e1e2e5]" /> : null}
                     <td />
                     <td />
                     <td />
@@ -747,11 +759,15 @@ export function FolhaView({
                 </tbody>
                 <tfoot>
                   <tr className="text-[16px] font-semibold text-[#22272a]">
-                    <td className="px-1 py-1" colSpan={lineEditMode ? 11 : 10}>s/IVA {formatEUR(base)}</td>
-                    <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
-                    <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
-                    <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
-                    <td colSpan={3} />
+                    {showCosts ? (
+                      <>
+                        <td className="px-1 py-1" colSpan={lineEditMode ? 11 : 10}>s/IVA {formatEUR(base)}</td>
+                        <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
+                        <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
+                        <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
+                        <td colSpan={3} />
+                      </>
+                    ) : <td colSpan={lineEditMode ? 10 : 9} />}
                   </tr>
                 </tfoot>
               </table>
@@ -815,8 +831,9 @@ export function FolhaView({
         <div className="no-print fixed bottom-0 left-0 z-30 flex h-12 w-full items-center gap-3 border-t border-[#eaeaf2] bg-white px-3 text-[16px] lg:left-[var(--rail)] lg:w-[calc(100%-var(--rail))]">
           <label className="flex items-center gap-2 text-[#8d939c]">
             Atribuída a
-            <select disabled title="Indisponível nesta versão" className="h-9 cursor-not-allowed rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[16px] text-[#22272a]">
+            <select data-testid="atribuida-a" defaultValue="Balcão" className="h-9 rounded border border-[#e1e2e5] bg-[#f7f8fa] px-2 text-[16px] text-[#22272a]">
               <option>Balcão</option>
+              {technicians.map((user) => <option key={user.id}>{user.name}</option>)}
             </select>
           </label>
           <input type="range" disabled value={40} title="Indisponível nesta versão" className="h-1 w-40 cursor-not-allowed accent-[#00a9fd]" />
@@ -855,6 +872,14 @@ export function FolhaView({
           <Spec label="Próxima IPO" value={nextInspection} onChange={onNextInspection} disabled={locked} />
           <Spec label="Próxima revisão" value={nextService} onChange={onNextService} disabled={locked} />
         </div>
+        <label className="mt-2 grid gap-1 text-[16px]">
+          Técnico
+          <select data-testid="tecnico-obra" value={technicianOf(documentId || "")} disabled={locked || !documentId} onChange={(event) => { if (documentId) assignTechnician(documentId, event.target.value); }} className="h-10 rounded border border-[#d5ebed] bg-white px-2">
+            <option value="">Sem técnico</option>
+            {technicians.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+          </select>
+        </label>
+        <p data-testid="tempo-trabalhado" className="mt-2 text-[18px] font-semibold">Tempo trabalhado: {formatClock(workedMs(documentId || ""))}</p>
         <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
           <p className="text-[14px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
           <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
@@ -870,9 +895,9 @@ export function FolhaView({
               {saveState === "error" ? "Não gravado" : saveState === "saved" ? "Guardado" : "A guardar…"}
             </p>
           )}
-          <Button type="button" data-testid="gerar-orcamento" variant="outline" className="h-10 border-[#00a9fd] bg-white text-[17px] text-[#00a9fd]" disabled={locked || pending} onClick={onQuote}>
+          {allowQuote ? <Button type="button" data-testid="gerar-orcamento" variant="outline" className="h-10 border-[#00a9fd] bg-white text-[17px] text-[#00a9fd]" disabled={locked || pending} onClick={onQuote}>
             Gerar orçamento
-          </Button>
+          </Button> : null}
           {quoteNumber && quoteHref ? (
             <Link href={quoteHref} data-testid="abrir-orcamento" className="inline-flex h-10 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[17px] font-medium text-[#00a9fd]">
               Abrir orçamento
@@ -889,7 +914,7 @@ export function FolhaView({
                 type="button"
                 data-testid={`approval-${value}`}
                 aria-pressed={approval === value}
-                disabled={locked || pending || !onApproval}
+                disabled={locked || pending || !onApproval || !allowApprove}
                 onClick={() => onApproval?.(value)}
                 className={`h-10 rounded-lg border text-[16px] font-semibold disabled:opacity-50 ${approval === value ? filled : outlined}`}
               >
@@ -897,8 +922,8 @@ export function FolhaView({
               </button>
             ))}
           </div>
-          <Button type="button" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button>
-          {canInvoice ? <Button type="button" data-testid="faturar" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
+          {allowClose ? <Button type="button" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button> : null}
+          {canInvoice && allowInvoice ? <Button type="button" data-testid="faturar" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
           {invoiceNumber && invoiceHref ? (
             <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[17px] font-medium text-[#00a9fd]">
               Abrir fatura

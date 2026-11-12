@@ -16,7 +16,10 @@ import { TableShell, Td, Th } from "@/components/table-shell";
 import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
 import { DocumentPaper } from "@/components/document-paper";
-import { EcolubSettings } from "@/components/ecolub-settings";
+import { WorkshopSettings } from "@/components/workshop-settings";
+import { OficinaMode, type OficinaOrder } from "@/components/oficina-mode";
+import { PontosPage } from "@/components/pontos-page";
+import { companyDisplayName } from "@/lib/company-settings";
 import { FolhaPrint } from "@/components/folha-print";
 import { FolhaServicos } from "@/components/folha-servicos";
 import { PrintButton } from "@/components/print-button";
@@ -490,7 +493,7 @@ function LoginPage() {
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="hidden bg-[#0b8f9c] p-10 text-white lg:block">
         <Logo light />
-        <h1 className="mt-16 max-w-md text-4xl font-semibold">Hyperion Car Lab</h1>
+        <h1 className="mt-16 max-w-md text-4xl font-semibold">{companyDisplayName()}</h1>
         <p className="mt-4 max-w-md text-white/90">Teste estático. Os dados ficam neste browser.</p>
       </section>
       <section className="flex items-center justify-center p-6">
@@ -658,12 +661,34 @@ function SheetServices() {
 }
 
 function SettingsPage() {
-  return (
-    <div className="max-w-xl rounded-xl border border-[#d5ebed] bg-white p-4">
-      <h1 className="mb-3 text-lg font-semibold">Parametrização</h1>
-      <EcolubSettings />
-    </div>
-  );
+  return <WorkshopSettings />;
+}
+
+function ordersForOficina(snap: NonNullable<ReturnType<typeof useSnap>>): OficinaOrder[] {
+  return snap.orders.map((order) => {
+    const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
+    const client = snap.clients.find((item) => item.id === order.clientId);
+    return {
+      id: order.id,
+      number: order.number,
+      plate: vehicle?.plate ?? "",
+      vehicle: [vehicle?.brand, vehicle?.model].filter(Boolean).join(" "),
+      clientName: client?.name ?? "",
+      tasks: snap.lines.filter((line) => line.orderId === order.id && line.kind === "mao_de_obra").map((line) => line.description),
+    };
+  });
+}
+
+function OficinaScreen() {
+  const snap = useSnap();
+  if (!snap) return null;
+  return <OficinaMode orders={ordersForOficina(snap)} />;
+}
+
+function TecnicosScreen() {
+  const snap = useSnap();
+  if (!snap) return null;
+  return <OficinaMode admin orders={ordersForOficina(snap)} />;
 }
 
 function AppRoutes() {
@@ -684,6 +709,9 @@ function AppRoutes() {
       <Route path="/artigos" element={<Frame><Articles /></Frame>} />
       <Route path="/compras" element={<Frame><Purchases /></Frame>} />
       <Route path="/movimentos" element={<Frame><Movements /></Frame>} />
+      <Route path="/modo-oficina" element={<Frame><OficinaScreen /></Frame>} />
+      <Route path="/tecnicos" element={<Frame><TecnicosScreen /></Frame>} />
+      <Route path="/pontos" element={<Frame><PontosPage /></Frame>} />
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

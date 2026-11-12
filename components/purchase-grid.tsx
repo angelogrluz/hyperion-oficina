@@ -25,6 +25,8 @@ import { formatEUR, formatQty } from "@/lib/format";
 import { readEcolubRate, subscribeEcolubRate } from "@/lib/ecolub-settings";
 import { DOCUMENT_TYPES, FAMILIES, PAYMENT_METHODS } from "@/lib/labels";
 import { ecolubDefaults, purchaseTypeMovesStock, purchaseTypes } from "@/src/config";
+import { readPriceSettings } from "@/lib/price-settings";
+import { readCompanySettings } from "@/lib/company-settings";
 
 export type GridArticle = {
   id: string;
@@ -73,8 +75,8 @@ function blankLine(today: string, previous?: Line): Line {
     description: "",
     quantity: "",
     cost: "",
-    vat: "23",
-    margin: "40",
+    vat: num(readCompanySettings().defaultVat),
+    margin: num(readPriceSettings().productMargin),
     family: "Produto",
     tipologia: "produto",
     articleId: null,
@@ -462,7 +464,7 @@ export function PurchaseGrid({
                     patch(index, {
                       tipologia,
                       isOil: tipologia === "oleo",
-                      margin: tipologia === "oleo" ? "30" : tipologia === "produto" ? "40" : line.margin,
+                      margin: tipologia === "oleo" ? num(readPriceSettings().oilMargin) : tipologia === "produto" ? num(readPriceSettings().productMargin) : line.margin,
                       family: tipologia === "oleo" ? "Óleo" : line.family,
                     });
                   }}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useSyncExternalStore } from "react";
-import { CompanyBlock } from "@/components/company-block";
+import { CompanyBlock, CompanyFooter } from "@/components/company-block";
 import { PrintButton } from "@/components/print-button";
 import { readSymptoms, subscribeSymptoms } from "@/lib/browser-cache";
 import { formatEUR, formatQty } from "@/lib/format";
@@ -184,6 +184,7 @@ export function FolhaPrint({
             <div className="border-t border-neutral-500 pt-1">Assinatura da oficina</div>
           </div>
         </div>
+        <CompanyFooter />
       </article>
     </main>
   );

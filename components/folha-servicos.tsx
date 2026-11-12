@@ -2,11 +2,11 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { CarSide } from "@/components/car-side";
-import { companyLogoSrc } from "@/components/company-block";
+import { CompanyFooter } from "@/components/company-block";
 import { PrintButton } from "@/components/print-button";
 import { readSymptoms, subscribeSymptoms } from "@/lib/browser-cache";
+import { companyDisplayName, companyLogoSrc, installationCompany, readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
 import { formatMediumDate, formatQty, lisbonTime } from "@/lib/format";
-import { company } from "@/src/config";
 
 export type ServicoLine = {
   description: string;
@@ -55,6 +55,8 @@ export function FolhaServicos({
   lines: ServicoLine[];
 }) {
   const symptoms = useSyncExternalStore(subscribeSymptoms, () => readSymptoms(documentId), () => readSymptoms(""));
+  const company = useSyncExternalStore(subscribeCompanySettings, readCompanySettings, () => installationCompany);
+  const logo = companyLogoSrc(company);
 
   useEffect(() => {
     if (!autoPrint) return;
@@ -73,10 +75,10 @@ export function FolhaServicos({
           <div>
             <p className="text-[15px] font-semibold">Folha de Serviços</p>
             <p className="text-[22px] leading-tight font-bold">Nº: {number}</p>
-            <p className="mt-1 text-[12px] font-semibold">Hyperion Reparação Automóvel Unip. Lda</p>
-            <p>NIF: {company.nif}</p>
+            <p className="mt-1 text-[12px] font-semibold">{company.legalName.trim() || companyDisplayName(company)}</p>
+            {company.nif.trim() ? <p>NIF: {company.nif}</p> : null}
           </div>
-          <img src={companyLogoSrc()} alt="Hyperion" className="h-14 w-auto bg-white object-contain" />
+          {logo ? <img src={logo} alt={companyDisplayName(company)} className="h-14 w-auto bg-white object-contain" /> : <p className="font-semibold">{companyDisplayName(company)}</p>}
           <div className="grid gap-2">
             <div className="border border-black px-2 py-1">
               <p className="text-[10px]">Data e hora de entrada:</p>
@@ -153,6 +155,7 @@ export function FolhaServicos({
           </div>
           <p>Ass. Técnico: ____________________</p>
         </footer>
+        <CompanyFooter />
       </article>
     </main>
   );

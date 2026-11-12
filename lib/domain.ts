@@ -1,3 +1,5 @@
+import { readPriceSettings } from "@/lib/price-settings";
+
 export const ECOLUB_REF = "ECOLUB";
 export const ECOLUB_UNIT_COST = 0.09;
 export const DEFAULT_MARGIN = 40;
@@ -97,9 +99,10 @@ export function defaultMargin(input: {
 }) {
   const ref = (input.ref ?? "").toUpperCase();
   const family = input.family ?? "";
+  const prices = readPriceSettings();
   if (ref === ECOLUB_REF || family === "Eco Taxa") return 0;
-  if (isOilArticle(input)) return OIL_MARGIN;
-  return DEFAULT_MARGIN;
+  if (isOilArticle(input)) return prices.oilMargin;
+  return prices.productMargin;
 }
 
 export function defaultMinStock(input: {

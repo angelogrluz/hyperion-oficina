@@ -16,7 +16,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { Clock, Wrench } from "lucide-react";
+import { PinDialog } from "@/components/pin-dialog";
+import { companyReady, readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
+import { can, currentUser, pinMatches, readCurrentUserId, readUsers, subscribeAccess, writeCurrentUserId } from "@/lib/user-settings";
 import { logout } from "@/app/actions/auth";
 import { Logo } from "@/components/logo";
 import { SheetSidebarProvider } from "@/components/sheet-sidebar";
@@ -109,15 +113,16 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
             <p className="text-xs tracking-wide text-white/75 uppercase">{sidebarTitle(pathname)}</p>
             <p className="mt-2 text-white/90">{sidebarHint(pathname)}</p>
             <div className="mt-4 grid gap-1">
-              <Link href="/clientes" className="rounded-lg px-2 py-2 hover:bg-white/15">Listagem de Clientes</Link>
-              <Link href="/viaturas" className="rounded-lg px-2 py-2 hover:bg-white/15">Listagem de Viaturas</Link>
+              {can("clientes.ver") ? <Link href="/clientes" className="rounded-lg px-2 py-2 hover:bg-white/15">Listagem de Clientes</Link> : null}
+              {can("clientes.ver") ? <Link href="/viaturas" className="rounded-lg px-2 py-2 hover:bg-white/15">Listagem de Viaturas</Link> : null}
               <Link href="/documentos" className="rounded-lg px-2 py-2 hover:bg-white/15">Listagem de Documentos</Link>
-              <Link href="/ordens" className="rounded-lg px-2 py-2 hover:bg-white/15">Obras em curso</Link>
-              <Link href="/orcamentos" className="rounded-lg px-2 py-2 hover:bg-white/15">Orçamentos</Link>
+              {can("obras.ver") ? <Link href="/ordens" className="rounded-lg px-2 py-2 hover:bg-white/15">Obras em curso</Link> : null}
+              {can("orcamentos.ver") ? <Link href="/orcamentos" className="rounded-lg px-2 py-2 hover:bg-white/15">Orçamentos</Link> : null}
             </div>
           </div>
         )}
       </div>
+      <CurrentUserSelect />
       <div className="border-t border-white/10 text-[16px]">
         <div className="bg-[#3a4146] px-2 py-1.5 text-white">
           <p className="text-[14px] uppercase">Por aprovar</p>
@@ -135,6 +140,24 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
         </div>
       </div>
     </>
+  );
+}
+
+function CurrentUserSelect() {
+  useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "u-angelo");
+  const users = readUsers().filter((user) => user.active);
+  const selected = currentUser();
+  const [pending, setPending] = useState("");
+  const [error, setError] = useState("");
+  return (
+    <div className="px-2 py-2">
+      <label className="grid gap-1 text-[14px] text-white/80">Utilizador atual
+        <select data-testid="utilizador-atual" value={selected?.id ?? ""} onChange={(event) => { if (event.target.value !== selected?.id) { setPending(event.target.value); setError(""); } }} className="h-10 rounded bg-white px-2 text-[16px] text-[#22272a]">
+          {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+        </select>
+      </label>
+      {pending ? <PinDialog title={users.find((user) => user.id === pending)?.name ?? "PIN"} error={error} onClose={() => setPending("")} onSubmit={(pin) => { if (!pinMatches(pending, pin)) { setError("PIN incorreto ou ainda não definido em Utilizadores."); return; } writeCurrentUserId(pending); setPending(""); }} /> : null}
+    </div>
   );
 }
 
@@ -174,6 +197,10 @@ export function Shell({
   const [stockOpen, setStockOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
+  useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "u-angelo");
+  const allow = (permission: string) => can(permission);
+  const ready = useSyncExternalStore(subscribeCompanySettings, () => companyReady(readCompanySettings()), () => true);
+  const stockLinks = STOCK_LINKS.filter((item) => item.href.startsWith("/movimentos") ? allow("movimentos") : item.href.startsWith("/artigos") ? allow("artigos.ver") : allow("compras"));
 
   return (
     <SheetSidebarProvider>
@@ -190,10 +217,10 @@ export function Shell({
           <button type="button" className="grid size-10 place-items-center rounded-lg text-[#0b8f9c] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu />
           </button>
-          <ToolButton href="/" label="Obras em Curso"><ClipboardList className="size-4" /></ToolButton>
-          <ToolButton href="/orcamentos" label="Obras de Orçamentos e Encomendas"><FileStack className="size-4" /></ToolButton>
-          <ToolButton href="/clientes" label="Gestão de Cliente"><Users className="size-4" /></ToolButton>
-          <div className="relative">
+          {allow("obras.ver") ? <ToolButton href="/" label="Obras em Curso"><ClipboardList className="size-4" /></ToolButton> : null}
+          {allow("orcamentos.ver") ? <ToolButton href="/orcamentos" label="Obras de Orçamentos e Encomendas"><FileStack className="size-4" /></ToolButton> : null}
+          {allow("clientes.ver") ? <ToolButton href="/clientes" label="Gestão de Cliente"><Users className="size-4" /></ToolButton> : null}
+          {stockLinks.length ? <div className="relative">
             <ToolButton label="Gestão de Serviços e/ou Mercadorias" onClick={() => setStockOpen((value) => !value)}>
               <span className="flex items-center">
                 <Package className="size-4" />
@@ -202,18 +229,21 @@ export function Shell({
             </ToolButton>
             {stockOpen ? (
               <div className="absolute top-12 left-0 z-50 w-72 rounded-lg border border-[#d5ebed] bg-white p-1 shadow-lg">
-                {STOCK_LINKS.map((item) => (
+                {stockLinks.map((item) => (
                   <Link key={item.href} href={item.href} className="block rounded-md px-3 py-2 text-sm hover:bg-[#e7f7f8]" onClick={() => setStockOpen(false)}>
                     {item.label}
                   </Link>
                 ))}
               </div>
             ) : null}
-          </div>
-          <ToolButton href="/ordens/nova" label="Nova Obra"><Plus className="size-4" /></ToolButton>
+          </div> : null}
+          {allow("obras.editar") ? <ToolButton href="/ordens/nova" label="Nova Obra"><Plus className="size-4" /></ToolButton> : null}
+          {allow("oficina") ? <ToolButton href="/modo-oficina" label="Modo oficina"><Wrench className="size-4" /></ToolButton> : null}
+          {allow("tecnicos") ? <ToolButton href="/tecnicos" label="Técnicos"><Users className="size-4" /></ToolButton> : null}
+          {allow("pontos") ? <ToolButton href="/pontos" label="Pontos"><Clock className="size-4" /></ToolButton> : null}
           <ToolButton href="/agenda" label="Agenda"><CalendarDays className="size-4" /></ToolButton>
-          <ToolButton href="/resultados" label="Resultados da Empresa"><BarChart3 className="size-4" /></ToolButton>
-          <ToolButton href="/definicoes" label="Parametrização"><Settings className="size-4" /></ToolButton>
+          {allow("relatorios") ? <ToolButton href="/resultados" label="Resultados da Empresa"><BarChart3 className="size-4" /></ToolButton> : null}
+          {(allow("config.empresa") || allow("config.precos") || allow("config.utilizadores")) ? <ToolButton href="/definicoes" label="Parametrização"><Settings className="size-4" /></ToolButton> : null}
           <form
             className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 md:max-w-sm"
             onSubmit={(event) => {
@@ -260,6 +290,7 @@ export function Shell({
             </div>
           </SheetContent>
         </Sheet>
+        {!ready ? <p data-testid="aviso-empresa" className="bg-[#fff8eb] px-3 py-2 text-[16px] text-[#3a2a00]">Preencha os dados da empresa em Configurações. Os documentos usam o que lá estiver.</p> : null}
         <main className="px-2 py-2">{children}</main>
       </div>
     </div>

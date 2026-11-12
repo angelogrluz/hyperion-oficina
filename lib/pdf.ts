@@ -1,7 +1,7 @@
 import { createWriteStream } from "node:fs";
 import path from "node:path";
 import PDFDocument from "pdfkit";
-import { company } from "@/src/config";
+import { installationCompany } from "@/lib/company-settings";
 import { formatEUR, formatPercent, formatQty } from "@/lib/format";
 import type { PrintableDocument, WorkshopProfile } from "@/lib/printable";
 
@@ -19,15 +19,16 @@ function render(doc: PDFKit.PDFDocument, printable: PrintableDocument, workshop:
 
   doc.rect(0, 0, 595.28, 10).fill(pine);
   void workshop;
-  doc.fillColor(ink).font("bold").fontSize(9).text(company.legalName, left, 24, { width: 300 });
+  const company = installationCompany;
+  doc.fillColor(ink).font("bold").fontSize(9).text(company.legalName || company.tradeName || "Oficina", left, 24, { width: 300 });
   doc.font("body").fontSize(8).fillColor(muted);
   doc.text(company.address, left, 40, { width: 280 });
   doc.text(`${company.postalCode} ${company.city}`, left, 50, { width: 280 });
-  doc.text(`Tel./WhatsApp ${company.phone}`, left, 60, { width: 280 });
+  doc.text(company.phone ? `Tel./WhatsApp ${company.phone}` : "", left, 60, { width: 280 });
   doc.text(company.email, left, 70, { width: 280 });
   doc.text(company.site, left, 80, { width: 280 });
-  doc.text(`NIF ${company.nif}`, left, 90, { width: 280 });
-  doc.text(`IBAN ${company.ibanBank}: ${company.iban}`, left, 100, { width: 280 });
+  doc.text(company.nif ? `NIF ${company.nif}` : "", left, 90, { width: 280 });
+  doc.text(company.iban ? `IBAN ${company.bank}: ${company.iban}` : "", left, 100, { width: 280 });
 
   doc.fillColor(copper).font("bold").fontSize(11).text(printable.title.toUpperCase(), 330, 32, { width: 225, align: "right" });
   doc.fillColor(ink).fontSize(16).text(printable.number, 330, 48, { width: 225, align: "right" });
@@ -134,7 +135,7 @@ function render(doc: PDFKit.PDFDocument, printable: PrintableDocument, workshop:
   doc.text("A oficina", 330, y + 6, { width: 190 });
 
   doc.font("body").fontSize(7.5).fillColor(muted).text(
-    "Hyperion Car Lab · documento interno de oficina. A faturação certificada não está ativa. Números de fatura em modo de simulação não substituem uma fatura emitida por software certificado pela AT.",
+    `${installationCompany.tradeName || "Oficina"} · documento interno de oficina. A faturação certificada não está ativa. Números de fatura em modo de simulação não substituem uma fatura emitida por software certificado pela AT.`,
     left,
     800,
     { width, align: "center" },

@@ -22,7 +22,7 @@ export default async function LoginPage({
             fornecedor como a Moloni — aqui corre em simulação.
           </p>
         </div>
-        <p className="text-sm text-white/80">Hyperion Car Lab · Vila Nova de Gaia</p>
+        <p className="text-sm text-white/80">Balcão da oficina</p>
       </section>
       <section className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">

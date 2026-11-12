@@ -28,6 +28,8 @@ import { clearSheetDraft, readSheetDraft, writeSheetDraft, type SheetDraft } fro
 import { markUnsaved, registerSaveFlush } from "@/lib/unsaved";
 import { ECOLUB_REF, defaultMargin, includesSearch, isOilArticle, lineAmounts, normalizeArticleDescription, normalizeNif, normalizePlate, parseDecimal, platesMatch, salePrice, sumTotals } from "@/lib/domain";
 import { ecolubDefaults } from "@/src/config";
+import { labourUnitPrice, readPriceSettings } from "@/lib/price-settings";
+import { readCompanySettings } from "@/lib/company-settings";
 import { readEcolubRate, subscribeEcolubRate } from "@/lib/ecolub-settings";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
@@ -277,10 +279,10 @@ export function DocumentEditor({
         kind: "mao_de_obra",
         description: "",
         quantity: "1",
-        unitPrice: num(labourRate),
+        unitPrice: readPriceSettings().hourly == null ? "" : num(readPriceSettings().hourly ?? 0),
         unitCost: "0",
         discount: "0",
-        vatRate: "23",
+        vatRate: num(readCompanySettings().defaultVat),
         note: "",
         articleId: null,
         ref: "",
@@ -691,10 +693,10 @@ export function DocumentEditor({
             kind: (draft.ref.trim() ? "peca" : "mao_de_obra") as "peca" | "mao_de_obra",
             description: draft.description,
             quantity: draft.quantity || "1",
-            unitPrice: draft.unitPrice || num(labourRate),
+            unitPrice: draft.unitPrice.trim() ? draft.unitPrice : draft.ref.trim() ? num(labourRate) : (labourUnitPrice(draft.description) == null ? "" : num(labourUnitPrice(draft.description) ?? 0)),
             unitCost: draft.unitCost || "0",
             discount: "0",
-            vatRate: draft.vatRate || "23",
+            vatRate: num(readCompanySettings().defaultVat),
             note: "",
             articleId: null,
             ref: draft.ref,

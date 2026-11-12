@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Hyperion Car Lab", template: "%s · Hyperion Car Lab" },
-  description: "Gestão da oficina Hyperion Car Lab: clientes, viaturas, ordens de reparação, stock e agenda.",
+  title: { default: "Oficina", template: "%s · Oficina" },
+  description: "Gestão de oficina: clientes, viaturas, ordens de reparação, stock e agenda.",
   robots: { index: false, follow: false },
 };
 
