@@ -149,9 +149,18 @@ export function workedMs(orderId: string, now = Date.now()) {
 }
 
 export function formatClock(ms: number) {
-  const minutes = Math.max(0, Math.floor(ms / 60000));
-  const hours = Math.floor(minutes / 60);
-  return `${String(hours).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+}
+
+export function personMs(userId: string, kind: "obra" | "interno", targetId: string, now = Date.now()) {
+  return readLogs()
+    .filter((item) => item.userId === userId && item.kind === kind && item.targetId === targetId)
+    .reduce((sum, item) => sum + ((item.endedAt ? new Date(item.endedAt).getTime() : now) - new Date(item.startedAt).getTime()), 0);
 }
 
 export function punch(userId: string) {

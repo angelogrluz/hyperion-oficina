@@ -16,11 +16,11 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Clock, Wrench } from "lucide-react";
-import { PinDialog } from "@/components/pin-dialog";
 import { companyReady, readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
-import { can, currentUser, pinMatches, readCurrentUserId, readUsers, subscribeAccess, writeCurrentUserId } from "@/lib/user-settings";
+import { can, readCurrentUserId, subscribeAccess } from "@/lib/user-settings";
+import { recordPath } from "@/lib/nav-history";
 import { logout } from "@/app/actions/auth";
 import { Logo } from "@/components/logo";
 import { SheetSidebarProvider } from "@/components/sheet-sidebar";
@@ -122,7 +122,6 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
           </div>
         )}
       </div>
-      <CurrentUserSelect />
       <div className="border-t border-white/10 text-[16px]">
         <div className="bg-[#3a4146] px-2 py-1.5 text-white">
           <p className="text-[14px] uppercase">Por aprovar</p>
@@ -140,24 +139,6 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
         </div>
       </div>
     </>
-  );
-}
-
-function CurrentUserSelect() {
-  useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "u-angelo");
-  const users = readUsers().filter((user) => user.active);
-  const selected = currentUser();
-  const [pending, setPending] = useState("");
-  const [error, setError] = useState("");
-  return (
-    <div className="px-2 py-2">
-      <label className="grid gap-1 text-[14px] text-white/80">Utilizador atual
-        <select data-testid="utilizador-atual" value={selected?.id ?? ""} onChange={(event) => { if (event.target.value !== selected?.id) { setPending(event.target.value); setError(""); } }} className="h-10 rounded bg-white px-2 text-[16px] text-[#22272a]">
-          {users.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-        </select>
-      </label>
-      {pending ? <PinDialog title={users.find((user) => user.id === pending)?.name ?? "PIN"} error={error} onClose={() => setPending("")} onSubmit={(pin) => { if (!pinMatches(pending, pin)) { setError("PIN incorreto ou ainda não definido em Utilizadores."); return; } writeCurrentUserId(pending); setPending(""); }} /> : null}
-    </div>
   );
 }
 
@@ -193,6 +174,7 @@ export function Shell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  useEffect(() => { recordPath(pathname); }, [pathname]);
   const [open, setOpen] = useState(false);
   const [stockOpen, setStockOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -210,10 +192,8 @@ export function Shell({
         <SidebarBody pathname={pathname} totals={totals} extra={sidebar} />
       </aside>
       <div className="lg:pl-[var(--rail)]">
-        {header ? (
-          <header className="no-print sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">{header}</header>
-        ) : (
-        <header className="no-print sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-[#eaeaf2] bg-white px-2">
+        <header className="no-print sticky top-0 z-40 border-b border-[#eaeaf2] bg-white">
+        <div className="flex h-14 items-center gap-1 px-2">
           <button type="button" className="grid size-10 place-items-center rounded-lg text-[#0b8f9c] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
             <Menu />
           </button>
@@ -280,8 +260,9 @@ export function Shell({
               </div>
             ) : null}
           </div>
+        </div>
+        {header}
         </header>
-        )}
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetContent side="left" className="w-72 bg-[#22272a] p-0 text-white">
             <SheetTitle className="sr-only">Menu</SheetTitle>

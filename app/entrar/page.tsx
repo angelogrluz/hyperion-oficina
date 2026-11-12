@@ -32,12 +32,7 @@ export default async function LoginPage({
           <h2 className="text-2xl font-semibold tracking-tight">Iniciar sessão</h2>
           <p className="mt-1 text-sm text-muted-foreground">Acesso da gerência da oficina.</p>
           <div className="mt-6">
-            <LoginForm from={params.from} />
-          </div>
-          <div className="mt-6 rounded-xl bg-card px-4 py-3 text-sm ring-1 ring-foreground/10">
-            <p className="font-medium">Credenciais de demonstração</p>
-            <p className="mt-1 text-muted-foreground">admin@hyperioncarlab.pt</p>
-            <p className="text-muted-foreground">oficina</p>
+            <LoginForm />
           </div>
         </div>
       </section>

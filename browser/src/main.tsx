@@ -17,7 +17,7 @@ import { VehicleFields } from "@/components/vehicle-fields";
 import { DocumentEditor } from "@/components/document-editor";
 import { DocumentPaper } from "@/components/document-paper";
 import { WorkshopSettings } from "@/components/workshop-settings";
-import { OficinaMode, type OficinaOrder } from "@/components/oficina-mode";
+import { OficinaMode, TechnicianStatus, type OficinaOrder } from "@/components/oficina-mode";
 import { PontosPage } from "@/components/pontos-page";
 import { companyDisplayName } from "@/lib/company-settings";
 import { FolhaPrint } from "@/components/folha-print";
@@ -138,8 +138,9 @@ function Home() {
           </button>
         ))}
       </div>
-      <div className="mt-4">
-        {jobs.length === 0 ? <p className="text-sm text-[#8d939c]">Nenhuma obra neste estado.</p> : <JobBoard jobs={jobs} />}
+      <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div>{jobs.length === 0 ? <p className="text-sm text-[#8d939c]">Nenhuma obra neste estado.</p> : <JobBoard jobs={jobs} />}</div>
+        <TechnicianStatus orders={ordersForOficina(snap)} />
       </div>
     </div>
   );
@@ -500,7 +501,6 @@ function LoginPage() {
         <div className="w-full max-w-sm">
           <h2 className="mb-4 text-2xl font-semibold">Iniciar sessão</h2>
           <LoginForm />
-          <p className="mt-4 text-sm text-[#4d6d73]">admin@hyperioncarlab.pt · oficina</p>
         </div>
       </section>
     </main>
@@ -709,7 +709,7 @@ function AppRoutes() {
       <Route path="/artigos" element={<Frame><Articles /></Frame>} />
       <Route path="/compras" element={<Frame><Purchases /></Frame>} />
       <Route path="/movimentos" element={<Frame><Movements /></Frame>} />
-      <Route path="/modo-oficina" element={<Frame><OficinaScreen /></Frame>} />
+      <Route path="/modo-oficina" element={<OficinaScreen />} />
       <Route path="/tecnicos" element={<Frame><TecnicosScreen /></Frame>} />
       <Route path="/pontos" element={<Frame><PontosPage /></Frame>} />
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />

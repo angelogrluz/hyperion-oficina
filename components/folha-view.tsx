@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 import { can, readCurrentUserId, readUsers, subscribeAccess } from "@/lib/user-settings";
-import { assignTechnician, formatClock, subscribeOps, technicianOf, workedMs } from "@/lib/workshop-ops";
+import { assignTechnician, formatClock, readLogs, subscribeOps, technicianOf, workedMs } from "@/lib/workshop-ops";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { PackagePlus, Pencil, Plus } from "lucide-react";
@@ -218,7 +218,12 @@ export function FolhaView({
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [draft, setDraft] = useState({ description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "23" });
   useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "u-angelo");
-  useSyncExternalStore(subscribeOps, () => workedMs(documentId || ""), () => 0);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useSyncExternalStore(subscribeOps, readLogs, readLogs);
   const showCosts = can("precos.ver");
   const showContacts = can("clientes.contactos");
   const allowDelete = can("obras.apagar");
@@ -842,6 +847,16 @@ export function FolhaView({
         </div>
       </div>
       <aside className="sticky top-2 flex max-h-[calc(100dvh-8.5rem)] flex-col gap-2">
+        <div className="shrink-0 rounded border border-[#00a9fd] bg-white p-2 text-[16px] text-[#22272a]">
+          <label className="grid gap-1">
+            Técnico
+            <select data-testid="tecnico-obra" value={technicianOf(documentId || "")} disabled={locked || !documentId} onChange={(event) => { if (documentId) assignTechnician(documentId, event.target.value); }} className="h-10 rounded border border-[#d5ebed] bg-white px-2">
+              <option value="">Sem técnico</option>
+              {technicians.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
+            </select>
+          </label>
+          <p data-testid="tempo-trabalhado" className="mt-2 text-[22px] font-semibold">Tempo trabalhado: {formatClock(workedMs(documentId || "", clockNow))}</p>
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto rounded border border-[#eaeaf2] bg-white p-2 text-[16px] text-[#22272a]">
         <label className="block text-center">
           <span className="text-[14px] tracking-wide text-[#8d939c] uppercase">Matrícula</span>
@@ -872,14 +887,6 @@ export function FolhaView({
           <Spec label="Próxima IPO" value={nextInspection} onChange={onNextInspection} disabled={locked} />
           <Spec label="Próxima revisão" value={nextService} onChange={onNextService} disabled={locked} />
         </div>
-        <label className="mt-2 grid gap-1 text-[16px]">
-          Técnico
-          <select data-testid="tecnico-obra" value={technicianOf(documentId || "")} disabled={locked || !documentId} onChange={(event) => { if (documentId) assignTechnician(documentId, event.target.value); }} className="h-10 rounded border border-[#d5ebed] bg-white px-2">
-            <option value="">Sem técnico</option>
-            {technicians.map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-          </select>
-        </label>
-        <p data-testid="tempo-trabalhado" className="mt-2 text-[18px] font-semibold">Tempo trabalhado: {formatClock(workedMs(documentId || ""))}</p>
         <div className="mt-2 rounded border border-[#eaeaf2] bg-[#f7f8fa] p-1.5">
           <p className="text-[14px] font-semibold tracking-wide text-[#8d939c] uppercase">Histórico</p>
           <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>

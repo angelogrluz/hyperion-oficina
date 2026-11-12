@@ -43,9 +43,9 @@ export type WorkshopUser = {
 export type PermissionMatrix = Record<Exclude<RoleId, "admin">, Record<string, boolean>>;
 
 export const installationUsers: WorkshopUser[] = [
-  { id: "u-angelo", name: "Angelo Luz", login: "angelo", email: "", role: "admin", active: true, technician: true, clocksIn: false, pin: "" },
-  { id: "u-joao", name: "João", login: "joao", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" },
-  { id: "u-bernardo", name: "Bernardo", login: "bernardo", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" },
+  { id: "u-angelo", name: "Angelo Luz", login: "angelo", email: "", role: "admin", active: true, technician: true, clocksIn: false, pin: "1234" },
+  { id: "u-joao", name: "João", login: "joao", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "1111" },
+  { id: "u-bernardo", name: "Bernardo", login: "bernardo", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "2222" },
 ];
 
 function allTrue() {
