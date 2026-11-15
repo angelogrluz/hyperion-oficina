@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { toast } from "sonner";
-import { convertQuote, issueInvoice, issueQuote, saveOrder, saveQuote } from "@/app/actions/documents";
+import { convertQuote, issueInvoice, issueQuote, markOrderPaid, saveOrder, saveQuote } from "@/app/actions/documents";
 import { lookupPlate } from "@/app/actions/plates";
 import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
 import { ensureConsumidorFinal, saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
@@ -138,6 +138,7 @@ export function DocumentEditor({
   quoteNumber,
   quoteUrl,
   invoiceUrl,
+  paid = false,
   orderHref,
   userName = "Admin",
   printHref,
@@ -156,6 +157,7 @@ export function DocumentEditor({
   quoteNumber?: string | null;
   quoteUrl?: string | null;
   invoiceUrl?: string | null;
+  paid?: boolean;
   orderHref?: string | null;
   userName?: string;
   printHref?: string;
@@ -949,6 +951,15 @@ export function DocumentEditor({
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
           invoiceHref={documentId ? (invoiceUrl || `/ordens/${documentId}/fatura`) : undefined}
+          paid={paid}
+          onMarkPaid={() => {
+            if (!documentId) return;
+            void markOrderPaid(documentId).then((result) => {
+              if (!result.ok) { toast.error(result.error); return; }
+              toast.success("Pagamento registado.");
+              router.refresh();
+            });
+          }}
         />
         <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}>
           <DialogContent className="sm:max-w-lg">

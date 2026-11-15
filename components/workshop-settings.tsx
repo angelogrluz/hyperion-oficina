@@ -26,6 +26,8 @@ import {
   type WorkshopUser,
 } from "@/lib/user-settings";
 import { readServices, subscribeOps, writeServices, type InternalService } from "@/lib/workshop-ops";
+import { DOCUMENT_TYPES, billingReady, emptyBilling, readBillingSettings, readPlateLookup, subscribeIntegrations, writeBillingSettings, writePlateLookup, type BillingSettings } from "@/lib/billing-settings";
+import { readServiceTypes, subscribeServiceTypes, writeServiceTypes, type ServiceType } from "@/lib/booking-settings";
 import { purchaseTypes } from "@/src/config";
 
 const SECTIONS = [
@@ -36,6 +38,9 @@ const SECTIONS = [
   { id: "stock", title: "Stock e artigos", subtitle: "Tipologias que entram no inventário.", permit: "config.empresa" },
   { id: "utilizadores", title: "Utilizadores e permissões", subtitle: "Pessoas, funções e o que cada uma pode fazer.", permit: "config.utilizadores" },
   { id: "servicos", title: "Serviços internos", subtitle: "Tarefas de oficina que não vão para a folha do cliente.", permit: "config.empresa" },
+  { id: "faturacao", title: "Faturação", subtitle: "Ligação à Moloni, preparada para a fase cloud.", permit: "config.empresa" },
+  { id: "matricula", title: "Matrícula", subtitle: "Onde vais buscar a foto da viatura, mais tarde.", permit: "config.empresa" },
+  { id: "marcacoes", title: "Marcações", subtitle: "Duração de cada tipo de serviço na agenda.", permit: "config.empresa" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -46,6 +51,9 @@ export function WorkshopSettings() {
   const users = useSyncExternalStore(subscribeAccess, readUsers, () => installationUsers);
   const matrix = useSyncExternalStore(subscribeAccess, readMatrix, readMatrix);
   const services = useSyncExternalStore(subscribeOps, readServices, readServices);
+  const billing = useSyncExternalStore(subscribeIntegrations, readBillingSettings, () => emptyBilling);
+  const plateLookup = useSyncExternalStore(subscribeIntegrations, readPlateLookup, () => ({ apiUrl: "", apiKey: "" }));
+  const serviceTypes = useSyncExternalStore(subscribeServiceTypes, readServiceTypes, readServiceTypes);
   const [section, setSection] = useState<SectionId>("empresa");
   const [notice, setNotice] = useState("");
   const current = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0];
@@ -84,6 +92,9 @@ export function WorkshopSettings() {
         {section === "stock" ? <StockFields /> : null}
         {section === "utilizadores" ? <UserFields users={users} matrix={matrix} /> : null}
         {section === "servicos" ? <ServiceFields services={services} /> : null}
+        {section === "faturacao" ? <BillingFields billing={billing} onNotice={setNotice} /> : null}
+        {section === "matricula" ? <PlateFields lookup={plateLookup} onNotice={setNotice} /> : null}
+        {section === "marcacoes" ? <BookingFields types={serviceTypes} /> : null}
         <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[#d5ebed] px-3 text-[16px]" onClick={() => { writeCompanySettings(installationCompany); writePriceSettings(installationPrices); setNotice("Dados iniciais repostos"); }}>
           Repor dados iniciais da instalação
         </button>
@@ -316,4 +327,70 @@ function resizeLogo(file: File) {
     image.onerror = () => reject(new Error("Não foi possível ler a imagem."));
     image.src = url;
   });
+}
+
+function SecretInput({ label, testId, stored, onCommit }: { label: string; testId: string; stored: boolean; onCommit: (value: string) => void }) {
+  const [value, setValue] = useState("");
+  return (
+    <label className="grid gap-1 text-[16px]">{label}
+      <input data-testid={testId} type="password" autoComplete="new-password" value={value} placeholder={stored ? "Guardado — escreve só se quiseres mudar" : ""} onChange={(event) => setValue(event.target.value)} onBlur={() => { if (value.trim()) { onCommit(value.trim()); setValue(""); } }} className="h-10 rounded-lg border border-[#d5ebed] px-3" />
+    </label>
+  );
+}
+
+function BillingFields({ billing, onNotice }: { billing: BillingSettings; onNotice: (message: string) => void }) {
+  function save(patch: Partial<BillingSettings>) {
+    writeBillingSettings({ ...readBillingSettings(), ...patch });
+    onNotice("Guardado");
+  }
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <Field label="Client ID" testId="moloni-client-id" value={billing.clientId} onSave={(clientId) => save({ clientId })} />
+      <SecretInput label="Client Secret" testId="moloni-secret" stored={Boolean(billing.clientSecret)} onCommit={(clientSecret) => save({ clientSecret })} />
+      <Field label="Utilizador / e-mail" testId="moloni-user" value={billing.user} onSave={(user) => save({ user })} />
+      <SecretInput label="Palavra-passe" testId="moloni-password" stored={Boolean(billing.password)} onCommit={(password) => save({ password })} />
+      <Field label="Empresa" testId="moloni-empresa" value={billing.companyId} onSave={(companyId) => save({ companyId })} />
+      <Field label="Série de documentos" testId="moloni-serie" value={billing.series} onSave={(series) => save({ series })} />
+      <label className="grid gap-1 text-[16px]">Tipo de documento por defeito
+        <select data-testid="moloni-tipo" value={billing.documentType} onChange={(event) => save({ documentType: event.target.value as BillingSettings["documentType"] })} className="h-10 rounded-lg border px-2">
+          {DOCUMENT_TYPES.map((item) => <option key={item}>{item}</option>)}
+        </select>
+      </label>
+      <Field label="Método de pagamento por defeito" testId="moloni-pagamento" value={billing.paymentMethod} onSave={(paymentMethod) => save({ paymentMethod })} />
+      <button type="button" data-testid="moloni-testar" className="h-11 rounded-xl bg-[#22272a] px-4 text-[16px] font-semibold text-white sm:col-span-2" onClick={() => onNotice(billingReady(readBillingSettings()) ? "Os campos estão preenchidos. A ligação real à Moloni fica para a fase cloud — daqui não sai nenhum segredo." : "Ainda faltam campos. Preenche-os antes de testar.")}>Testar ligação</button>
+    </div>
+  );
+}
+
+function PlateFields({ lookup, onNotice }: { lookup: { apiUrl: string; apiKey: string }; onNotice: (message: string) => void }) {
+  return (
+    <div className="grid gap-3">
+      <p className="text-[16px] text-[#4d6d73]">Quando não houver foto da matrícula, a oficina mostra o carro neutro. A chamada à API fica para a fase cloud.</p>
+      <Field label="URL da API" testId="matricula-url" value={lookup.apiUrl} onSave={(apiUrl) => { writePlateLookup({ ...readPlateLookup(), apiUrl }); onNotice("Guardado"); }} />
+      <SecretInput label="Chave" testId="matricula-chave" stored={Boolean(lookup.apiKey)} onCommit={(apiKey) => { writePlateLookup({ ...readPlateLookup(), apiKey }); onNotice("Guardado"); }} />
+    </div>
+  );
+}
+
+function BookingFields({ types }: { types: ServiceType[] }) {
+  const [name, setName] = useState("");
+  const [minutes, setMinutes] = useState("60");
+  return (
+    <div className="grid gap-3">
+      {types.map((item) => (
+        <div key={item.id} data-testid="tipo-servico" className="grid items-center gap-2 rounded-xl bg-[#f7f8fa] p-3 sm:grid-cols-[1fr_120px_auto]">
+          <input value={item.name} onChange={(event) => writeServiceTypes(types.map((row) => row.id === item.id ? { ...row, name: event.target.value } : row))} className="h-10 rounded-lg border px-2" />
+          <label className="text-[14px]">Minutos
+            <input type="number" min={15} value={item.minutes} onChange={(event) => writeServiceTypes(types.map((row) => row.id === item.id ? { ...row, minutes: Number(event.target.value) || 15 } : row))} className="mt-1 h-10 w-full rounded-lg border px-2" />
+          </label>
+          <label className="flex items-center gap-2 text-[15px]"><input type="checkbox" checked={item.active} onChange={(event) => writeServiceTypes(types.map((row) => row.id === item.id ? { ...row, active: event.target.checked } : row))} /> Ativo</label>
+        </div>
+      ))}
+      <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); if (!name.trim()) return; writeServiceTypes([...types, { id: crypto.randomUUID(), name: name.trim(), minutes: Number(minutes) || 60, active: true }]); setName(""); }}>
+        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Novo tipo" className="h-10 flex-1 rounded-lg border px-2" />
+        <input value={minutes} onChange={(event) => setMinutes(event.target.value)} className="h-10 w-24 rounded-lg border px-2" />
+        <button className="h-10 rounded-lg bg-[#00a9fd] px-3 font-semibold text-white">Adicionar</button>
+      </form>
+    </div>
+  );
 }

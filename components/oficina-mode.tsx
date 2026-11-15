@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { Logo } from "@/components/logo";
 import { pinMatches, readUsers, subscribeAccess } from "@/lib/user-settings";
 import { readSession } from "@/browser/src/shims/auth";
@@ -8,8 +8,8 @@ import { recordPath } from "@/lib/nav-history";
 import {
   assignTechnician,
   formatClock,
-  moveAssignment,
   openLog,
+  reorderAssignments,
   personMs,
   punch,
   readAssignments,
@@ -29,6 +29,7 @@ export type OficinaOrder = {
   vehicle: string;
   clientName: string;
   tasks: string[];
+  serviceHours: number | null;
 };
 
 export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[]; admin?: boolean }) {
@@ -47,6 +48,8 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   const [now, setNow] = useState(Date.now());
   const [ponto, setPonto] = useState("");
   const [pontoMsg, setPontoMsg] = useState("");
+  const [internos, setInternos] = useState(false);
+  const [serviceId, setServiceId] = useState("");
   useEffect(() => { if (!admin) recordPath("/modo-oficina"); }, [admin]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -54,16 +57,19 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   }, []);
 
   useEffect(() => {
-    if (admin || chat || !techId) return;
+    if (admin || chat || (!techId && !internos)) return;
     const timer = window.setInterval(() => {
       if (Date.now() - touched > 15000) {
         setTechId("");
         setOrderId("");
         setChat(false);
+        setInternos(false);
+        setServiceId("");
+        setReorder(false);
       }
     }, 400);
     return () => window.clearInterval(timer);
-  }, [admin, chat, techId, touched]);
+  }, [admin, chat, techId, internos, touched]);
 
   const tech = users.find((user) => user.id === techId);
   const queue = readAssignments().filter((item) => item.userId === techId).sort((a, b) => a.position - b.position);
@@ -80,6 +86,27 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
     setTouched(Date.now());
   }
 
+  function startDrag(event: ReactPointerEvent, userId: string, orderId: string) {
+    event.preventDefault();
+    const ids = readAssignments().filter((item) => item.userId === userId).sort((a, b) => a.position - b.position).map((item) => item.orderId);
+    const move = (ev: PointerEvent) => {
+      const target = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest("[data-order-id]")?.getAttribute("data-order-id");
+      if (!target || target === orderId) return;
+      const from = ids.indexOf(orderId);
+      const to = ids.indexOf(target);
+      if (from < 0 || to < 0 || from === to) return;
+      ids.splice(from, 1);
+      ids.splice(to, 0, orderId);
+      reorderAssignments(userId, ids);
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+  }
+
   return (
     <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} className={admin ? "min-h-[70vh] bg-white p-3 text-[#22272a]" : "min-h-screen bg-white p-4 text-[#22272a]"} onPointerDown={touch}>
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -88,16 +115,33 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
       </div>
       {!tech ? (
         <div className="grid gap-4 pb-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-wrap gap-2">
             {users.map((user) => (
-              <button key={user.id} type="button" data-testid="tecnico-nome" className="h-24 rounded-2xl bg-[#00a9fd] text-[28px] font-semibold text-white" onClick={() => identify(user.id)}>{user.name}</button>
+              <button key={user.id} type="button" data-testid="tecnico-nome" className="h-12 rounded-xl bg-[#00a9fd] px-4 text-[18px] font-semibold text-white" onClick={() => identify(user.id)}>{user.name}</button>
             ))}
           </div>
           {admin ? null : (
-            <button type="button" data-testid="picar-ponto" className="h-28 w-full rounded-2xl bg-[#22272a] text-[36px] font-semibold text-white shadow-lg" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>
-              Picar o ponto
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" data-testid="picar-ponto" className="h-16 min-w-64 flex-1 rounded-2xl bg-[#22272a] text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
+              <button type="button" data-testid="servicos-internos" className="h-16 min-w-64 flex-1 rounded-2xl border-2 border-[#22272a] text-[24px] font-semibold" onClick={() => { setInternos(true); setServiceId(""); }}>Serviços internos</button>
+            </div>
           )}
+          {admin ? null : <TechnicianTable users={users} orders={orders} services={services} now={now} />}
+          {internos ? (
+            <div data-testid="lista-internos" className="grid gap-2 rounded-2xl border border-[#d5ebed] bg-white p-3">
+              <div className="flex items-center justify-between"><h2 className="text-[20px] font-semibold">Serviços internos</h2><button type="button" onClick={() => setInternos(false)}>Fechar</button></div>
+              {!serviceId ? services.map((service) => (
+                <button key={service.id} type="button" data-testid="interno-opcao" className="h-14 rounded-xl bg-[#f4f6f8] text-left text-[20px] font-semibold" onClick={() => setServiceId(service.id)}>{service.name}</button>
+              )) : (
+                <div className="grid gap-2">
+                  <p className="text-[16px]">Quem começa {services.find((service) => service.id === serviceId)?.name}?</p>
+                  {users.map((user) => (
+                    <button key={user.id} type="button" className="h-12 rounded-xl bg-[#00a9fd] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setInternos(false); setServiceId(""); }}>{user.name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : order ? (
         <div className="grid gap-3">
@@ -127,7 +171,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
         <div className="grid gap-4">
           <div className="flex items-center justify-between">
             <h2 className="text-[22px] font-semibold">Obras de {tech.name}</h2>
-            {admin ? <button type="button" data-testid="reordenar" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => setReorder((value) => !value)}>{reorder ? "Concluir" : "✎ Ordenar"}</button> : null}
+            <button type="button" data-testid="reordenar" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => setReorder((value) => !value)}>{reorder ? "Concluir" : "✎ Ordenar"}</button>
           </div>
           <div className="grid gap-2">
             {queue.map((item) => {
@@ -135,17 +179,12 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
               if (!card) return null;
               const active = running?.kind === "obra" && running.targetId === card.id;
               return (
-                <div key={card.id} data-testid="obra-tecnico" className="flex items-center gap-2">
-                  <button type="button" className={`h-20 flex-1 rounded-2xl px-4 text-left text-[22px] font-semibold ${active ? "bg-[#1f9d55] text-white" : "bg-[#e7f7f8]"}`} onClick={() => setOrderId(card.id)}>
+                <div key={card.id} data-testid="obra-tecnico" data-order-id={card.id} className="flex items-center gap-2">
+                  {reorder ? <span data-testid="drag-handle" aria-label="Arrastar obra" className="grid h-20 w-10 cursor-grab place-items-center rounded-xl bg-[#e1e2e5] text-[22px] select-none active:cursor-grabbing" onPointerDown={(event) => startDrag(event, tech.id, card.id)}>≡</span> : null}
+                  <button type="button" className={`h-20 flex-1 rounded-2xl px-4 text-left text-[22px] font-semibold ${active ? "bg-[#1f9d55] text-white" : "bg-[#e7f7f8]"}`} onClick={() => { if (!reorder) setOrderId(card.id); }}>
                     {card.number} · {card.plate}
                     <span className="mt-1 block text-[16px] font-normal">{card.vehicle}</span>
                   </button>
-                  {admin && reorder ? (
-                    <span className="grid gap-1">
-                      <button type="button" aria-label="Subir obra" className="h-9 rounded border px-2" onClick={() => moveAssignment(tech.id, card.id, -1)}>↑</button>
-                      <button type="button" aria-label="Descer obra" className="h-9 rounded border px-2" onClick={() => moveAssignment(tech.id, card.id, 1)}>↓</button>
-                    </span>
-                  ) : null}
                 </div>
               );
             })}
@@ -195,6 +234,50 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
           </div>
         </form>
       ) : null}
+    </div>
+  );
+}
+
+function paceClass(elapsed: number, hours: number | null) {
+  if (hours == null || hours <= 0) return "";
+  const estimate = hours * 3_600_000;
+  if (elapsed >= estimate) return "text-[#d64545]";
+  if (elapsed >= estimate * 0.9) return "text-[#b8860b]";
+  return "text-[#1f9d55]";
+}
+
+function TechnicianTable({ users, orders, services, now }: { users: Array<{ id: string; name: string }>; orders: OficinaOrder[]; services: Array<{ id: string; name: string }>; now: number }) {
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-[#d5ebed] bg-white">
+      <table data-testid="oficina-tabela" className="w-full min-w-[760px] text-left text-[16px]">
+        <thead>
+          <tr className="text-[14px] text-[#4d6d73]">
+            <th className="px-3 py-2 font-semibold">Nome</th>
+            <th className="px-3 py-2 font-semibold">Marca e modelo</th>
+            <th className="px-3 py-2 font-semibold">Nº obra</th>
+            <th className="px-3 py-2 font-semibold">Tempo decorrido</th>
+            <th className="px-3 py-2 font-semibold">Tempo estipulado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((user) => {
+            const open = openLog(user.id);
+            const order = open?.kind === "obra" ? orders.find((item) => item.id === open.targetId) : null;
+            const service = open?.kind === "interno" ? services.find((item) => item.id === open.targetId) : null;
+            const elapsed = open ? personMs(user.id, open.kind, open.targetId, now) : 0;
+            const hours = order?.serviceHours ?? null;
+            return (
+              <tr key={user.id} data-testid="linha-tecnico" className="border-t border-[#eaeaf2]">
+                <td className="px-3 py-3 font-semibold">{user.name}</td>
+                <td className="px-3 py-3">{order?.vehicle || service?.name || "Livre"}</td>
+                <td className="px-3 py-3">{order?.number ?? "—"}</td>
+                <td className={`px-3 py-3 font-semibold tabular-nums ${open?.kind === "obra" ? paceClass(elapsed, hours) : ""}`}>{open ? formatClock(elapsed) : "—"}</td>
+                <td className="px-3 py-3 tabular-nums">{hours ? formatClock(hours * 3_600_000) : "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

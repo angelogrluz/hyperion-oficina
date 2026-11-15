@@ -106,6 +106,8 @@ export function FolhaView({
   quoteHref,
   invoiceNumber,
   invoiceHref,
+  paid,
+  onMarkPaid,
   suppliers,
   onSaveClient,
   onCreateClient,
@@ -189,6 +191,8 @@ export function FolhaView({
   quoteHref?: string;
   invoiceNumber?: string | null;
   invoiceHref?: string;
+  paid?: boolean;
+  onMarkPaid?: () => void;
   suppliers: { id: string; name: string }[];
   onSaveClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
   onCreateClient: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -894,9 +898,12 @@ export function FolhaView({
         </div>
         <div className="no-print grid w-full shrink-0 gap-1.5 rounded border border-[#eaeaf2] bg-white p-2">
           {isNew ? (
-            <Button type="button" data-testid="gravar-obra" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
-              Criar obra
-            </Button>
+            <>
+              <Button type="button" data-testid="gravar-obra" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave()}>
+                Criar obra
+              </Button>
+              <p className="text-[14px] text-[#4d6d73]">O número só aparece quando gravares. Se saíres agora, não fica nenhuma obra vazia.</p>
+            </>
           ) : (
             <p data-testid="guardado" className="text-right text-[16px] text-[#8d939c]">
               {saveState === "error" ? "Não gravado" : saveState === "saved" ? "Guardado" : "A guardar…"}
@@ -931,6 +938,9 @@ export function FolhaView({
           </div>
           {allowClose ? <Button type="button" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button> : null}
           {canInvoice && allowInvoice ? <Button type="button" data-testid="faturar" className="h-10 bg-[#00a9fd] text-[17px] hover:bg-[#0096e0]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
+          {invoiceNumber ? <Link href={`/ordens/${documentId}/fatura?imprimir=1`} data-testid="imprimir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg bg-[#00a9fd] text-[17px] font-semibold text-white">Imprimir fatura</Link> : null}
+          {invoiceNumber && !paid ? <Button type="button" data-testid="registar-pagamento" className="h-10 bg-[#1f9d55] text-[17px] hover:bg-[#188a48]" disabled={pending} onClick={onMarkPaid}>Registar pagamento</Button> : null}
+          {paid ? <Link href={`/ordens/${documentId}/recibo?imprimir=1`} data-testid="imprimir-recibo" className="inline-flex h-10 items-center justify-center rounded-lg bg-[#22272a] text-[17px] font-semibold text-white">Imprimir recibo</Link> : null}
           {invoiceNumber && invoiceHref ? (
             <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[#00a9fd] bg-white text-[17px] font-medium text-[#00a9fd]">
               Abrir fatura

@@ -114,6 +114,14 @@ export function assignTechnician(orderId: string, userId: string) {
   writeAssignments([...rest, { orderId, userId, position }]);
 }
 
+export function reorderAssignments(userId: string, orderIds: string[]) {
+  const current = readAssignments();
+  const mine = new Map(current.filter((item) => item.userId === userId).map((item) => [item.orderId, item]));
+  const next = orderIds.filter((orderId) => mine.has(orderId)).map((orderId, position) => ({ ...mine.get(orderId)!, position }));
+  const others = current.filter((item) => item.userId !== userId);
+  writeAssignments([...others, ...next]);
+}
+
 export function moveAssignment(userId: string, orderId: string, direction: -1 | 1) {
   const items = readAssignments().filter((item) => item.userId === userId).sort((a, b) => a.position - b.position);
   const index = items.findIndex((item) => item.orderId === orderId);
@@ -167,6 +175,8 @@ export function punch(userId: string) {
   const rows = readPunches();
   const open = rows.find((item) => item.userId === userId && !item.outAt);
   const now = new Date().toISOString();
-  if (open) writePunches(rows.map((item) => (item.id === open.id ? { ...item, outAt: now } : item)));
-  else writePunches([...rows, { id: crypto.randomUUID(), userId, inAt: now, outAt: null }]);
+  if (open) {
+    writePunches(rows.map((item) => (item.id === open.id ? { ...item, outAt: now } : item)));
+    writeLogs(readLogs().map((item) => (item.userId === userId && !item.endedAt ? { ...item, endedAt: now } : item)));
+  } else writePunches([...rows, { id: crypto.randomUUID(), userId, inAt: now, outAt: null }]);
 }

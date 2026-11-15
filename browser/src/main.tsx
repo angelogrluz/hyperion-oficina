@@ -18,6 +18,9 @@ import { DocumentEditor } from "@/components/document-editor";
 import { DocumentPaper } from "@/components/document-paper";
 import { WorkshopSettings } from "@/components/workshop-settings";
 import { OficinaMode, TechnicianStatus, type OficinaOrder } from "@/components/oficina-mode";
+import { AgendaPage } from "@/components/agenda-page";
+import { ResultsPage } from "@/components/results-page";
+import { ClientAccount, invoiceTotal } from "@/components/client-account";
 import { PontosPage } from "@/components/pontos-page";
 import { companyDisplayName } from "@/lib/company-settings";
 import { FolhaPrint } from "@/components/folha-print";
@@ -251,6 +254,7 @@ function OrderScreen() {
       articles={catalog.articles}
       suppliers={catalog.suppliers}
       invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: order.invoiceProvider ?? "Simulação" } : null}
+      paid={Boolean(order.paidAt)}
       quoteNumber={order.quoteNumber ?? null}
       quoteUrl={order.quoteUrl ?? null}
       invoiceUrl={order.invoiceUrl ?? null}
@@ -507,15 +511,23 @@ function LoginPage() {
   );
 }
 
-function BillingView({ kind }: { kind: "orcamento" | "fatura" }) {
+function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   const { id } = useParams();
+  const params = useSearchParams();
   const snap = useSnap();
+  const imprimir = params.get("imprimir") === "1";
+  useEffect(() => {
+    if (!imprimir) return;
+    const timer = window.setTimeout(() => window.print(), 400);
+    return () => window.clearTimeout(timer);
+  }, [imprimir]);
   if (!snap || !id) return null;
   const order = snap.orders.find((item) => item.id === id);
   if (!order) return <p className="p-6">Documento não encontrado.</p>;
   const client = snap.clients.find((item) => item.id === order.clientId);
   const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
   if (!client || !vehicle) return <p className="p-6">Indique o cliente e a viatura antes de abrir o documento.</p>;
+  if (kind === "recibo" && !order.paidAt) return <p className="p-6">Este recibo só fica disponível depois do pagamento.</p>;
   const number = kind === "orcamento" ? order.quoteNumber : order.invoiceNumber;
   if (!number) return <p className="p-6">Este documento ainda não foi emitido.</p>;
   const lines = snap.lines
@@ -549,7 +561,7 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" }) {
     vehicle,
     lines,
   });
-  doc.title = kind === "orcamento" ? "Orçamento" : "Fatura";
+  doc.title = kind === "orcamento" ? "Orçamento" : kind === "recibo" ? "Recibo" : "Fatura";
   doc.kind = kind === "orcamento" ? "quote" : "order";
   doc.sheetNumber = order.number;
   doc.relatedNumber = kind === "fatura" ? order.quoteNumber || "—" : "—";
@@ -664,6 +676,55 @@ function SettingsPage() {
   return <WorkshopSettings />;
 }
 
+function AgendaScreen() {
+  const snap = useSnap();
+  if (!snap) return null;
+  return (
+    <AgendaPage
+      today={lisbonParts().iso}
+      appointments={snap.appointments}
+      clients={snap.clients.map((client) => ({ id: client.id, name: client.name }))}
+      vehicles={snap.vehicles.map((vehicle) => ({ id: vehicle.id, clientId: vehicle.clientId, plate: vehicle.plate, brand: vehicle.brand, model: vehicle.model }))}
+    />
+  );
+}
+
+function ResultsScreen() {
+  const snap = useSnap();
+  if (!snap) return null;
+  return (
+    <ResultsPage
+      orders={snap.orders.map((order) => ({
+        status: order.status,
+        invoiceNumber: order.invoiceNumber,
+        invoiceIssuedAt: order.invoiceIssuedAt,
+        dateOut: order.dateOut,
+        updatedAt: order.updatedAt,
+        lines: snap.lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: line.discountPercent, vatRate: line.vatRate })),
+      }))}
+      purchases={snap.purchases.map((purchase) => ({ id: purchase.id, date: purchase.date, voided: purchase.voided }))}
+      purchaseLines={snap.purchaseLines.map((line) => ({ purchaseId: line.purchaseId, quantity: line.quantity, cost: line.cost, vatRate: line.vatRate }))}
+    />
+  );
+}
+
+function ClientScreen() {
+  const { id } = useParams();
+  const snap = useSnap();
+  if (!snap || !id) return null;
+  const client = snap.clients.find((item) => item.id === id);
+  if (!client) return <p className="p-6">Cliente não encontrado.</p>;
+  const invoices = snap.orders.filter((order) => order.clientId === client.id && order.invoiceNumber).map((order) => ({
+    id: order.id,
+    number: order.invoiceNumber ?? "",
+    issuedAt: order.invoiceIssuedAt || order.dateOut || order.updatedAt,
+    total: invoiceTotal(snap.lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: line.discountPercent, vatRate: line.vatRate }))),
+    paid: Boolean(order.paidAt),
+    plate: snap.vehicles.find((vehicle) => vehicle.id === order.vehicleId)?.plate ?? "",
+  }));
+  return <ClientAccount client={{ id: client.id, name: client.name, nif: client.nif, phone: client.phone, email: client.email }} invoices={invoices} />;
+}
+
 function ordersForOficina(snap: NonNullable<ReturnType<typeof useSnap>>): OficinaOrder[] {
   return snap.orders.map((order) => {
     const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
@@ -675,6 +736,10 @@ function ordersForOficina(snap: NonNullable<ReturnType<typeof useSnap>>): Oficin
       vehicle: [vehicle?.brand, vehicle?.model].filter(Boolean).join(" "),
       clientName: client?.name ?? "",
       tasks: snap.lines.filter((line) => line.orderId === order.id && line.kind === "mao_de_obra").map((line) => line.description),
+      serviceHours: (() => {
+        const hours = snap.lines.filter((line) => line.orderId === order.id && line.kind === "mao_de_obra").reduce((sum, line) => sum + line.quantity, 0);
+        return hours > 0 ? hours : null;
+      })(),
     };
   });
 }
@@ -701,9 +766,11 @@ function AppRoutes() {
       <Route path="/ordens/:id/servicos" element={<SheetServices />} />
       <Route path="/ordens/:id/orcamento" element={<BillingView kind="orcamento" />} />
       <Route path="/ordens/:id/fatura" element={<BillingView kind="fatura" />} />
+      <Route path="/ordens/:id/recibo" element={<BillingView kind="recibo" />} />
       <Route path="/ordens/:id" element={<Frame><OrderScreen /></Frame>} />
       <Route path="/clientes" element={<Frame><Clients /></Frame>} />
       <Route path="/clientes/novo" element={<Frame><NewClient /></Frame>} />
+      <Route path="/clientes/:id" element={<Frame><ClientScreen /></Frame>} />
       <Route path="/viaturas" element={<Frame><Vehicles /></Frame>} />
       <Route path="/viaturas/nova" element={<Frame><NewVehicle /></Frame>} />
       <Route path="/artigos" element={<Frame><Articles /></Frame>} />
@@ -713,6 +780,8 @@ function AppRoutes() {
       <Route path="/tecnicos" element={<Frame><TecnicosScreen /></Frame>} />
       <Route path="/pontos" element={<Frame><PontosPage /></Frame>} />
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
+      <Route path="/agenda" element={<Frame><AgendaScreen /></Frame>} />
+      <Route path="/resultados" element={<Frame><ResultsScreen /></Frame>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

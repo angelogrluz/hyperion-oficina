@@ -33,7 +33,7 @@ export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
   const issued = dashDate(doc.primaryDate);
   const groups = taxGroups(doc);
   const quote = doc.kind === "quote";
-  const title = quote ? "Orçamento" : "Fatura";
+  const title = quote ? "Orçamento" : doc.title || "Fatura";
   const yourRef = doc.sheetNumber || "—";
   const linked = doc.relatedNumber || "—";
   const addressLines = [doc.client.address, [doc.client.postalCode, doc.client.city].filter(Boolean).join(" ")].filter(Boolean);
@@ -110,7 +110,7 @@ export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
       <p className="mt-4 text-[10px]">
         {quote
           ? `Este documento não serve de fatura e foi criado a ${issued}.`
-          : "Documento simulado. Não tem validade fiscal nem foi comunicado à Autoridade Tributária."}
+          : "Cópia interna, não certificada. A fatura oficial fica para a fase cloud, quando a Moloni estiver ligada."}
       </p>
 
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_220px] items-start gap-4">

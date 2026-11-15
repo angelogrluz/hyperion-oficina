@@ -128,6 +128,7 @@ export type Order = {
   invoiceSimulated: boolean;
   invoiceUrl?: string | null;
   paymentMethod?: string | null;
+  paidAt?: string | null;
   quoteNumber?: string | null;
   quoteUrl?: string | null;
   quoteId: string | null;
@@ -186,6 +187,7 @@ export type Appointment = {
   vehicleId: string | null;
   title: string;
   notes: string;
+  orderId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -1246,8 +1248,9 @@ export async function commitStockEntryRecord(input: StockEntryInput) {
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível dar entrada de stock." };
   }
-  if (!saved) return { ok: false as const, error: "Não foi possível dar entrada de stock." };
-  return { ok: true as const, ...saved };
+  const payload = saved as { link: StockLink; article: StockArticle } | null;
+  if (!payload) return { ok: false as const, error: "Não foi possível dar entrada de stock." };
+  return { ok: true as const, link: payload.link, article: payload.article };
 }
 
 export async function removeStockEntryRecord(purchaseLineId: string) {
@@ -1297,7 +1300,15 @@ export async function saveAppointmentRecord(input: {
         const vehicle = snap.vehicles.find((item) => item.id === input.vehicleId);
         if (!vehicle || vehicle.clientId !== input.clientId) throw new Error("A viatura não pertence ao cliente.");
       }
+      if (!Number.isFinite(input.duration) || input.duration < 15 || input.duration > 480) throw new Error("A duração tem de ficar entre 15 minutos e 8 horas.");
       const startsAt = zonedDateTime(input.date, input.time);
+      if (!fitsOpeningHours(startsAt, input.duration)) {
+        throw new Error("Esse horário fica fora da oficina: segunda a sexta, 9:00–13:00 e 14:30–18:00.");
+      }
+      const endsAt = new Date(startsAt.getTime() + input.duration * 60 * 1000);
+      if (snap.appointments.some((item) => startsAt < new Date(item.endsAt) && endsAt > new Date(item.startsAt))) {
+        throw new Error("Já há uma marcação nesse intervalo.");
+      }
       const created: Appointment = {
         id: uid(),
         startsAt: startsAt.toISOString(),
@@ -1316,6 +1327,73 @@ export async function saveAppointmentRecord(input: {
     return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível criar a marcação." };
   }
   return { ok: true as const, id: savedId };
+}
+
+function fitsOpeningHours(startsAt: Date, durationMin: number) {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Lisbon", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(startsAt);
+  const weekday = parts.find((part) => part.type === "weekday")?.value ?? "";
+  if (weekday === "Sat" || weekday === "Sun") return false;
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+  const start = hour * 60 + minute;
+  const end = start + durationMin;
+  return (start >= 9 * 60 && end <= 13 * 60) || (start >= 14 * 60 + 30 && end <= 18 * 60);
+}
+
+export async function convertAppointmentRecord(id: string) {
+  let orderId = "";
+  try {
+    await update((snap) => {
+      const item = snap.appointments.find((entry) => entry.id === id);
+      if (!item) throw new Error("Marcação não encontrada.");
+      if (item.orderId && snap.orders.some((order) => order.id === item.orderId)) throw new Error("Esta marcação já tem obra.");
+      if (!item.clientId || !item.vehicleId) throw new Error("Indica o cliente e a viatura antes de abrir a obra.");
+      const created: Order = {
+        id: uid(),
+        number: nextNumber(snap, "OR"),
+        clientId: item.clientId,
+        vehicleId: item.vehicleId,
+        dateIn: dateOnly(lisbonParts().iso).toISOString(),
+        dateOut: null,
+        km: snap.vehicles.find((vehicle) => vehicle.id === item.vehicleId)?.km ?? 0,
+        problem: item.title,
+        status: "aberta",
+        notes: item.notes,
+        approval: "aguarda",
+        approvalAt: null,
+        invoiceNumber: null,
+        invoiceProvider: null,
+        invoiceIssuedAt: null,
+        invoiceSimulated: false,
+        paymentMethod: null,
+        paidAt: null,
+        quoteId: null,
+        createdAt: stamp(),
+        updatedAt: stamp(),
+      };
+      snap.orders.push(created);
+      item.orderId = created.id;
+      item.updatedAt = stamp();
+      orderId = created.id;
+    });
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível abrir a obra." };
+  }
+  return { ok: true as const, id: orderId };
+}
+
+export async function markOrderPaidRecord(orderId: string) {
+  try {
+    await update((snap) => {
+      const order = snap.orders.find((item) => item.id === orderId);
+      if (!order || !order.invoiceNumber) throw new Error("Só podes registar o pagamento de uma obra faturada.");
+      order.paidAt = new Date().toISOString();
+      order.updatedAt = stamp();
+    });
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível registar o pagamento." };
+  }
+  return { ok: true as const };
 }
 
 export async function deleteAppointmentRecord(id: string) {

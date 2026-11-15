@@ -398,3 +398,12 @@ export async function issueInvoice(orderId: string, paymentMethod = "Transferên
   refresh();
   return { ok: true, documentNumber: issued.documentNumber, provider: issued.providerLabel, url: issued.url ?? `/ordens/${orderId}/fatura` };
 }
+
+export async function markOrderPaid(orderId: string): Promise<Result> {
+  await requireUser();
+  const order = await prisma.repairOrder.findUnique({ where: { id: orderId } });
+  if (!order?.invoiceNumber) return { ok: false, error: "Só podes registar o pagamento de uma obra faturada." };
+  await prisma.repairOrder.update({ where: { id: orderId }, data: { paidAt: new Date() } });
+  refresh();
+  return { ok: true };
+}
