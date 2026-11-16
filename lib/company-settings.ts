@@ -72,6 +72,7 @@ export function writeCompanySettings(next: CompanySettings) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(KEY, JSON.stringify(next));
   listeners.forEach((listener) => listener());
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
 }
 
 export function subscribeCompanySettings(listener: () => void) {

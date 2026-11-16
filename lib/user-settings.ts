@@ -136,6 +136,7 @@ export function writeUsers(users: WorkshopUser[]) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
   notify();
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
 }
 
 let matrixSnap = defaultMatrix();
@@ -160,6 +161,7 @@ export function writeMatrix(matrix: PermissionMatrix) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(MATRIX_KEY, JSON.stringify(matrix));
   notify();
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
 }
 
 export function readCurrentUserId() {

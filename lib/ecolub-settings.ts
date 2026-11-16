@@ -15,6 +15,7 @@ export function writeEcolubRate(rate: number) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(KEY, String(rate));
   for (const listener of listeners) listener();
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
 }
 
 export function subscribeEcolubRate(listener: () => void) {

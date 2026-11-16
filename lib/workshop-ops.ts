@@ -64,6 +64,7 @@ function write<T>(key: string, value: T) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(key, JSON.stringify(value));
   notify();
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
 }
 
 export function subscribeOps(listener: () => void) {

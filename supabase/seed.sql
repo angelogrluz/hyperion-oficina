@@ -1,0 +1,15 @@
+-- OficinaPlan does not seed a tenant.
+-- The first email sign-up creates the company and an owner membership
+-- (see handle_new_user in 0001_init.sql).
+--
+-- Document numbers are allocated per company by assign_document_number
+-- the first time an obra, orçamento or fatura is saved. Nothing is reserved
+-- when a form is only opened.
+--
+-- Optional: after you have signed up, you can point a workshop at an
+-- existing auth user by inserting a membership. Do not run that blindly.
+
+-- example (keep commented):
+-- insert into public.memberships (user_id, company_id, role)
+-- values ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', 'tecnico')
+-- on conflict do nothing;

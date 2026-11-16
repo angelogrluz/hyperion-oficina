@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Oficina", template: "%s · Oficina" },
+  title: { default: "OficinaPlan", template: "%s · OficinaPlan" },
   description: "Gestão de oficina: clientes, viaturas, ordens de reparação, stock e agenda.",
   robots: { index: false, follow: false },
 };

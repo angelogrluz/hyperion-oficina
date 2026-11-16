@@ -41,6 +41,7 @@ export function writeSymptoms(documentId: string, items: SymptomItem[]) {
   symptomRaw = raw;
   symptomCache = next;
   for (const listener of symptomListeners) listener();
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
 }
 
 export function moveSymptoms(from: string, to: string) {

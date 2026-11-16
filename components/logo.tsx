@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { companyDisplayName, companyLogoSrc, installationCompany, readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
 import { goBack } from "@/lib/nav-history";
 import { readSession } from "@/browser/src/shims/auth";
+import { readCloudUser } from "@/browser/src/cloud";
 
 export function Logo({ light = false, onBeforeBack }: { light?: boolean; onBeforeBack?: () => boolean }) {
   const company = useSyncExternalStore(subscribeCompanySettings, readCompanySettings, () => installationCompany);
   const src = companyLogoSrc(company, light);
   const name = companyDisplayName(company);
   const router = useRouter();
-  useEffect(() => { document.title = name; }, [name]);
+  useEffect(() => { document.title = name ? `OficinaPlan · ${name}` : "OficinaPlan"; }, [name]);
   return (
     <button
       type="button"
@@ -21,7 +22,7 @@ export function Logo({ light = false, onBeforeBack }: { light?: boolean; onBefor
       className="block w-full cursor-pointer text-left"
       onClick={() => {
         if (onBeforeBack?.()) return;
-        if (readSession()?.role === "mecanico") return;
+        if (readSession()?.role === "mecanico" || readCloudUser()?.role === "tecnico") return;
         const previous = goBack();
         if (previous) router.push(previous);
       }}

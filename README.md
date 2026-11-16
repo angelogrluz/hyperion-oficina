@@ -1,3 +1,7 @@
+# OficinaPlan
+
+O nome do produto é OficinaPlan. Os documentos da oficina continuam a usar os dados da empresa (nesta instalação, Hyperion) definidos em Configurações.
+
 # Hyperion Car Lab
 
 Gestão de uma oficina de reparação automóvel em Portugal: clientes, viaturas, ordens de reparação, orçamentos, stock, compras a fornecedores e agenda.
@@ -54,7 +58,20 @@ INVOICE_PROVIDER="mock-moloni"
 npm run build:pages
 ```
 
-Gera `browser/dist` com base `/hyperion-oficina/` e o zip `/opt/cursor/artifacts/hyperion-oficina.zip` (`index.html` na raiz e `.nojekyll`). Publique o conteúdo do zip em `https://angelogrluz.github.io/hyperion-oficina/`. Os dados ficam no IndexedDB deste browser. No menu do utilizador há **Repor dados de demonstração**. O mesmo login de demonstração funciona sem servidor. A versão Next.js com SQLite mantém-se com `npm run dev`.
+Gera `browser/dist` com base `/hyperion-oficina/` e o zip `/opt/cursor/artifacts/hyperion-oficina.zip` (`index.html` na raiz e `.nojekyll`). O site público é `https://angelogrluz.github.io/hyperion-oficina/`.
+
+Sem `VITE_SUPABASE_ANON_KEY`, a build continua e a aplicação fica no computador (IndexedDB + localStorage), com a mensagem «Servidor não configurado». O login da oficina (nome + PIN) mantém-se. Com a chave anon, o login passa a e-mail e palavra-passe do Supabase e os dados passam a viver no projeto `oficinaplan`.
+
+No GitHub, em Settings → Secrets and variables → Actions:
+
+- Secret `VITE_SUPABASE_ANON_KEY`: a chave anon do projeto (não uses a service role).
+- Variable opcional `VITE_SUPABASE_URL`: por omissão `https://jltzehisxmxywhxmdxmt.supabase.co`.
+
+O workflow `.github/workflows/pages.yml` publica `browser/dist` quando entra em `main`.
+
+Cópias de segurança: `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_URL` no ambiente de quem corre o cron, depois `node scripts/backup.mjs`. A service role não entra no site.
+
+No Supabase (Authentication → URL configuration): Site URL `https://angelogrluz.github.io/hyperion-oficina/` e a mesma origem nos redirect URLs. Para o primeiro arranque, podes desligar a confirmação de e-mail em Authentication → Providers → Email. O SQL está em `supabase/migrations/0001_init.sql` e o seed vazio em `supabase/seed.sql`. A primeira conta cria a empresa e a filiação de owner.
 
 ## Docker
 

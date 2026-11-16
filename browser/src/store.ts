@@ -26,6 +26,7 @@ import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
 import { mockMoloniAdapter } from "@/lib/invoice/mock-moloni";
+import { assignDocumentNumber, cloudActive, cloudConfigured, loadCompanyState, saveCompanyState } from "./cloud";
 
 export type Client = {
   id: string;
@@ -238,6 +239,7 @@ const uid = () => crypto.randomUUID();
 
 let database: IDBPDatabase | null = null;
 let chain: Promise<unknown> = Promise.resolve();
+let cloudMemory: Snapshot | null = null;
 const listeners = new Set<() => void>();
 
 export function subscribeSnapshot(listener: () => void) {
@@ -262,7 +264,57 @@ async function databaseHandle() {
   return database;
 }
 
+function workshopFromSettings(): Workshop {
+  let legalName = "Oficina";
+  let labourRate = 45;
+  try {
+    const company = JSON.parse(localStorage.getItem("hyperion-oficina-empresa") || "null") as { legalName?: string; tradeName?: string } | null;
+    const prices = JSON.parse(localStorage.getItem("hyperion-oficina-precos") || "null") as { hourly?: number } | null;
+    if (company?.legalName) legalName = company.legalName;
+    if (prices?.hourly != null && Number.isFinite(Number(prices.hourly))) labourRate = Number(prices.hourly);
+    return {
+      id: "cloud",
+      legalName,
+      tradeName: company?.tradeName || legalName,
+      nif: "",
+      address: "",
+      postalCode: "",
+      city: "",
+      phone: "",
+      email: "",
+      labourRate,
+    };
+  } catch {
+    return { id: "cloud", legalName, tradeName: legalName, nif: "", address: "", postalCode: "", city: "", phone: "", email: "", labourRate };
+  }
+}
+
+function emptyCloudSnapshot(): Snapshot {
+  return {
+    workshop: workshopFromSettings(),
+    clients: [],
+    vehicles: [],
+    articles: [],
+    suppliers: [],
+    orders: [],
+    quotes: [],
+    lines: [],
+    purchases: [],
+    purchaseLines: [],
+    appointments: [],
+    invoiceLogs: [],
+  };
+}
+
 export async function readSnapshot(): Promise<Snapshot> {
+  if (cloudConfigured() && !cloudActive()) return emptyCloudSnapshot();
+  if (cloudActive()) {
+    if (cloudMemory) return cloudMemory;
+    const loaded = await loadCompanyState();
+    if (!loaded) throw new Error("Sem sessão na nuvem.");
+    cloudMemory = { workshop: workshopFromSettings(), ...loaded };
+    return cloudMemory;
+  }
   const db = await databaseHandle();
   const existing = (await db.get("kv", "snapshot")) as Snapshot | undefined;
   if (existing) return existing;
@@ -271,7 +323,17 @@ export async function readSnapshot(): Promise<Snapshot> {
   return seeded;
 }
 
+export async function readDeviceSnapshot(): Promise<Snapshot | null> {
+  const db = await databaseHandle();
+  return ((await db.get("kv", "snapshot")) as Snapshot | undefined) ?? null;
+}
+
+export function forgetCloudMemory() {
+  cloudMemory = null;
+}
+
 export async function resetDemo() {
+  if (cloudActive()) throw new Error("Na nuvem não se repõem os dados de demonstração.");
   const db = await databaseHandle();
   const seeded = await buildDemo();
   await db.put("kv", seeded, "snapshot");
@@ -283,8 +345,29 @@ function update(mutate: (snap: Snapshot) => void | Promise<void>) {
   const run = chain.then(async () => {
     const snap = await readSnapshot();
     await mutate(snap);
-    const db = await databaseHandle();
-    await db.put("kv", snap, "snapshot");
+    if (cloudActive()) {
+      cloudMemory = snap;
+      await saveCompanyState({
+        clients: snap.clients,
+        vehicles: snap.vehicles,
+        articles: snap.articles,
+        suppliers: snap.suppliers,
+        orders: snap.orders,
+        quotes: snap.quotes,
+        lines: snap.lines,
+        purchases: snap.purchases,
+        purchaseLines: snap.purchaseLines,
+        appointments: snap.appointments,
+        invoiceLogs: snap.invoiceLogs.map((log) => ({
+          ...log,
+          requestJson: log.requestJson || "{}",
+          responseJson: log.responseJson || "{}",
+        })),
+      });
+    } else {
+      const db = await databaseHandle();
+      await db.put("kv", snap, "snapshot");
+    }
     notifySnapshot();
     return snap;
   });
@@ -309,6 +392,11 @@ function nextNumber(snap: Snapshot, kind: "OR" | "ORC") {
     return Number.isFinite(value) ? Math.max(highest, value) : highest;
   }, 0);
   return `${prefix}${String(max + 1).padStart(4, "0")}`;
+}
+
+async function serverNumber(series: "OR" | "ORC" | "ORCDOC" | "FT") {
+  if (!cloudActive()) return null;
+  return assignDocumentNumber(series);
 }
 
 function nextDocumentSequence(snap: Snapshot, year: number, prefix: "FT" | "ORC") {
@@ -600,6 +688,7 @@ export async function saveOrderRecord(id: string | null, input: {
   let savedId = "";
   const stock: Record<string, number> = {};
   try {
+    const reservedOrder = id ? null : await serverNumber("OR");
     await update((snap) => {
       const clientId = input.clientId || null;
       const vehicleId = input.vehicleId || null;
@@ -641,7 +730,7 @@ export async function saveOrderRecord(id: string | null, input: {
         const created: Order = {
           ...data,
           id: uid(),
-          number: nextNumber(snap, "OR"),
+          number: reservedOrder ?? nextNumber(snap, "OR"),
           invoiceNumber: null,
           invoiceProvider: null,
           invoiceIssuedAt: null,
@@ -717,6 +806,7 @@ export async function saveQuoteRecord(id: string | null, input: {
   if (input.problem.trim().length < 3) return { ok: false as const, error: "Descreva o trabalho a orçamentar." };
   let savedId = "";
   try {
+    const reservedQuote = id ? null : await serverNumber("ORC");
     await update((snap) => {
       const vehicle = snap.vehicles.find((item) => item.id === input.vehicleId && item.clientId === input.clientId);
       if (!vehicle) throw new Error("A viatura não pertence ao cliente.");
@@ -732,7 +822,7 @@ export async function saveQuoteRecord(id: string | null, input: {
         updatedAt: stamp(),
       };
       if (!id) {
-        const created: Quote = { ...data, id: uid(), number: nextNumber(snap, "ORC"), createdAt: stamp() };
+        const created: Quote = { ...data, id: uid(), number: reservedQuote ?? nextNumber(snap, "ORC"), createdAt: stamp() };
         snap.quotes.push(created);
         pushLines(snap, { quoteId: created.id }, input.lines);
         savedId = created.id;
@@ -866,10 +956,12 @@ export async function issueQuoteRecord(orderId: string) {
     };
   }
   const year = lisbonParts().year;
-  const sequence = nextDocumentSequence(snap, year, "ORC");
+  const serverQuote = await serverNumber("ORCDOC");
+  const sequence = serverQuote ? 1 : nextDocumentSequence(snap, year, "ORC");
   let issued;
   try {
     issued = await issueMoloniQuote(moloniPayload(bundle, sequence, year));
+    if (serverQuote && issued) issued = { ...issued, documentNumber: serverQuote };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou o orçamento." };
   }
@@ -898,10 +990,12 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
   if (bundle.order.status !== "concluida") return { ok: false as const, error: "Só é possível faturar uma ordem concluída." };
   if (bundle.lines.length === 0) return { ok: false as const, error: "A ordem não tem linhas para faturar." };
   const year = lisbonParts().year;
-  const sequence = nextDocumentSequence(snap, year, "FT");
+  const serverInvoice = await serverNumber("FT");
+  const sequence = serverInvoice ? 1 : nextDocumentSequence(snap, year, "FT");
   let issued;
   try {
     issued = await issueMoloniInvoice({ ...moloniPayload(bundle, sequence, year), paymentMethod });
+    if (serverInvoice && issued) issued = { ...issued, documentNumber: serverInvoice };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou a fatura." };
   }
@@ -1343,6 +1437,7 @@ function fitsOpeningHours(startsAt: Date, durationMin: number) {
 export async function convertAppointmentRecord(id: string) {
   let orderId = "";
   try {
+    const reservedOrder = await serverNumber("OR");
     await update((snap) => {
       const item = snap.appointments.find((entry) => entry.id === id);
       if (!item) throw new Error("Marcação não encontrada.");
@@ -1350,7 +1445,7 @@ export async function convertAppointmentRecord(id: string) {
       if (!item.clientId || !item.vehicleId) throw new Error("Indica o cliente e a viatura antes de abrir a obra.");
       const created: Order = {
         id: uid(),
-        number: nextNumber(snap, "OR"),
+        number: reservedOrder ?? nextNumber(snap, "OR"),
         clientId: item.clientId,
         vehicleId: item.vehicleId,
         dateIn: dateOnly(lisbonParts().iso).toISOString(),

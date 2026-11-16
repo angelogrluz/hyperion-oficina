@@ -58,6 +58,7 @@ export function readPriceSettings(): PriceSettings {
 export function writePriceSettings(next: PriceSettings) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(KEY, JSON.stringify(next));
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
   listeners.forEach((listener) => listener());
 }
 

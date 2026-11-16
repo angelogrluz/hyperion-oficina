@@ -34,6 +34,7 @@ export function readServiceTypes(): ServiceType[] {
 export function writeServiceTypes(items: ServiceType[]) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(KEY, JSON.stringify(items));
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
   rawCache = "\0";
   listeners.forEach((listener) => listener());
 }

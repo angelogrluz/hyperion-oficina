@@ -1,10 +1,12 @@
-import { StrictMode, useEffect, useState, type ReactNode } from "react";
+import { StrictMode, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Toaster } from "sonner";
 import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
+import { CloudLogin } from "@/components/cloud-login";
+import { ImportBanner } from "@/components/import-banner";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
@@ -33,6 +35,7 @@ import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval
 import { resolveLineIdentity } from "@/lib/line-ref";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
+import { bootCloud, cloudConfigured, readCloudUser, subscribeCloud } from "./cloud";
 import { saveClient, saveVehicle } from "./shims/records";
 import { clearWorkshopCache } from "@/lib/browser-cache";
 import { readSnapshot, resetDemo, subscribeSnapshot, type Snapshot } from "./store";
@@ -87,10 +90,11 @@ function Frame({ children }: { children: ReactNode }) {
     lines: snap.lines.filter((line) => line.orderId === order.id),
   })));
   return (
-    <Shell user={{ name: session.name, email: session.email }} totals={totals} footerExtra={<ResetButton />}>
+    <Shell user={{ name: session.name, email: session.email ?? "" }} totals={totals} footerExtra={cloudConfigured() ? null : <ResetButton />}>
+      <ImportBanner />
       {onSheet ? null : (
         <p className="mb-2 bg-[#e7f7f8] px-2 py-1 text-[17px] text-[#0b5f68]">
-          Versão de teste no browser. Os dados ficam neste computador.
+          {cloudConfigured() ? "OficinaPlan. Os dados da oficina estão na tua conta." : "Servidor não configurado. Os dados ficam neste computador."}
         </p>
       )}
       {children}
@@ -493,18 +497,23 @@ function Purchases() {
 }
 
 function LoginPage() {
-  if (readSession()) return <Navigate to="/" replace />;
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
+  if (cloudConfigured()) {
+    if (cloudUser?.role === "tecnico") return <Navigate to="/modo-oficina" replace />;
+    if (cloudUser) return <Navigate to="/" replace />;
+  } else if (readSession()) return <Navigate to="/" replace />;
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="hidden bg-[#0b8f9c] p-10 text-white lg:block">
         <Logo light />
-        <h1 className="mt-16 max-w-md text-4xl font-semibold">{companyDisplayName()}</h1>
-        <p className="mt-4 max-w-md text-white/90">Teste estático. Os dados ficam neste browser.</p>
+        <h1 className="mt-16 max-w-md text-4xl font-semibold">OficinaPlan</h1>
+        <p className="mt-4 max-w-md text-white/90">{cloudConfigured() ? "A oficina na nuvem. Os documentos impressos continuam com os dados da empresa." : "Servidor não configurado. Continuas neste computador, com o login da oficina."}</p>
       </section>
       <section className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <h2 className="mb-4 text-2xl font-semibold">Iniciar sessão</h2>
-          <LoginForm />
+          <h2 className="mb-1 text-2xl font-semibold">OficinaPlan</h2>
+          <p className="mb-4 text-[15px] text-[#4d6d73]">{companyDisplayName()}</p>
+          {cloudConfigured() ? <CloudLogin /> : <LoginForm />}
         </div>
       </section>
     </main>
@@ -745,9 +754,16 @@ function ordersForOficina(snap: NonNullable<ReturnType<typeof useSnap>>): Oficin
 }
 
 function OficinaScreen() {
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const snap = useSnap();
+  if (cloudConfigured() && !cloudUser) return <Navigate to="/entrar" replace />;
   if (!snap) return null;
-  return <OficinaMode orders={ordersForOficina(snap)} />;
+  return (
+    <>
+      <ImportBanner />
+      <OficinaMode orders={ordersForOficina(snap)} />
+    </>
+  );
 }
 
 function TecnicosScreen() {
@@ -789,12 +805,25 @@ function AppRoutes() {
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "");
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
+function Root() {
+  const configured = cloudConfigured();
+  const [ready, setReady] = useState(!configured);
+  useEffect(() => {
+    if (!configured) return;
+    void bootCloud().finally(() => setReady(true));
+  }, [configured]);
+  if (!ready) return <p className="p-8 text-[17px] text-[#4d6d73]">A ligar ao OficinaPlan…</p>;
+  return (
     <BrowserRouter basename={basename}>
       <AppUpdates />
       <AppRoutes />
       <Toaster position="top-right" />
     </BrowserRouter>
+  );
+}
+
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <Root />
   </StrictMode>,
 );

@@ -63,6 +63,7 @@ export function readBillingSettings(): BillingSettings {
 export function writeBillingSettings(next: BillingSettings) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(BILLING_KEY, JSON.stringify(next));
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
   billingRaw = "\0";
   listeners.forEach((listener) => listener());
 }
@@ -78,6 +79,7 @@ export function readPlateLookup(): PlateLookupSettings {
 export function writePlateLookup(next: PlateLookupSettings) {
   if (typeof localStorage === "undefined") return;
   localStorage.setItem(PLATE_KEY, JSON.stringify(next));
+  void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
   plateRaw = "\0";
   listeners.forEach((listener) => listener());
 }
