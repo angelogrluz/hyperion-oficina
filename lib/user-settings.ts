@@ -1,3 +1,4 @@
+import { readCloudUser } from "@/browser/src/cloud";
 import { cloudBlankMode } from "@/lib/cloud-session";
 
 const USERS_KEY = "hyperion-oficina-utilizadores";
@@ -6,7 +7,7 @@ const CURRENT_KEY = "hyperion-oficina-utilizador-atual";
 const listeners = new Set<() => void>();
 
 export const ROLES = [
-  { id: "admin", label: "Admin" },
+  { id: "admin", label: "Administrador" },
   { id: "gestor", label: "Gestor" },
   { id: "rececionista", label: "Rececionista" },
   { id: "mecanico", label: "Mecânico" },
@@ -184,12 +185,36 @@ export function writeCurrentUserId(id: string) {
   notify();
 }
 
+function companyOwnerSignedIn() {
+  const cloud = readCloudUser();
+  return cloud?.companyStatus === "active" && cloud.role === "owner";
+}
+
 export function currentUser() {
   const users = readUsers();
-  return users.find((user) => user.id === readCurrentUserId() && user.active) ?? users.find((user) => user.role === "admin" && user.active) ?? users[0];
+  return users.find((user) => user.id === readCurrentUserId() && user.active)
+    ?? users.find((user) => user.role === "admin" && user.active)
+    ?? users[0]
+    ?? (companyOwnerSignedIn() ? ownerPlaceholder() : undefined);
+}
+
+function ownerPlaceholder(): WorkshopUser {
+  const cloud = readCloudUser();
+  return {
+    id: cloud?.userId ?? "owner",
+    name: "Admin",
+    login: "admin",
+    email: cloud?.email ?? "",
+    role: "admin",
+    active: true,
+    technician: false,
+    clocksIn: false,
+    pin: "",
+  };
 }
 
 export function can(permission: string, user = currentUser()) {
+  if (companyOwnerSignedIn()) return true;
   if (!user?.active) return false;
   if (user.role === "admin") return true;
   return Boolean(readMatrix()[user.role]?.[permission]);

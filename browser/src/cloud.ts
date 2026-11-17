@@ -300,6 +300,30 @@ export function afterLocalWrite() {
   pushTimer = window.setTimeout(() => { void pushSettingsOnly(); }, 400);
 }
 
+export async function ensureOwnerStaff(user: CloudUser | null) {
+  if (!user || user.companyStatus !== "active" || user.role !== "owner") return;
+  const { readUsers, writeCurrentUserId, writeUsers } = await import("@/lib/user-settings");
+  const users = readUsers();
+  const email = user.email.trim().toLowerCase();
+  const existing = users.find((item) => item.id === user.userId || (email !== "" && item.email.trim().toLowerCase() === email));
+  if (existing) {
+    writeCurrentUserId(existing.id);
+    return;
+  }
+  writeUsers([...users, {
+    id: user.userId,
+    name: "Admin",
+    login: "admin",
+    email: user.email,
+    role: "admin",
+    active: true,
+    technician: false,
+    clocksIn: false,
+    pin: "",
+  }]);
+  writeCurrentUserId(user.userId);
+}
+
 async function ensureRemoteIdentity(user: CloudUser | null) {
   if (!user || user.companyStatus !== "active" || !user.companyId) return;
   const db = supabase();
@@ -363,6 +387,7 @@ export async function loadCompanyState() {
   const failed = [clients, vehicles, articles, suppliers, orders, quotes, lines, purchases, purchaseLines, appointments, invoiceLogs, settings].find((result) => result.error);
   if (failed?.error) throw new Error(failed.error.message);
   if (settings.data) applyRemoteSettings(settings.data as Row);
+  await ensureOwnerStaff(current);
   return {
     clients: ((clients.data ?? []) as Row[]).map((row) => ({
       id: String(row.id), name: String(row.name ?? ""), nif: String(row.nif ?? ""), phone: String(row.phone ?? ""), email: String(row.email ?? ""),
