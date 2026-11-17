@@ -58,7 +58,7 @@ INVOICE_PROVIDER="mock-moloni"
 npm run build:pages
 ```
 
-Gera `browser/dist` na raiz do domínio (`base: /`) e o zip `/opt/cursor/artifacts/hyperion-oficina.zip`. O site público é `https://app.oficinaplan.com/`. O endereço antigo `https://angelogrluz.github.io/hyperion-oficina/` passa a redirecionar para esse domínio.
+Gera `browser/dist` na raiz do domínio (`base: /`) e o zip `/opt/cursor/artifacts/hyperion-oficina.zip`. O site público é `https://oficinaplan.com/`. O endereço antigo `https://angelogrluz.github.io/hyperion-oficina/` passa a redirecionar para esse domínio.
 
 A chave pública `sb_publishable_…` está no código e pode ser substituída por `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` na build. Sem nenhuma chave, a aplicação continua neste computador.
 
@@ -71,7 +71,7 @@ O workflow `.github/workflows/pages.yml` publica `browser/dist` quando entra em 
 
 Cópias de segurança: `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_URL` no ambiente de quem corre o cron, depois `node scripts/backup.mjs`. A service role não entra no site.
 
-No Supabase (Authentication → URL configuration): Site URL `https://app.oficinaplan.com/` e redirect `https://app.oficinaplan.com/**`. O SQL está em `supabase/migrations/0001_init.sql`. `supabase/seed.sql` não tem comandos para executar. A primeira conta cria a empresa e a filiação de owner.
+No Supabase (Authentication → URL configuration): Site URL `https://oficinaplan.com/` e redirect `https://oficinaplan.com/**`. O SQL está em `supabase/migrations/0001_init.sql`. `supabase/seed.sql` não tem comandos para executar. A primeira conta cria a empresa e a filiação de owner.
 
 ## Docker
 

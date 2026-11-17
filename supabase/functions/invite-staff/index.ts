@@ -1,7 +1,7 @@
 // Invite a staff member into an existing workshop.
 // Deploy from the Supabase dashboard (Edge Functions → Deploy new function → name: invite-staff).
 // Paste this file as index.ts. The platform injects SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY.
-// Optional secret SITE_URL (default https://app.oficinaplan.com). Set it to https://oficinaplan.com after the apex domain is live.
+// Optional secret SITE_URL (default https://oficinaplan.com).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const ALLOWED = new Set(["admin", "gestor", "rececionista", "mecanico"]);
@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
     const url = Deno.env.get("SUPABASE_URL") ?? "";
     const anon = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
     const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const site = (Deno.env.get("SITE_URL") ?? "https://app.oficinaplan.com").replace(/\/$/, "");
+    const site = (Deno.env.get("SITE_URL") ?? "https://oficinaplan.com").replace(/\/$/, "");
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader) return json({ error: "Sessão em falta." }, 401);
     const caller = createClient(url, anon, { global: { headers: { Authorization: authHeader } } });
