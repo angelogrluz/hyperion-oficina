@@ -13,7 +13,9 @@ function basePath() {
 export function readSession(): Session | null {
   if (cloudConfigured()) {
     const user = readCloudUser();
-    if (!user || user.role === "tecnico") return null;
+    if (!user) return null;
+    const office = user.platformAdmin || (user.companyStatus === "active" && user.role && user.role !== "tecnico");
+    if (!office) return null;
     return { userId: user.userId, name: user.email, role: "admin", email: user.email };
   }
   const raw = localStorage.getItem(SESSION_KEY);

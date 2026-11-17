@@ -7,6 +7,8 @@ import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
 import { CloudLogin } from "@/components/cloud-login";
 import { ImportBanner } from "@/components/import-banner";
+import { AccountHold } from "@/components/account-hold";
+import { PlatformAdmin } from "@/components/platform-admin";
 import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
@@ -77,11 +79,20 @@ function ResetButton() {
   );
 }
 
+function holdFor(user: ReturnType<typeof readCloudUser>) {
+  if (!cloudConfigured() || !user || user.platformAdmin) return null;
+  if (user.companyStatus === "pending" || user.companyStatus === "suspended") return user.companyStatus;
+  return null;
+}
+
 function Frame({ children }: { children: ReactNode }) {
   const session = readSession();
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const snap = useSnap();
   const pathname = usePathname();
   const onSheet = /^\/ordens\/.+/.test(pathname);
+  const held = holdFor(cloudUser);
+  if (held) return <AccountHold status={held} />;
   if (!session) return <Navigate to="/entrar" replace />;
   if (!snap) return <p className="p-8 text-sm text-[#4d6d73]">A carregar a oficina…</p>;
   const totals = shellTotals(snap.orders.map((order) => ({
@@ -498,10 +509,12 @@ function Purchases() {
 
 function LoginPage() {
   const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
-  if (cloudConfigured()) {
-    if (cloudUser?.role === "tecnico") return <Navigate to="/modo-oficina" replace />;
-    if (cloudUser) return <Navigate to="/" replace />;
-  } else if (readSession()) return <Navigate to="/" replace />;
+  if (cloudConfigured() && cloudUser) {
+    const held = !cloudUser.platformAdmin && (cloudUser.companyStatus === "pending" || cloudUser.companyStatus === "suspended");
+    if (held && cloudUser.companyStatus) return <AccountHold status={cloudUser.companyStatus} />;
+    if (cloudUser.role === "tecnico" && cloudUser.companyStatus === "active") return <Navigate to="/modo-oficina" replace />;
+    if (cloudUser.platformAdmin || cloudUser.companyStatus === "active") return <Navigate to="/" replace />;
+  } else if (!cloudConfigured() && readSession()) return <Navigate to="/" replace />;
   return (
     <main className="grid min-h-screen lg:grid-cols-2">
       <section className="hidden bg-[#0b8f9c] p-10 text-white lg:block">
@@ -756,6 +769,8 @@ function ordersForOficina(snap: NonNullable<ReturnType<typeof useSnap>>): Oficin
 function OficinaScreen() {
   const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const snap = useSnap();
+  const held = holdFor(cloudUser);
+  if (held) return <AccountHold status={held} />;
   if (cloudConfigured() && !cloudUser) return <Navigate to="/entrar" replace />;
   if (!snap) return null;
   return (
@@ -798,6 +813,7 @@ function AppRoutes() {
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
       <Route path="/agenda" element={<Frame><AgendaScreen /></Frame>} />
       <Route path="/resultados" element={<Frame><ResultsScreen /></Frame>} />
+      <Route path="/administracao" element={<Frame><PlatformAdmin /></Frame>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

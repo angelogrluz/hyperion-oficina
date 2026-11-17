@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Settings,
+  Shield,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +21,7 @@ import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react
 import { Clock, Wrench } from "lucide-react";
 import { companyReady, readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
 import { can, readCurrentUserId, subscribeAccess } from "@/lib/user-settings";
+import { readCloudUser, subscribeCloud } from "@/browser/src/cloud";
 import { recordPath } from "@/lib/nav-history";
 import { logout } from "@/app/actions/auth";
 import { Logo } from "@/components/logo";
@@ -180,6 +182,7 @@ export function Shell({
   const [userOpen, setUserOpen] = useState(false);
   const [query, setQuery] = useState("");
   useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "u-angelo");
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const allow = (permission: string) => can(permission);
   const ready = useSyncExternalStore(subscribeCompanySettings, () => companyReady(readCompanySettings()), () => true);
   const stockLinks = STOCK_LINKS.filter((item) => item.href.startsWith("/movimentos") ? allow("movimentos") : item.href.startsWith("/artigos") ? allow("artigos.ver") : allow("compras"));
@@ -224,6 +227,7 @@ export function Shell({
           <ToolButton href="/agenda" label="Agenda"><CalendarDays className="size-4" /></ToolButton>
           {allow("relatorios") ? <ToolButton href="/resultados" label="Resultados da Empresa"><BarChart3 className="size-4" /></ToolButton> : null}
           {(allow("config.empresa") || allow("config.precos") || allow("config.utilizadores")) ? <ToolButton href="/definicoes" label="Parametrização"><Settings className="size-4" /></ToolButton> : null}
+          {cloudUser?.platformAdmin ? <ToolButton href="/administracao" label="Administração OficinaPlan"><Shield className="size-4" /></ToolButton> : null}
           <form
             className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 md:max-w-sm"
             onSubmit={(event) => {

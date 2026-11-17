@@ -7,7 +7,16 @@ export const SUPABASE_URL = env.VITE_SUPABASE_URL || "https://jltzehisxmxywhxmdx
 export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || "sb_publishable_sh6X9towv0X7joZPYNpZhw_X1NZ5Tko";
 
 export type CloudRole = "owner" | "admin" | "tecnico";
-export type CloudUser = { userId: string; email: string; role: CloudRole; companyId: string; companyName: string };
+export type CompanyStatus = "pending" | "active" | "suspended";
+export type CloudUser = {
+  userId: string;
+  email: string;
+  role: CloudRole | null;
+  companyId: string | null;
+  companyName: string;
+  companyStatus: CompanyStatus | null;
+  platformAdmin: boolean;
+};
 
 const listeners = new Set<() => void>();
 let client: SupabaseClient | null = null;
@@ -40,6 +49,20 @@ export function supabase(): SupabaseClient | null {
 async function loadMembership(session: Session) {
   const db = supabase();
   if (!db) return null;
+  const rpc = await db.rpc("my_account");
+  if (!rpc.error && Array.isArray(rpc.data)) {
+    const row = rpc.data[0] as { company_id: string | null; company_name: string | null; role: CloudRole | null; status: CompanyStatus | null; platform_admin: boolean } | undefined;
+    if (!row || (!row.company_id && !row.platform_admin)) return null;
+    return {
+      userId: session.user.id,
+      email: session.user.email ?? "",
+      role: row.role,
+      companyId: row.company_id,
+      companyName: row.company_name ?? "Oficina",
+      companyStatus: row.status,
+      platformAdmin: Boolean(row.platform_admin),
+    } satisfies CloudUser;
+  }
   const { data, error } = await db.from("memberships").select("role, company_id, companies(name)").eq("user_id", session.user.id).limit(1);
   if (error || !data?.length) return null;
   const row = data[0] as { role: CloudRole; company_id: string; companies: { name: string } | { name: string }[] | null };
@@ -50,6 +73,8 @@ async function loadMembership(session: Session) {
     role: row.role,
     companyId: row.company_id,
     companyName: company?.name ?? "Oficina",
+    companyStatus: "active",
+    platformAdmin: false,
   } satisfies CloudUser;
 }
 
