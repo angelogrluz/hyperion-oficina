@@ -977,7 +977,7 @@ export async function issueQuoteRecord(orderId: string) {
     issued = remote ?? await issueMoloniQuote(payload);
     if (issued.simulated && serverQuote) issued = { ...issued, documentNumber: serverQuote };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou o orçamento." };
+    return { ok: false as const, error: error instanceof Error ? error.message : "O programa de faturação recusou o orçamento." };
   }
   const url = issued.url ?? `/ordens/${orderId}/orcamento`;
   await update((current) => {
@@ -1024,7 +1024,7 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
     issued = remote ?? await issueMoloniInvoice({ ...payload, paymentMethod });
     if (issued.simulated && serverInvoice) issued = { ...issued, documentNumber: serverInvoice };
   } catch (error) {
-    return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou a fatura." };
+    return { ok: false as const, error: error instanceof Error ? error.message : "O programa de faturação recusou a fatura." };
   }
   const url = issued.url ?? `/ordens/${orderId}/fatura`;
   try {

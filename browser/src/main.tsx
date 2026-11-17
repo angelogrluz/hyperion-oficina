@@ -622,7 +622,7 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   doc.sheetNumber = order.number;
   doc.relatedNumber = kind === "fatura" ? order.quoteNumber || "—" : "—";
   doc.number = number;
-  doc.statusLabel = "Simulação Moloni";
+  doc.statusLabel = order.invoiceSimulated ? "Simulação (sem validade fiscal)" : order.invoiceProvider?.includes("rascunho") ? "Rascunho de teste" : "Fatura certificada";
   doc.paymentMethod = kind === "fatura" ? order.paymentMethod ?? null : null;
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
@@ -630,9 +630,9 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
         <a href={`${import.meta.env.BASE_URL}ordens/${order.id}`} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</a>
         <PrintButton />
       </div>
-      <p className="no-print mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-        Documento simulado pela Moloni. Não tem validade fiscal nem foi comunicado à Autoridade Tributária.
-      </p>
+      {order.invoiceSimulated ? <p className="no-print mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+        Simulação (sem validade fiscal). O documento não foi comunicado à Autoridade Tributária.
+      </p> : null}
       <DocumentPaper doc={doc} />
     </main>
   );

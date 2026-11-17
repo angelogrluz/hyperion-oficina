@@ -7,7 +7,7 @@ function wait(ms: number) {
 
 export const mockMoloniAdapter: InvoiceAdapter = {
   id: "mock-moloni",
-  label: "Moloni (simulação)",
+  label: "Simulação (sem validade fiscal)",
   simulated: true,
   async issue(draft: InvoiceDraft): Promise<InvoiceIssued> {
     if (process.env.NODE_ENV !== "test") {
@@ -34,7 +34,7 @@ export const mockMoloniAdapter: InvoiceAdapter = {
 
 export const moloniAdapter: InvoiceAdapter = {
   id: "moloni",
-  label: "Moloni",
+  label: "Programa de faturação",
   simulated: false,
   async issue(): Promise<InvoiceIssued> {
     const missing = ["MOLONI_CLIENT_ID", "MOLONI_CLIENT_SECRET", "MOLONI_USERNAME", "MOLONI_PASSWORD"].filter(
@@ -42,11 +42,11 @@ export const moloniAdapter: InvoiceAdapter = {
     );
     if (missing.length > 0) {
       throw new Error(
-        `Moloni não está configurado (${missing.join(", ")}). A oficina continua em modo de simulação.`,
+        `O programa de faturação não está configurado (${missing.join(", ")}). A oficina continua em simulação.`,
       );
     }
     throw new Error(
-      "O adaptador Moloni está preparado, mas ainda não emite documentos certificados. Use o modo de simulação.",
+      "O programa de faturação está preparado, mas ainda não emite documentos certificados. Usa a simulação.",
     );
   },
 };

@@ -23,12 +23,18 @@ export type MoloniStatus = {
   error?: string;
 };
 
+function generic(message: string) {
+  return message.replace(/Moloni/g, "o programa de faturação");
+}
+
 async function call(body: Record<string, unknown>): Promise<MoloniStatus> {
   const db = supabase();
   if (!db) return { connected: false, status: "desligado", error: "O servidor ainda não está configurado." };
   const { data, error } = await db.functions.invoke("moloni", { body });
-  if (error) return { connected: false, status: "desligado", error: "A função Moloni ainda não está publicada no servidor." };
-  return (data ?? { connected: false, status: "desligado" }) as MoloniStatus;
+  if (error) return { connected: false, status: "desligado", error: "A ligação ao programa de faturação ainda não está publicada no servidor." };
+  const payload = (data ?? { connected: false, status: "desligado" }) as MoloniStatus;
+  if (payload.error) payload.error = generic(payload.error);
+  return payload;
 }
 
 export function moloniStatus(companyId: string) {
@@ -84,8 +90,11 @@ export async function issueCloudDocument(input: {
       lines: input.lines,
     },
   });
-  if (error) throw new Error("Não foi possível falar com a Moloni.");
-  const payload = data as (MoloniIssued & { error?: string }) | null;
-  if (!payload || payload.error) throw new Error(payload?.error || "A Moloni recusou o documento.");
-  return payload;
+  if (error) throw new Error("Não foi possível falar com o programa de faturação.");
+  const payload = data as (MoloniIssued & { error?: string; testMode?: boolean }) | null;
+  if (!payload || payload.error) throw new Error(generic(payload?.error || "O programa de faturação recusou o documento."));
+  return {
+    ...payload,
+    providerLabel: payload.testMode ? "Rascunho de teste" : "Fatura certificada",
+  };
 }

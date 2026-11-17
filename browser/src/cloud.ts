@@ -1,6 +1,7 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import { blankCompany } from "@/lib/company-settings";
 import { CLOUD_OWNER_KEY, CLOUD_SESSION_FLAG, DEVICE_STASH_KEY } from "@/lib/cloud-session";
+import { billingLabel } from "@/lib/moloni/service";
 import type { StockLink } from "@/lib/stock-entry";
 
 const env = (import.meta.env ?? {}) as ImportMetaEnv & { VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string };
@@ -458,7 +459,7 @@ export async function loadCompanyState() {
       id: String(row.id), number: String(row.number ?? ""), clientId: (row.client_id as string | null) ?? null, vehicleId: (row.vehicle_id as string | null) ?? null,
       dateIn: String(row.date_in), dateOut: (row.date_out as string | null) ?? null, km: num(row.km), kmOut: row.km_out == null ? null : num(row.km_out),
       problem: String(row.problem ?? ""), status: String(row.status ?? "aberta"), approval: String(row.approval ?? "aguarda"), approvalAt: (row.approval_at as string | null) ?? null,
-      notes: String(row.notes ?? ""), invoiceNumber: (row.invoice_number as string | null) ?? null, invoiceProvider: (row.invoice_provider as string | null) ?? null,
+      notes: String(row.notes ?? ""), invoiceNumber: (row.invoice_number as string | null) ?? null, invoiceProvider: billingLabel((row.invoice_provider as string | null) ?? null) || null,
       invoiceIssuedAt: (row.invoice_issued_at as string | null) ?? null, invoiceSimulated: Boolean(row.invoice_simulated), invoiceUrl: (row.invoice_url as string | null) ?? null,
       paymentMethod: (row.payment_method as string | null) ?? null, paidAt: (row.paid_at as string | null) ?? null, quoteNumber: (row.quote_number as string | null) ?? null,
       quoteUrl: (row.quote_url as string | null) ?? null, quoteId: (row.quote_id as string | null) ?? null, createdAt: String(row.created_at), updatedAt: String(row.updated_at),
@@ -490,7 +491,7 @@ export async function loadCompanyState() {
       orderId: (row.order_id as string | null) ?? null, createdAt: String(row.created_at), updatedAt: String(row.updated_at),
     })),
     invoiceLogs: ((invoiceLogs.data ?? []) as Row[]).map((row) => ({
-      id: String(row.id), orderId: String(row.order_id ?? ""), providerId: String(row.provider_id ?? ""), providerLabel: String(row.provider_label ?? ""),
+      id: String(row.id), orderId: String(row.order_id ?? ""), providerId: String(row.provider_id ?? ""), providerLabel: billingLabel(String(row.provider_label ?? "")),
       simulated: Boolean(row.simulated), documentNumber: String(row.document_number ?? ""),
       requestJson: typeof row.request_json === "string" ? row.request_json : JSON.stringify(row.request_json ?? {}),
       responseJson: typeof row.response_json === "string" ? row.response_json : JSON.stringify(row.response_json ?? {}),

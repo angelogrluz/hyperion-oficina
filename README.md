@@ -6,7 +6,7 @@ O nome do produto é OficinaPlan. Os documentos da oficina continuam a usar os d
 
 Gestão de uma oficina de reparação automóvel em Portugal: clientes, viaturas, ordens de reparação, orçamentos, stock, compras a fornecedores e agenda.
 
-A interface está em português europeu. A faturação certificada **não está implementada** — a lei exige software certificado pela Autoridade Tributária. O botão **Faturar** envia a ordem concluída a um adaptador. Nesta versão o adaptador é uma simulação no lugar da Moloni e o número devolvido não tem validade fiscal.
+A interface está em português europeu. Sem um programa de faturação ligado, o botão **Faturar** emite uma simulação (sem validade fiscal). Com a ligação ativa, o documento sai como fatura certificada.
 
 ## Entrar na demonstração
 

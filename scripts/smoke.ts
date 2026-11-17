@@ -26,7 +26,7 @@ const checks: Array<[string, string | null, string]> = [
   ["/fornecedores", cookie, "LubriNorte"],
   ["/compras", cookie, "ECOLUB"],
   ["/agenda", cookie, "Agenda"],
-  ["/faturacao", cookie, "Moloni (simulação)"],
+  ["/faturacao", cookie, "Simulação (sem validade fiscal)"],
   [`/ordens/${order.id}/imprimir`, cookie, "Ordem de reparação"],
   [`/orcamentos/${quote.id}/imprimir`, cookie, "Orçamento"],
 ];

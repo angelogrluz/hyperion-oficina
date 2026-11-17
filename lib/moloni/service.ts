@@ -30,6 +30,15 @@ type IssueBase = {
   total: number;
 };
 
+export function billingLabel(value: string | null | undefined) {
+  if (!value) return value ?? "";
+  const text = value.toLowerCase();
+  if (text.includes("simula")) return "Simulação (sem validade fiscal)";
+  if (text.includes("rascunho") || text.includes("teste")) return "Rascunho de teste";
+  if (text.includes("moloni")) return "Fatura certificada";
+  return value;
+}
+
 export type MoloniIssued = {
   documentNumber: string;
   externalId: string;
@@ -51,7 +60,7 @@ function simulated(kind: "orcamento" | "fatura", input: IssueBase): MoloniIssued
     externalId: `sim_${kind}_${input.orderId}_${sequence(input.sequence)}`,
     url: null,
     providerId: "mock-moloni",
-    providerLabel: "Moloni (simulação)",
+    providerLabel: "Simulação (sem validade fiscal)",
     simulated: true,
   };
 }
@@ -70,9 +79,9 @@ async function callMoloni(kind: "orcamento" | "fatura", input: IssueBase & { pay
   if (!realMoloniConfigured()) return simulated(kind, input);
   const missing = missingCredentials();
   if (missing.length) {
-    throw new Error(`Moloni não está configurado (${missing.join(", ")}). A oficina continua em simulação.`);
+    throw new Error(`O programa de faturação não está configurado (${missing.join(", ")}). A oficina continua em simulação.`);
   }
-  throw new Error("A API Moloni ainda não está ligada. Use a simulação.");
+  throw new Error("O programa de faturação ainda não está ligado. A oficina continua em simulação.");
 }
 
 export async function issueMoloniQuote(input: IssueBase) {

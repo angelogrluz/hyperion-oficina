@@ -4,6 +4,7 @@ import { SimulationBanner } from "@/components/simulation-banner";
 import { prisma } from "@/lib/db";
 import { formatEUR, formatMediumDate } from "@/lib/format";
 import { getInvoiceAdapter } from "@/lib/invoice";
+import { billingLabel } from "@/lib/moloni/service";
 import type { InvoiceDraft } from "@/lib/invoice/types";
 
 export const metadata = { title: "Faturação" };
@@ -48,7 +49,7 @@ export default async function BillingPage() {
                 <div>
                   <p className="font-semibold">{log.documentNumber}</p>
                   <p className="text-sm text-muted-foreground">
-                    {log.providerLabel} · {formatMediumDate(log.createdAt)} · {log.order.client?.name ?? "Sem cliente"}
+                    {billingLabel(log.providerLabel)} · {formatMediumDate(log.createdAt)} · {log.order.client?.name ?? "Sem cliente"}
                   </p>
                 </div>
                 <div className="text-right">
@@ -57,7 +58,7 @@ export default async function BillingPage() {
                 </div>
               </div>
               {log.simulated ? (
-                <p className="mt-2 text-sm text-amber-800">Simulação — sem validade fiscal.</p>
+                <p className="mt-2 text-sm text-amber-800">Simulação (sem validade fiscal).</p>
               ) : null}
               <details className="mt-2 text-sm">
                 <summary className="cursor-pointer text-muted-foreground">Pedido enviado ao adaptador</summary>

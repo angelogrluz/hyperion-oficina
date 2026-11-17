@@ -18,8 +18,8 @@ export default async function LoginPage({
           <Plate value="AB-19-CK" />
           <h1 className="mt-6 max-w-md text-4xl font-semibold tracking-tight">O balcão da oficina, sem papelada solta.</h1>
           <p className="mt-4 max-w-md text-white/90">
-            Clientes, viaturas, ordens de reparação, orçamentos, stock e marcações. A faturação certificada fica para um
-            fornecedor como a Moloni — aqui corre em simulação.
+            Clientes, viaturas, ordens de reparação, orçamentos, stock e marcações. Sem programa de faturação ligado,
+            os documentos correm em simulação.
           </p>
         </div>
         <p className="text-sm text-white/80">Balcão da oficina</p>

@@ -302,7 +302,7 @@ export async function issueQuote(orderId: string): Promise<Result<{ documentNumb
     refresh();
     return { ok: true, documentNumber: issued.documentNumber, url };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "A Moloni recusou o orçamento." };
+    return { ok: false, error: error instanceof Error ? error.message : "O programa de faturação recusou o orçamento." };
   }
 }
 

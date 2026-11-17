@@ -110,7 +110,7 @@ export function DocumentPaper({ doc }: { doc: PrintableDocument }) {
       <p className="mt-4 text-[10px]">
         {quote
           ? `Este documento não serve de fatura e foi criado a ${issued}.`
-          : "Cópia interna, não certificada. A fatura oficial fica para a fase cloud, quando a Moloni estiver ligada."}
+          : "Cópia interna, não certificada. A fatura oficial fica para quando o programa de faturação estiver ligado."}
       </p>
 
       <div className="mt-3 grid grid-cols-[minmax(0,1fr)_220px] items-start gap-4">

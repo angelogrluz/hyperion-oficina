@@ -8,6 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 const empty = { connected: false, status: "desligado" as const };
+const PROGRAMS = [
+  { id: "moloni", label: "Moloni", available: true },
+  { id: "vendus", label: "Vendus", available: false },
+  { id: "billpt", label: "Bill.pt", available: false },
+  { id: "invoicexpress", label: "InvoiceXpress", available: false },
+  { id: "sage", label: "Sage Active", available: false },
+] as const;
 
 export function IntegrationsPanel() {
   const companyId = readCloudUser()?.companyId ?? "";
@@ -31,6 +38,7 @@ export function IntegrationsPanel() {
   const [issueAs, setIssueAs] = useState<"fatura" | "fatura_recibo">("fatura");
   const [testMode, setTestMode] = useState(true);
   const [payments, setPayments] = useState<Record<string, string>>({});
+  const [program, setProgram] = useState("");
 
   function apply(next: MoloniStatus) {
     setStatus(next);
@@ -49,6 +57,7 @@ export function IntegrationsPanel() {
     if (next.payments) setPayments(next.payments);
     if (next.developerId) setDeveloperId(next.developerId);
     if (next.username) setUsername(next.username);
+    if (next.connected) setProgram("moloni");
   }
 
   useEffect(() => {
@@ -72,13 +81,22 @@ export function IntegrationsPanel() {
       <article data-testid="integracao-moloni" className="grid gap-4 rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 className="text-[20px] font-semibold">Moloni</h2>
+            <h2 className="text-[20px] font-semibold">Programa de faturação</h2>
             <p className="text-[15px] text-[var(--muted-text)]">Faturas, faturas-recibo e orçamentos certificados. O segredo e a palavra-passe não ficam neste computador.</p>
           </div>
           <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${status.connected ? "bg-[#1f9d55] text-white" : "bg-[var(--line)] text-[var(--ink)]"}`}>{status.connected ? "Ligado" : "Desligado"}</span>
         </div>
         {notice ? <p className="text-[15px] text-[var(--glow-deep)]">{notice}</p> : null}
-        {!status.connected ? (
+        <label className="grid gap-1 text-[15px] font-medium">Programa
+          <select className="h-11 rounded-lg border border-[var(--line)] bg-white px-2" value={program} onChange={(event) => setProgram(event.target.value)}>
+            <option value="">Escolher…</option>
+            {PROGRAMS.map((item) => (
+              <option key={item.id} value={item.id} disabled={!item.available}>{item.available ? item.label : `${item.label} — Brevemente`}</option>
+            ))}
+          </select>
+        </label>
+        {program !== "" && program !== "moloni" ? <p className="text-[15px] text-[var(--muted-text)]">Este programa fica disponível em breve.</p> : null}
+        {program === "moloni" && !status.connected ? (
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => {
             event.preventDefault();
             setPending(true);
@@ -98,15 +116,15 @@ export function IntegrationsPanel() {
             <label className="grid gap-1 text-[15px] font-medium">Client Secret
               <Input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required className="h-11" autoComplete="new-password" />
             </label>
-            <label className="grid gap-1 text-[15px] font-medium">E-mail Moloni
+            <label className="grid gap-1 text-[15px] font-medium">E-mail
               <Input type="email" value={username} onChange={(event) => setUsername(event.target.value)} required className="h-11" autoComplete="off" />
             </label>
-            <label className="grid gap-1 text-[15px] font-medium">Palavra-passe Moloni
+            <label className="grid gap-1 text-[15px] font-medium">Palavra-passe
               <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required className="h-11" autoComplete="new-password" />
             </label>
             <Button type="submit" disabled={pending || !companyId} className="h-11 bg-[var(--ink)] hover:bg-[var(--graphite)] sm:col-span-2">{pending ? "A ligar…" : "Ligar"}</Button>
           </form>
-        ) : (
+        ) : program === "moloni" && status.connected ? (
           <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => {
             event.preventDefault();
             setPending(true);
@@ -127,7 +145,7 @@ export function IntegrationsPanel() {
               setNotice("Ligação guardada.");
             });
           }}>
-            <label className="grid gap-1 text-[15px] font-medium sm:col-span-2">Empresa Moloni
+            <label className="grid gap-1 text-[15px] font-medium sm:col-span-2">Empresa no programa
               <select className="h-11 rounded-lg border border-[var(--line)] bg-white px-2" value={company} onChange={(event) => {
                 const id = event.target.value;
                 setCompany(id);
@@ -174,7 +192,7 @@ export function IntegrationsPanel() {
               <Button type="button" variant="outline" className="h-11" onClick={() => { setPassword(""); void moloniDisconnect(companyId).then(() => { setStatus(empty); setCompanies([]); setNotice("Desligado."); }); }}>Desligar</Button>
             </div>
           </form>
-        )}
+        ) : null}
         {status.connected && status.needsPassword ? (
           <form className="grid gap-2" onSubmit={(event) => {
             event.preventDefault();
@@ -185,8 +203,8 @@ export function IntegrationsPanel() {
               else { apply(result); setNotice("Ligado outra vez."); }
             });
           }}>
-            <p className="text-[15px]">A palavra-passe da Moloni expirou. Escreve-a outra vez. Não fica guardada.</p>
-            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Palavra-passe Moloni" required />
+            <p className="text-[15px]">A palavra-passe do programa expirou. Escreve-a outra vez. Não fica guardada.</p>
+            <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Palavra-passe" required />
             <Button type="submit" className="h-11 w-fit bg-[var(--ink)]">Ligar outra vez</Button>
           </form>
         ) : null}

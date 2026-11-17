@@ -966,7 +966,7 @@ export function DocumentEditor({
             <DialogHeader>
               <DialogTitle>Faturar</DialogTitle>
               <DialogDescription>
-                A Moloni emite a fatura em simulação. Escolha o modo de pagamento. O documento não tem validade fiscal.
+                Sem programa de faturação ligado, a fatura fica em simulação. Escolhe o modo de pagamento. O documento não tem validade fiscal.
               </DialogDescription>
             </DialogHeader>
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -1323,7 +1323,7 @@ export function DocumentEditor({
           <DialogHeader>
             <DialogTitle>Emitir fatura simulada</DialogTitle>
             <DialogDescription>
-              O adaptador ativo é a Moloni em modo de simulação. O documento fica numerado, mas não tem validade fiscal
+              Sem programa de faturação ligado, o documento fica numerado em simulação e não tem validade fiscal
               nem é enviado à Autoridade Tributária.
             </DialogDescription>
           </DialogHeader>
