@@ -24,7 +24,7 @@ function versionJson(): Plugin {
 
 export default defineConfig({
   root: __dirname,
-  base: "/hyperion-oficina/",
+  base: "/",
   plugins: [react(), tailwindcss(), versionJson()],
   resolve: {
     alias: [

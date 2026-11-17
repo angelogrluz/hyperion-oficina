@@ -58,9 +58,9 @@ INVOICE_PROVIDER="mock-moloni"
 npm run build:pages
 ```
 
-Gera `browser/dist` com base `/hyperion-oficina/` e o zip `/opt/cursor/artifacts/hyperion-oficina.zip` (`index.html` na raiz e `.nojekyll`). O site público é `https://angelogrluz.github.io/hyperion-oficina/`.
+Gera `browser/dist` na raiz do domínio (`base: /`) e o zip `/opt/cursor/artifacts/hyperion-oficina.zip`. O site público é `https://app.oficinaplan.com/`. O endereço antigo `https://angelogrluz.github.io/hyperion-oficina/` passa a redirecionar para esse domínio.
 
-Sem `VITE_SUPABASE_ANON_KEY`, a build continua e a aplicação fica no computador (IndexedDB + localStorage), com a mensagem «Servidor não configurado». O login da oficina (nome + PIN) mantém-se. Com a chave anon, o login passa a e-mail e palavra-passe do Supabase e os dados passam a viver no projeto `oficinaplan`.
+A chave pública `sb_publishable_…` está no código e pode ser substituída por `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` na build. Sem nenhuma chave, a aplicação continua neste computador.
 
 No GitHub, em Settings → Secrets and variables → Actions:
 
@@ -71,7 +71,7 @@ O workflow `.github/workflows/pages.yml` publica `browser/dist` quando entra em 
 
 Cópias de segurança: `SUPABASE_SERVICE_ROLE_KEY` e `SUPABASE_URL` no ambiente de quem corre o cron, depois `node scripts/backup.mjs`. A service role não entra no site.
 
-No Supabase (Authentication → URL configuration): Site URL `https://angelogrluz.github.io/hyperion-oficina/` e a mesma origem nos redirect URLs. Para o primeiro arranque, podes desligar a confirmação de e-mail em Authentication → Providers → Email. O SQL está em `supabase/migrations/0001_init.sql` e o seed vazio em `supabase/seed.sql`. A primeira conta cria a empresa e a filiação de owner.
+No Supabase (Authentication → URL configuration): Site URL `https://app.oficinaplan.com/` e redirect `https://app.oficinaplan.com/**`. O SQL está em `supabase/migrations/0001_init.sql`. `supabase/seed.sql` não tem comandos para executar. A primeira conta cria a empresa e a filiação de owner.
 
 ## Docker
 

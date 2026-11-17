@@ -27,9 +27,8 @@ jobs:
       - name: Build GitHub Pages bundle
         run: npm run build:pages
         env:
-          # Committed default. Override in the repo variable VITE_SUPABASE_URL if the project URL changes.
+          # Committed defaults live in browser/src/cloud.ts. Set these only to override them.
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL != '' && vars.VITE_SUPABASE_URL || 'https://jltzehisxmxywhxmdxmt.supabase.co' }}
-          # Empty when the secret is missing. The app then keeps working on local data.
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:

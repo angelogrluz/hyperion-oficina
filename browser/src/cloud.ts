@@ -3,7 +3,8 @@ import type { StockLink } from "@/lib/stock-entry";
 
 const env = import.meta.env as ImportMetaEnv & { VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string };
 export const SUPABASE_URL = env.VITE_SUPABASE_URL || "https://jltzehisxmxywhxmdxmt.supabase.co";
-export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || "";
+// Public publishable key. Env still overrides when a non-empty value is set.
+export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || "sb_publishable_sh6X9towv0X7joZPYNpZhw_X1NZ5Tko";
 
 export type CloudRole = "owner" | "admin" | "tecnico";
 export type CloudUser = { userId: string; email: string; role: CloudRole; companyId: string; companyName: string };

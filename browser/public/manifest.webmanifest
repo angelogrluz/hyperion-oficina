@@ -1,7 +1,7 @@
 {
   "name": "OficinaPlan",
   "short_name": "OficinaPlan",
-  "start_url": "/hyperion-oficina/",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#00a9fd",
