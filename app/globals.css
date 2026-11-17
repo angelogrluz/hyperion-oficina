@@ -175,11 +175,93 @@
 @media print {
   body {
     background: white !important;
+    color: #1a232c !important;
   }
   .no-print,
   [data-sonner-toaster] {
     display: none !important;
   }
+  [data-theme="dark"] {
+    --canvas: #ffffff;
+    --paper: #ffffff;
+    --text: #1a232c;
+    --muted-text: #5c6770;
+    --line: #d5dbe1;
+    --mist: #e6ebf0;
+    --background: #ffffff;
+    --foreground: #1a232c;
+  }
+  [data-theme="dark"] body,
+  [data-theme="dark"] .bg-white,
+  [data-theme="dark"] .print-keep {
+    background: #fff !important;
+    color: #1a232c !important;
+  }
+}
+
+/* Dark mode matches the workshop screen in the login photo. Print stays light above. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #131b24;
+  --paper: #1c2630;
+  --mist: #24303a;
+  --text: #e8eef3;
+  --muted-text: #b7c3ce;
+  --line: #3a4654;
+  --warm-soft: #2c261c;
+  --background: #131b24;
+  --foreground: #e8eef3;
+  --card: #1c2630;
+  --card-foreground: #e8eef3;
+  --popover: #24303a;
+  --popover-foreground: #e8eef3;
+  --secondary: #24303a;
+  --secondary-foreground: #e8eef3;
+  --muted: #24303a;
+  --muted-foreground: #b7c3ce;
+  --accent: #24303a;
+  --accent-foreground: #e8eef3;
+  --border: #3a4654;
+  --input: #3a4654;
+}
+
+[data-theme="dark"] body {
+  background: #131b24;
+  color: #e8eef3;
+}
+
+[data-theme="dark"] .bg-white:not(.print-keep) {
+  background-color: #1c2630;
+}
+
+[data-theme="dark"] .text-\[var\(--ink\)\],
+[data-theme="dark"] .text-\[var\(--charcoal\)\],
+[data-theme="dark"] .text-\[var\(--text\)\] {
+  color: #e8eef3;
+}
+
+[data-theme="dark"] .text-\[var\(--glow\)\],
+[data-theme="dark"] .text-\[var\(--glow-deep\)\] {
+  color: #8ec4ef;
+}
+
+[data-theme="dark"] input:not(.print-keep input),
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: #24303a;
+  color: #e8eef3;
+  border-color: #3a4654;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: #8b97a3;
+}
+
+[data-theme="dark"] .print-keep,
+[data-theme="dark"] .print-keep .bg-white {
+  background-color: #fff !important;
+  color: #1a232c !important;
 }
 
 @page {

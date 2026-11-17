@@ -1,6 +1,8 @@
 "use client";
 
 import { ChevronDown, LogOut, Menu, Search } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { readTheme, subscribeTheme } from "@/lib/theme";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -130,11 +132,12 @@ export function Shell({
   const [query, setQuery] = useState("");
   useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "");
   const ready = useSyncExternalStore(subscribeCompanySettings, () => companyReady(readCompanySettings()), () => true);
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "light" as const);
 
   return (
     <SheetSidebarProvider>
       {(sidebar, header) => (
-        <div className="min-h-screen bg-[var(--canvas)] font-['Source_Sans_Pro',sans-serif] text-[17px] text-[var(--text)] lg:[--rail:260px]">
+        <div data-theme={theme} className="min-h-screen bg-[var(--canvas)] font-['Source_Sans_Pro',sans-serif] text-[17px] text-[var(--text)] lg:[--rail:260px]">
           <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-[var(--rail)] lg:block">
             <AppMenu pathname={pathname} totals={totals} extra={sidebar} />
           </aside>
@@ -156,6 +159,7 @@ export function Shell({
                     <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Pesquisar" aria-label="Pesquisar" className="h-9 border-[var(--line)] bg-[var(--paper)] pl-8 text-[17px]" />
                   </div>
                 </form>
+                <ThemeToggle />
                 <div className="relative">
                   <button type="button" className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-[var(--mist)]" onClick={() => setUserOpen((value) => !value)}>
                     <span className="grid size-8 place-items-center rounded-full bg-[var(--charcoal)] text-[16px] font-semibold text-white">{user.name.slice(0, 1)}</span>

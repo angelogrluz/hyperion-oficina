@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
 import { ProductBackButton } from "@/components/product-mark";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { readTheme, subscribeTheme } from "@/lib/theme";
 import { pinMatches, readUsers, subscribeAccess } from "@/lib/user-settings";
 import { readSession } from "@/browser/src/shims/auth";
 import { recordPath } from "@/lib/nav-history";
@@ -49,6 +51,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   const [ponto, setPonto] = useState("");
   const [pontoMsg, setPontoMsg] = useState("");
   const [internos, setInternos] = useState(false);
+  const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "light" as const);
   const [serviceId, setServiceId] = useState("");
   useEffect(() => { if (!admin) recordPath("/modo-oficina"); }, [admin]);
   useEffect(() => {
@@ -108,10 +111,13 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   }
 
   return (
-    <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} className={admin ? "min-h-[70vh] bg-white p-3 text-[var(--charcoal)]" : "min-h-screen bg-white p-4 text-[var(--charcoal)]"} onPointerDown={touch}>
+    <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} data-theme={admin ? undefined : theme} className={admin ? "min-h-[70vh] bg-white p-3 text-[var(--charcoal)]" : "min-h-screen bg-white p-4 text-[var(--charcoal)]"} onPointerDown={touch}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="w-52">{admin ? <h1 className="text-[28px] font-semibold">Técnicos</h1> : <ProductBackButton onBeforeBack={() => { if (orderId) { setOrderId(""); setChat(false); return true; } if (techId) { setTechId(""); setChat(false); return true; } return Boolean(readSession()?.role === "mecanico"); }} />}</div>
-        {tech ? <button type="button" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => { setTechId(""); setOrderId(""); setChat(false); }}>{tech.name}</button> : <h1 className="text-[28px] font-semibold">{admin ? "" : "Modo oficina"}</h1>}
+        <div className="flex items-center gap-2">
+          {admin ? null : <ThemeToggle />}
+          {tech ? <button type="button" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => { setTechId(""); setOrderId(""); setChat(false); }}>{tech.name}</button> : <h1 className="text-[28px] font-semibold">{admin ? "" : "Modo oficina"}</h1>}
+        </div>
       </div>
       {!tech ? (
         <div className="grid gap-4 pb-4">
