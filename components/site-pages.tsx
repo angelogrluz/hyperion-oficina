@@ -47,7 +47,7 @@ export function Landing({ signedInSlug }: { signedInSlug?: string | null }) {
             ["Orçamentos", "Preparados a partir da obra, prontos a enviar ao cliente."],
             ["Stock e fornecedores", "Compras, existências e o que está a acabar."],
             ["Clientes e viaturas", "Ficha, histórico e conta corrente no mesmo lugar."],
-            ["Faturação com a Moloni", "Preparada para faturação certificada. Enquanto não está ligada, os documentos saem em simulação."],
+            ["Faturação Certificada", "Faturas e recibos prontos para emissão certificada. Enquanto a ligação não está ativa, os documentos saem em simulação."],
             ["Resultados e IVA estimado", "Uma leitura do mês, sem folha de cálculo à parte."],
             ["Permissões por função", "Cada pessoa vê o que lhe compete. O responsável vê tudo."],
             ["Na nuvem, em qualquer ecrã", "Escritório, tablet da oficina ou o telemóvel. Os dados são os da tua conta."],
@@ -98,7 +98,7 @@ export function Landing({ signedInSlug }: { signedInSlug?: string | null }) {
               ["Serve para uma oficina pequena?", "Sim. A organização é a mesma, mesmo que sejas só tu."],
               ["E se a equipa for grande?", "Sim. Há permissões por função e o modo oficina no tablet para a equipa picar o ponto e os tempos."],
               ["Pago por cada utilizador?", "Não. Os utilizadores são ilimitados."],
-              ["A fatura é certificada?", "A ligação à Moloni está preparada. Enquanto não estiver ativa, a fatura sai em modo de simulação e não substitui um documento certificado."],
+              ["A fatura é certificada?", "A faturação certificada está preparada. Enquanto não estiver ativa, a fatura sai em modo de simulação e não substitui um documento certificado."],
               ["Onde ficam os dados?", "Na tua conta, na nuvem. Não se misturam com os de outra oficina."],
               ["Quanto custa?", "Ainda não publicamos preços. Pede o teu orçamento para geral@oficinaplan.com."],
             ].map(([q, a]) => (
