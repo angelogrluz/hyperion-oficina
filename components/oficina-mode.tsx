@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from "react";
-import { Logo } from "@/components/logo";
+import { ProductBackButton } from "@/components/product-mark";
 import { pinMatches, readUsers, subscribeAccess } from "@/lib/user-settings";
 import { readSession } from "@/browser/src/shims/auth";
 import { recordPath } from "@/lib/nav-history";
@@ -110,7 +110,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   return (
     <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} className={admin ? "min-h-[70vh] bg-white p-3 text-[#22272a]" : "min-h-screen bg-white p-4 text-[#22272a]"} onPointerDown={touch}>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <div className="w-40">{admin ? <h1 className="text-[28px] font-semibold">Técnicos</h1> : <Logo onBeforeBack={() => { if (orderId) { setOrderId(""); setChat(false); return true; } if (techId) { setTechId(""); setChat(false); return true; } return Boolean(readSession()?.role === "mecanico"); }} />}</div>
+        <div className="w-52">{admin ? <h1 className="text-[28px] font-semibold">Técnicos</h1> : <ProductBackButton onBeforeBack={() => { if (orderId) { setOrderId(""); setChat(false); return true; } if (techId) { setTechId(""); setChat(false); return true; } return Boolean(readSession()?.role === "mecanico"); }} />}</div>
         {tech ? <button type="button" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => { setTechId(""); setOrderId(""); setChat(false); }}>{tech.name}</button> : <h1 className="text-[28px] font-semibold">{admin ? "" : "Modo oficina"}</h1>}
       </div>
       {!tech ? (

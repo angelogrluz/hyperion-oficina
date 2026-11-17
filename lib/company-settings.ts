@@ -1,3 +1,5 @@
+import { cloudBlankMode } from "@/lib/cloud-session";
+
 const KEY = "hyperion-oficina-empresa";
 const listeners = new Set<() => void>();
 
@@ -23,6 +25,30 @@ export type CompanySettings = {
   logoDataUrl: string;
 };
 
+/** Empty workshop. The name is the only value copied from sign-up. */
+export function blankCompany(name = ""): CompanySettings {
+  return {
+    legalName: name,
+    tradeName: name,
+    nif: "",
+    address: "",
+    postalCode: "",
+    city: "",
+    country: "",
+    phone: "",
+    email: "",
+    site: "",
+    bank: "",
+    iban: "",
+    hours: "",
+    footer: "",
+    defaultVat: 23,
+    logoMode: "none",
+    logoDataUrl: "",
+  };
+}
+
+/** Offline demo only. A cloud account never merges onto this object. */
 export const installationCompany: CompanySettings = {
   legalName: "Hyperion Reparação Automóvel, Unipessoal, Lda",
   tradeName: "Hyperion Car Lab",
@@ -43,13 +69,18 @@ export const installationCompany: CompanySettings = {
   logoDataUrl: "",
 };
 
+function baseCompany() {
+  return cloudBlankMode() ? blankCompany() : installationCompany;
+}
+
 function merge(raw: Partial<CompanySettings> | null): CompanySettings {
+  const base = baseCompany();
   const vat = Number(raw?.defaultVat);
   return {
-    ...installationCompany,
+    ...base,
     ...raw,
-    defaultVat: Number.isFinite(vat) && vat >= 0 ? vat : installationCompany.defaultVat,
-    logoMode: raw?.logoMode ?? "default",
+    defaultVat: Number.isFinite(vat) && vat >= 0 ? vat : base.defaultVat,
+    logoMode: raw?.logoMode ?? base.logoMode,
     logoDataUrl: raw?.logoDataUrl ?? "",
   };
 }
@@ -58,11 +89,12 @@ let companyCache: { raw: string; value: CompanySettings } = { raw: "", value: in
 
 export function readCompanySettings(): CompanySettings {
   if (typeof localStorage === "undefined") return installationCompany;
-  const raw = localStorage.getItem(KEY) ?? "";
+  const stored = localStorage.getItem(KEY) ?? "";
+  const raw = `${cloudBlankMode() ? "c" : "l"}:${stored}`;
   if (companyCache.raw === raw) return companyCache.value;
-  let value = installationCompany;
-  if (raw) {
-    try { value = merge(JSON.parse(raw) as Partial<CompanySettings>); } catch { value = installationCompany; }
+  let value = baseCompany();
+  if (stored) {
+    try { value = merge(JSON.parse(stored) as Partial<CompanySettings>); } catch { value = baseCompany(); }
   }
   companyCache = { raw, value };
   return value;
@@ -104,5 +136,6 @@ export function bundledLogoSrc(light = false) {
 export function companyLogoSrc(settings: CompanySettings = readCompanySettings(), light = false) {
   if (settings.logoMode === "none") return "";
   if (settings.logoMode === "custom" && settings.logoDataUrl) return settings.logoDataUrl;
+  if (cloudBlankMode()) return "";
   return bundledLogoSrc(light);
 }

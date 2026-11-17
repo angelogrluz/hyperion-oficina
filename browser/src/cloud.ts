@@ -1,7 +1,9 @@
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
+import { blankCompany } from "@/lib/company-settings";
+import { CLOUD_OWNER_KEY, CLOUD_SESSION_FLAG, DEVICE_STASH_KEY } from "@/lib/cloud-session";
 import type { StockLink } from "@/lib/stock-entry";
 
-const env = import.meta.env as ImportMetaEnv & { VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string };
+const env = (import.meta.env ?? {}) as ImportMetaEnv & { VITE_SUPABASE_URL?: string; VITE_SUPABASE_ANON_KEY?: string };
 export const SUPABASE_URL = env.VITE_SUPABASE_URL || "https://jltzehisxmxywhxmdxmt.supabase.co";
 // Public publishable key. Env still overrides when a non-empty value is set.
 export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || "sb_publishable_sh6X9towv0X7joZPYNpZhw_X1NZ5Tko";
@@ -46,36 +48,104 @@ export function supabase(): SupabaseClient | null {
   return client;
 }
 
+type AccountRow = {
+  company_id: string | null;
+  company_name: string | null;
+  role: CloudRole | null;
+  status: string | null;
+  platform_admin: boolean;
+};
+
+function asAccount(data: unknown): AccountRow | null {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== "object") return null;
+  return row as AccountRow;
+}
+
+function knownStatus(value: string | null | undefined, companyId: string | null): CompanyStatus | null {
+  if (value === "active" || value === "suspended" || value === "pending") return value;
+  return companyId ? "pending" : null;
+}
+
+function closedUser(session: Session, row: AccountRow | null): CloudUser {
+  const companyId = row?.company_id ?? null;
+  const status = knownStatus(row?.status, companyId);
+  const user: CloudUser = {
+    userId: session.user.id,
+    email: session.user.email ?? "",
+    role: row?.role ?? null,
+    companyId,
+    companyName: row?.company_name?.trim() || "Oficina",
+    companyStatus: status ?? "pending",
+    platformAdmin: Boolean(row?.platform_admin),
+  };
+  prepareCloudWorkspace(user);
+  return user;
+}
+
+/** Move another company's local data aside. The open account then starts from its own blank settings. */
+export function prepareCloudWorkspace(user: CloudUser) {
+  if (typeof localStorage === "undefined") return;
+  const id = user.companyId || user.userId;
+  const name = user.companyName === "Oficina" ? "" : user.companyName;
+  localStorage.setItem(CLOUD_SESSION_FLAG, "1");
+  if (localStorage.getItem(CLOUD_OWNER_KEY) === id) {
+    try {
+      const stored = JSON.parse(localStorage.getItem("hyperion-oficina-empresa") || "null") as { legalName?: string; tradeName?: string } | null;
+      if (name && !stored?.legalName?.trim() && !stored?.tradeName?.trim()) {
+        localStorage.setItem("hyperion-oficina-empresa", JSON.stringify(blankCompany(name)));
+      }
+    } catch { /* the next read falls back to a blank company */ }
+    return;
+  }
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) keys.push(key);
+  }
+  const stash: Record<string, string> = {};
+  for (const key of keys) {
+    if (!key.startsWith("hyperion-oficina-")) continue;
+    const value = localStorage.getItem(key);
+    if (value != null) stash[key] = value;
+  }
+  if (Object.keys(stash).length && !localStorage.getItem(DEVICE_STASH_KEY)) {
+    localStorage.setItem(DEVICE_STASH_KEY, JSON.stringify(stash));
+  }
+  applyingRemote = true;
+  try {
+    for (const key of keys) {
+      if (key.startsWith("hyperion-oficina-")) localStorage.removeItem(key);
+    }
+    localStorage.removeItem("hcl_browser_session");
+    localStorage.setItem("hyperion-oficina-empresa", JSON.stringify(blankCompany(name)));
+    localStorage.setItem(CLOUD_OWNER_KEY, id);
+  } finally {
+    applyingRemote = false;
+  }
+}
+
+export function readDeviceStash(): Record<string, string> | null {
+  if (typeof localStorage === "undefined") return null;
+  const raw = localStorage.getItem(DEVICE_STASH_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadMembership(session: Session) {
   const db = supabase();
   if (!db) return null;
   const rpc = await db.rpc("my_account");
-  if (!rpc.error && Array.isArray(rpc.data)) {
-    const row = rpc.data[0] as { company_id: string | null; company_name: string | null; role: CloudRole | null; status: CompanyStatus | null; platform_admin: boolean } | undefined;
-    if (!row || (!row.company_id && !row.platform_admin)) return null;
-    return {
-      userId: session.user.id,
-      email: session.user.email ?? "",
-      role: row.role,
-      companyId: row.company_id,
-      companyName: row.company_name ?? "Oficina",
-      companyStatus: row.status,
-      platformAdmin: Boolean(row.platform_admin),
-    } satisfies CloudUser;
+  const row = rpc.error ? null : asAccount(rpc.data);
+  if (rpc.error || !row || (!row.company_id && !row.platform_admin)) {
+    return closedUser(session, row);
   }
-  const { data, error } = await db.from("memberships").select("role, company_id, companies(name)").eq("user_id", session.user.id).limit(1);
-  if (error || !data?.length) return null;
-  const row = data[0] as { role: CloudRole; company_id: string; companies: { name: string } | { name: string }[] | null };
-  const company = Array.isArray(row.companies) ? row.companies[0] : row.companies;
-  return {
-    userId: session.user.id,
-    email: session.user.email ?? "",
-    role: row.role,
-    companyId: row.company_id,
-    companyName: company?.name ?? "Oficina",
-    companyStatus: "active",
-    platformAdmin: false,
-  } satisfies CloudUser;
+  return closedUser(session, row);
 }
 
 let booted = false;
@@ -85,11 +155,13 @@ export async function bootCloud() {
   if (!db) return null;
   const { data } = await db.auth.getSession();
   current = data.session ? await loadMembership(data.session) : null;
+  await ensureRemoteIdentity(current);
   if (!booted) {
     booted = true;
     db.auth.onAuthStateChange((_event, session) => {
     void (async () => {
       current = session ? await loadMembership(session) : null;
+      await ensureRemoteIdentity(current);
       emit();
     })();
     });
@@ -104,24 +176,35 @@ export async function signIn(email: string, password: string) {
   const { data, error } = await db.auth.signInWithPassword({ email: email.trim(), password });
   if (error || !data.session) return { error: "E-mail ou palavra-passe incorretos." };
   current = await loadMembership(data.session);
+  await ensureRemoteIdentity(current);
   emit();
   if (!current) return { error: "A conta entrou, mas ainda não tem oficina. Tenta outra vez daqui a um momento." };
   return { user: current };
 }
 
-export async function signUp(email: string, password: string, companyName: string) {
+export async function signUp(email: string, password: string, companyName: string, ownerName = "") {
   const db = supabase();
   if (!db) return { error: "O servidor ainda não está configurado." };
   const { data, error } = await db.auth.signUp({
     email: email.trim(),
     password,
-    options: { data: { company_name: companyName.trim() || "A minha oficina" } },
+    options: { data: { company_name: companyName.trim() || "A minha oficina", full_name: ownerName.trim() } },
   });
   if (error) return { error: error.message };
   if (!data.session) return { error: "Conta criada. Confirma o e-mail se o projeto o exigir, e entra a seguir." };
   current = await loadMembership(data.session);
+  await ensureRemoteIdentity(current);
   emit();
   return { user: current };
+}
+
+export async function resetPassword(email: string) {
+  const db = supabase();
+  if (!db) return { error: "O servidor ainda não está configurado." };
+  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
+  const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}${base}entrar` });
+  if (error) return { error: "Não foi possível enviar o e-mail. Confirma o endereço." };
+  return { error: "" };
 }
 
 export async function signOut() {
@@ -207,7 +290,7 @@ export function applyRemoteSettings(row: Record<string, unknown> | null) {
 }
 
 export function cloudActive() {
-  return cloudConfigured() && current != null;
+  return cloudConfigured() && current?.companyStatus === "active" && Boolean(current.companyId);
 }
 
 let pushTimer = 0;
@@ -215,6 +298,24 @@ export function afterLocalWrite() {
   if (applyingRemote || !cloudActive()) return;
   window.clearTimeout(pushTimer);
   pushTimer = window.setTimeout(() => { void pushSettingsOnly(); }, 400);
+}
+
+async function ensureRemoteIdentity(user: CloudUser | null) {
+  if (!user || user.companyStatus !== "active" || !user.companyId) return;
+  const db = supabase();
+  if (!db) return;
+  const { data, error } = await db.from("company_settings").select("company").eq("company_id", user.companyId).maybeSingle();
+  if (error) return;
+  const company = (data?.company ?? null) as { legalName?: string; tradeName?: string } | null;
+  if (company?.legalName?.trim() || company?.tradeName?.trim()) return;
+  const name = user.companyName === "Oficina" ? "" : user.companyName;
+  applyingRemote = true;
+  try {
+    localStorage.setItem("hyperion-oficina-empresa", JSON.stringify(blankCompany(name)));
+  } finally {
+    applyingRemote = false;
+  }
+  await pushSettingsOnly();
 }
 
 async function pushSettingsOnly() {
@@ -228,7 +329,8 @@ async function pushSettingsOnly() {
 export async function saveCompanyState(payload: Record<string, unknown>) {
   const db = supabase();
   if (!db || !current) return;
-  const body = { ...payload, settings: collectSettings() };
+  const { settings, ...rest } = payload;
+  const body = { ...rest, settings: settings ?? collectSettings() };
   const { error } = await db.rpc("save_company_state", { payload: body as never });
   if (error) throw new Error(error.message);
 }
@@ -331,9 +433,12 @@ export async function loadCompanyState() {
 const IMPORTED = "oficinaplan-imported";
 
 export function importAlreadyDone() {
-  return localStorage.getItem(IMPORTED) === "1";
+  const id = current?.companyId;
+  if (!id) return false;
+  return localStorage.getItem(`${IMPORTED}:${id}`) === "1";
 }
 
 export function markImported() {
-  localStorage.setItem(IMPORTED, "1");
+  const id = current?.companyId;
+  if (id) localStorage.setItem(`${IMPORTED}:${id}`, "1");
 }

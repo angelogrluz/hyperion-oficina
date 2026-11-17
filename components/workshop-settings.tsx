@@ -2,7 +2,10 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { EcolubSettings } from "@/components/ecolub-settings";
+import { readCloudUser } from "@/browser/src/cloud";
+import { cloudBlankMode } from "@/lib/cloud-session";
 import {
+  blankCompany,
   companyDisplayName,
   companyLogoSrc,
   installationCompany,
@@ -11,7 +14,7 @@ import {
   writeCompanySettings,
   type CompanySettings,
 } from "@/lib/company-settings";
-import { installationPrices, readPriceSettings, subscribePriceSettings, writePriceSettings, type PriceSettings } from "@/lib/price-settings";
+import { blankPrices, installationPrices, readPriceSettings, subscribePriceSettings, writePriceSettings, type PriceSettings } from "@/lib/price-settings";
 import {
   PERMISSION_GROUPS,
   ROLES,
@@ -95,8 +98,19 @@ export function WorkshopSettings() {
         {section === "faturacao" ? <BillingFields billing={billing} onNotice={setNotice} /> : null}
         {section === "matricula" ? <PlateFields lookup={plateLookup} onNotice={setNotice} /> : null}
         {section === "marcacoes" ? <BookingFields types={serviceTypes} /> : null}
-        <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[#d5ebed] px-3 text-[16px]" onClick={() => { writeCompanySettings(installationCompany); writePriceSettings(installationPrices); setNotice("Dados iniciais repostos"); }}>
-          Repor dados iniciais da instalação
+        <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[#d5ebed] px-3 text-[16px]" onClick={() => {
+          if (cloudBlankMode()) {
+            const name = readCloudUser()?.companyName ?? "";
+            writeCompanySettings(blankCompany(name === "Oficina" ? "" : name));
+            writePriceSettings(blankPrices);
+            setNotice("Campos da empresa limpos. O nome da oficina mantém-se.");
+            return;
+          }
+          writeCompanySettings(installationCompany);
+          writePriceSettings(installationPrices);
+          setNotice("Dados iniciais repostos");
+        }}>
+          {cloudBlankMode() ? "Limpar dados da empresa" : "Repor dados iniciais da instalação"}
         </button>
       </section>
     </div>
@@ -139,7 +153,7 @@ function LogoFields({ company, onSave, onError }: { company: CompanySettings; on
       </label>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="h-10 rounded-lg border px-3 text-[16px]" onClick={() => onSave({ logoMode: "none", logoDataUrl: "" })}>Remover</button>
-        <button type="button" data-testid="empresa-logo-default" className="h-10 rounded-lg border border-[#00a9fd] px-3 text-[16px] text-[#00a9fd]" onClick={() => onSave({ logoMode: "default", logoDataUrl: "" })}>Repor logótipo inicial</button>
+        {cloudBlankMode() ? null : <button type="button" data-testid="empresa-logo-default" className="h-10 rounded-lg border border-[#00a9fd] px-3 text-[16px] text-[#00a9fd]" onClick={() => onSave({ logoMode: "default", logoDataUrl: "" })}>Repor logótipo inicial</button>}
       </div>
     </div>
   );
@@ -156,7 +170,7 @@ function PriceFields({ prices, onSave }: { prices: PriceSettings; onSave: (patch
         <Money label="Diagnóstico" testId="preco-diagnostico" value={prices.diagnostico} placeholder={base} onSave={(diagnostico) => onSave({ diagnostico })} />
         <Money label="Ar condicionado" testId="preco-ar" value={prices.arCondicionado} placeholder={base} onSave={(arCondicionado) => onSave({ arCondicionado })} />
         <Money label="Chapa e pintura" testId="preco-chapa" value={prices.chapa} placeholder={base} onSave={(chapa) => onSave({ chapa })} />
-        <Money label="Margem produtos (%)" testId="margem-produto" value={prices.productMargin} onSave={(productMargin) => onSave({ productMargin: productMargin ?? 40 })} />
+        <Money label="Margem produtos (%)" testId="margem-produto" value={prices.productMargin} onSave={(productMargin) => onSave({ productMargin: productMargin ?? (cloudBlankMode() ? 0 : 40) })} />
         <Money label="Margem óleo (%)" testId="margem-oleo" value={prices.oilMargin} onSave={(oilMargin) => onSave({ oilMargin: oilMargin ?? 30 })} />
       </div>
       <div className="rounded-xl bg-[#f7f8fa] p-3"><EcolubSettings /></div>

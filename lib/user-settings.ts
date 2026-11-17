@@ -1,3 +1,5 @@
+import { cloudBlankMode } from "@/lib/cloud-session";
+
 const USERS_KEY = "hyperion-oficina-utilizadores";
 const MATRIX_KEY = "hyperion-oficina-permissoes";
 const CURRENT_KEY = "hyperion-oficina-utilizador-atual";
@@ -86,28 +88,35 @@ function readJson<T>(key: string, fallback: T): T {
 let usersSnap = installationUsers;
 let usersRaw = "\0";
 
+const emptyUser: WorkshopUser = {
+  id: "", name: "", login: "", email: "", role: "mecanico", active: true, technician: false, clocksIn: false, pin: "",
+};
+
 export function readUsers(): WorkshopUser[] {
-  const raw = typeof localStorage === "undefined" ? "" : localStorage.getItem(USERS_KEY) ?? "";
+  const stored = typeof localStorage === "undefined" ? "" : localStorage.getItem(USERS_KEY) ?? "";
+  const cloud = cloudBlankMode();
+  const raw = `${cloud ? "c" : "l"}:${stored}`;
   if (raw === usersRaw) return usersSnap;
   usersRaw = raw;
-  if (!raw) {
-    usersSnap = installationUsers;
+  const demo = cloud ? [] : installationUsers;
+  if (!stored) {
+    usersSnap = demo;
     return usersSnap;
   }
   try {
-    const parsed = JSON.parse(raw) as WorkshopUser[];
+    const parsed = JSON.parse(stored) as WorkshopUser[];
     if (!parsed.length) {
-      usersSnap = installationUsers;
+      usersSnap = demo;
       return usersSnap;
     }
     const defaults = new Map(installationUsers.map((user) => [user.id, user.pin]));
     let persist = false;
     usersSnap = parsed.map((user) => {
-      const stored = typeof user.pin === "string" ? user.pin : "";
-      const pin = stored.trim() ? stored : (defaults.get(user.id) ?? "");
-      if (pin !== stored) persist = true;
+      const storedPin = typeof user.pin === "string" ? user.pin : "";
+      const pin = cloud ? storedPin : (storedPin.trim() ? storedPin : (defaults.get(user.id) ?? ""));
+      if (pin !== storedPin) persist = true;
       return {
-        ...installationUsers[0],
+        ...(cloud ? emptyUser : installationUsers[0]),
         ...user,
         role: ROLES.some((role) => role.id === user.role) ? user.role : "mecanico",
         pin,
@@ -116,18 +125,18 @@ export function readUsers(): WorkshopUser[] {
         active: user.active !== false,
       };
     });
-    if (persist && typeof localStorage !== "undefined") {
+    if (persist && !cloud && typeof localStorage !== "undefined") {
       const patched = parsed.map((user) => {
-        const stored = typeof user.pin === "string" ? user.pin : "";
-        const pin = stored.trim() ? stored : (defaults.get(user.id) ?? "");
-        return pin === stored ? user : { ...user, pin };
+        const storedPin = typeof user.pin === "string" ? user.pin : "";
+        const pin = storedPin.trim() ? storedPin : (defaults.get(user.id) ?? "");
+        return pin === storedPin ? user : { ...user, pin };
       });
       const nextRaw = JSON.stringify(patched);
       localStorage.setItem(USERS_KEY, nextRaw);
-      usersRaw = nextRaw;
+      usersRaw = `${cloud ? "c" : "l"}:${nextRaw}`;
     }
   } catch {
-    usersSnap = installationUsers;
+    usersSnap = demo;
   }
   return usersSnap;
 }

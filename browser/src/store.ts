@@ -266,7 +266,7 @@ async function databaseHandle() {
 
 function workshopFromSettings(): Workshop {
   let legalName = "Oficina";
-  let labourRate = 45;
+  let labourRate = 0;
   try {
     const company = JSON.parse(localStorage.getItem("hyperion-oficina-empresa") || "null") as { legalName?: string; tradeName?: string } | null;
     const prices = JSON.parse(localStorage.getItem("hyperion-oficina-precos") || "null") as { hourly?: number } | null;

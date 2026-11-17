@@ -1,6 +1,6 @@
 import { Plate } from "@/components/plate";
 import { LoginForm } from "@/components/login-form";
-import { Logo } from "@/components/logo";
+import { ProductMark } from "@/components/product-mark";
 
 export const metadata = { title: "Entrar" };
 
@@ -13,7 +13,7 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.1fr_0.9fr]">
       <section className="hidden flex-col justify-between bg-primary px-12 py-10 text-white lg:flex">
-        <Logo light />
+        <ProductMark light />
         <div>
           <Plate value="AB-19-CK" />
           <h1 className="mt-6 max-w-md text-4xl font-semibold tracking-tight">O balcão da oficina, sem papelada solta.</h1>
@@ -27,7 +27,7 @@ export default async function LoginPage({
       <section className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden">
-            <Logo />
+            <ProductMark />
           </div>
           <h2 className="text-2xl font-semibold tracking-tight">Iniciar sessão</h2>
           <p className="mt-1 text-sm text-muted-foreground">Acesso da gerência da oficina.</p>

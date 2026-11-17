@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cloudActive, importAlreadyDone, markImported, saveCompanyState } from "@/browser/src/cloud";
+import { cloudActive, importAlreadyDone, markImported, readDeviceStash, saveCompanyState } from "@/browser/src/cloud";
 import { forgetCloudMemory, readDeviceSnapshot } from "@/browser/src/store";
 
 export function ImportBanner() {
@@ -12,8 +12,8 @@ export function ImportBanner() {
   useEffect(() => {
     if (!cloudActive() || importAlreadyDone() || sessionStorage.getItem("oficinaplan-import-skip") === "1") return;
     void readDeviceSnapshot().then((snap) => {
-      const hasSettings = Boolean(localStorage.getItem("hyperion-oficina-empresa") || localStorage.getItem("hyperion-oficina-utilizadores"));
-      if (snap || hasSettings) setOpen(true);
+      const stash = readDeviceStash();
+      if (snap || stash) setOpen(true);
     });
   }, []);
 
@@ -30,6 +30,12 @@ export function ImportBanner() {
           onClick={() => {
             setPending(true);
             void readDeviceSnapshot().then(async (snap) => {
+              const stash = readDeviceStash();
+              const parse = (key: string) => {
+                const raw = stash?.[key];
+                if (!raw) return null;
+                try { return JSON.parse(raw) as unknown; } catch { return raw; }
+              };
               await saveCompanyState({
                 clients: snap?.clients ?? [],
                 vehicles: snap?.vehicles ?? [],
@@ -42,6 +48,21 @@ export function ImportBanner() {
                 purchaseLines: snap?.purchaseLines ?? [],
                 appointments: snap?.appointments ?? [],
                 invoiceLogs: snap?.invoiceLogs ?? [],
+                settings: stash ? {
+                  company: parse("hyperion-oficina-empresa") ?? {},
+                  prices: parse("hyperion-oficina-precos") ?? {},
+                  users: parse("hyperion-oficina-utilizadores") ?? [],
+                  permissions: parse("hyperion-oficina-permissoes") ?? {},
+                  billing: parse("hyperion-oficina-faturacao") ?? {},
+                  plateLookup: parse("hyperion-oficina-matricula") ?? {},
+                  serviceTypes: parse("hyperion-oficina-tipos-servico") ?? [],
+                  internalServices: parse("hyperion-oficina-servicos-internos") ?? [],
+                  ecolub: stash["hyperion-oficina-ecolub-rate"] ?? null,
+                  assignments: parse("hyperion-oficina-tecnicos") ?? [],
+                  workLogs: parse("hyperion-oficina-tempos") ?? [],
+                  punches: parse("hyperion-oficina-pontos") ?? [],
+                  symptoms: parse("hyperion-oficina-sintomas") ?? {},
+                } : undefined,
               });
               markImported();
               forgetCloudMemory();

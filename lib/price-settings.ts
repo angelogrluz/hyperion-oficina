@@ -1,3 +1,5 @@
+import { cloudBlankMode } from "@/lib/cloud-session";
+
 const KEY = "hyperion-oficina-precos";
 const listeners = new Set<() => void>();
 
@@ -12,6 +14,7 @@ export type PriceSettings = {
   quoteDays: number | null;
 };
 
+/** Offline demo prices. Cloud accounts do not inherit the 45 €/h or the 40% product margin. */
 export const installationPrices: PriceSettings = {
   hourly: 45,
   mecanica: null,
@@ -19,6 +22,18 @@ export const installationPrices: PriceSettings = {
   arCondicionado: null,
   chapa: null,
   productMargin: 40,
+  oilMargin: 30,
+  quoteDays: null,
+};
+
+/** Oil stays at 30% because that is the product rule for oil lines, not a workshop identity. */
+export const blankPrices: PriceSettings = {
+  hourly: null,
+  mecanica: null,
+  diagnostico: null,
+  arCondicionado: null,
+  chapa: null,
+  productMargin: 0,
   oilMargin: 30,
   quoteDays: null,
 };
@@ -33,23 +48,26 @@ let priceCache: { raw: string; value: PriceSettings } = { raw: "", value: instal
 
 export function readPriceSettings(): PriceSettings {
   if (typeof localStorage === "undefined") return installationPrices;
-  const raw = localStorage.getItem(KEY) ?? "";
+  const stored = localStorage.getItem(KEY) ?? "";
+  const cloud = cloudBlankMode();
+  const raw = `${cloud ? "c" : "l"}:${stored}`;
   if (priceCache.raw === raw) return priceCache.value;
-  let value = installationPrices;
-  if (raw) {
+  const fallback = cloud ? blankPrices : installationPrices;
+  let value = fallback;
+  if (stored) {
     try {
-      const parsed = JSON.parse(raw) as Partial<PriceSettings>;
+      const parsed = JSON.parse(stored) as Partial<PriceSettings>;
       value = {
-        hourly: num(parsed.hourly, installationPrices.hourly),
+        hourly: num(parsed.hourly, fallback.hourly),
         mecanica: num(parsed.mecanica, null),
         diagnostico: num(parsed.diagnostico, null),
         arCondicionado: num(parsed.arCondicionado, null),
         chapa: num(parsed.chapa, null),
-        productMargin: num(parsed.productMargin, 40) ?? 40,
+        productMargin: num(parsed.productMargin, fallback.productMargin) ?? fallback.productMargin,
         oilMargin: num(parsed.oilMargin, 30) ?? 30,
         quoteDays: num(parsed.quoteDays, null),
       };
-    } catch { value = installationPrices; }
+    } catch { value = fallback; }
   }
   priceCache = { raw, value };
   return value;

@@ -32,10 +32,20 @@ export function PlatformAdmin() {
     if (!db) return;
     const { data, error: rpcError } = await db.rpc("admin_list_companies");
     if (rpcError) {
+      setRows([]);
       setError(rpcError.message);
       return;
     }
-    setRows((data ?? []) as CompanyRow[]);
+    let payload: unknown = data;
+    if (typeof data === "string") {
+      try { payload = JSON.parse(data) as unknown; } catch { setRows([]); setError("A lista de oficinas veio num formato inesperado."); return; }
+    }
+    const list = Array.isArray(payload) ? payload : [];
+    setRows(list.map((row) => {
+      const item = row as CompanyRow;
+      const status: CompanyStatus = item.status === "active" || item.status === "suspended" || item.status === "pending" ? item.status : "pending";
+      return { ...item, status };
+    }));
     setError("");
   }
 
@@ -82,11 +92,11 @@ export function PlatformAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.length === 0 ? <tr><td colSpan={5} className="px-3 py-4 text-[#8d939c]">Nenhuma oficina neste filtro.</td></tr> : shown.map((row) => (
+            {shown.length === 0 ? <tr><td colSpan={5} className="px-3 py-4 text-[#8d939c]">{error ? "A lista não chegou a carregar." : "Nenhuma oficina neste filtro."}</td></tr> : shown.map((row) => (
               <tr key={row.id} className="border-t border-[#eaeaf2]">
                 <td className="px-3 py-3 font-semibold">{row.name}</td>
                 <td className="px-3 py-3">{row.owner_email ?? "—"}</td>
-                <td className="px-3 py-3">{new Date(row.created_at).toLocaleDateString("pt-PT")}</td>
+                <td className="px-3 py-3">{row.created_at ? new Date(row.created_at).toLocaleDateString("pt-PT") : "—"}</td>
                 <td className="px-3 py-3">{row.status === "active" ? "Ativa" : row.status === "suspended" ? "Suspensa" : "Pendente"}</td>
                 <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-2">

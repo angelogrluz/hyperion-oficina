@@ -8,8 +8,8 @@ import { LoginForm } from "@/components/login-form";
 import { CloudLogin } from "@/components/cloud-login";
 import { ImportBanner } from "@/components/import-banner";
 import { AccountHold } from "@/components/account-hold";
+import { EntryBrand } from "@/components/entry-brand";
 import { PlatformAdmin } from "@/components/platform-admin";
-import { Logo } from "@/components/logo";
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
 import { StockMovements } from "@/components/stock-movements";
@@ -26,7 +26,6 @@ import { AgendaPage } from "@/components/agenda-page";
 import { ResultsPage } from "@/components/results-page";
 import { ClientAccount, invoiceTotal } from "@/components/client-account";
 import { PontosPage } from "@/components/pontos-page";
-import { companyDisplayName } from "@/lib/company-settings";
 import { FolhaPrint } from "@/components/folha-print";
 import { FolhaServicos } from "@/components/folha-servicos";
 import { PrintButton } from "@/components/print-button";
@@ -80,9 +79,8 @@ function ResetButton() {
 }
 
 function holdFor(user: ReturnType<typeof readCloudUser>) {
-  if (!cloudConfigured() || !user || user.platformAdmin) return null;
-  if (user.companyStatus === "pending" || user.companyStatus === "suspended") return user.companyStatus;
-  return null;
+  if (!cloudConfigured() || !user || user.companyStatus === "active") return null;
+  return user.companyStatus === "suspended" ? "suspended" : "pending";
 }
 
 function Frame({ children }: { children: ReactNode }) {
@@ -92,7 +90,7 @@ function Frame({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const onSheet = /^\/ordens\/.+/.test(pathname);
   const held = holdFor(cloudUser);
-  if (held) return <AccountHold status={held} />;
+  if (held) return <AccountHold status={held} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;
   if (!session) return <Navigate to="/entrar" replace />;
   if (!snap) return <p className="p-8 text-sm text-[#4d6d73]">A carregar a oficina…</p>;
   const totals = shellTotals(snap.orders.map((order) => ({
@@ -510,24 +508,26 @@ function Purchases() {
 function LoginPage() {
   const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   if (cloudConfigured() && cloudUser) {
-    const held = !cloudUser.platformAdmin && (cloudUser.companyStatus === "pending" || cloudUser.companyStatus === "suspended");
-    if (held && cloudUser.companyStatus) return <AccountHold status={cloudUser.companyStatus} />;
-    if (cloudUser.role === "tecnico" && cloudUser.companyStatus === "active") return <Navigate to="/modo-oficina" replace />;
-    if (cloudUser.platformAdmin || cloudUser.companyStatus === "active") return <Navigate to="/" replace />;
+    if (cloudUser.companyStatus !== "active") {
+      return <AccountHold status={cloudUser.companyStatus === "suspended" ? "suspended" : "pending"} platformAdmin={cloudUser.platformAdmin} />;
+    }
+    if (cloudUser.role === "tecnico") return <Navigate to="/modo-oficina" replace />;
+    return <Navigate to="/" replace />;
   } else if (!cloudConfigured() && readSession()) return <Navigate to="/" replace />;
   return (
-    <main className="grid min-h-screen lg:grid-cols-2">
-      <section className="hidden bg-[#0b8f9c] p-10 text-white lg:block">
-        <Logo light />
-        <h1 className="mt-16 max-w-md text-4xl font-semibold">OficinaPlan</h1>
-        <p className="mt-4 max-w-md text-white/90">{cloudConfigured() ? "A oficina na nuvem. Os documentos impressos continuam com os dados da empresa." : "Servidor não configurado. Continuas neste computador, com o login da oficina."}</p>
-      </section>
-      <section className="flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          <h2 className="mb-1 text-2xl font-semibold">OficinaPlan</h2>
-          <p className="mb-4 text-[15px] text-[#4d6d73]">{companyDisplayName()}</p>
-          {cloudConfigured() ? <CloudLogin /> : <LoginForm />}
+    <main className="grid min-h-screen md:grid-cols-[1.08fr_0.92fr]">
+      <EntryBrand />
+      <section className="flex flex-col items-center justify-center bg-[#f4f7f8] px-5 py-10">
+        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(14,36,51,.08)] sm:p-8">
+          {cloudConfigured() ? <CloudLogin /> : (
+            <>
+              <h2 className="mb-1 text-[26px] font-semibold text-[#0e2433]">Entrar</h2>
+              <p className="mb-4 text-[15px] text-[#5c6b76]">Servidor não configurado. Continuas neste computador.</p>
+              <LoginForm />
+            </>
+          )}
         </div>
+        <p className="mt-6 text-[14px] text-[#5c6b76] md:hidden">© OficinaPlan · geral@oficinaplan.com</p>
       </section>
     </main>
   );
@@ -770,7 +770,7 @@ function OficinaScreen() {
   const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const snap = useSnap();
   const held = holdFor(cloudUser);
-  if (held) return <AccountHold status={held} />;
+  if (held) return <AccountHold status={held} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;
   if (cloudConfigured() && !cloudUser) return <Navigate to="/entrar" replace />;
   if (!snap) return null;
   return (
@@ -787,17 +787,42 @@ function TecnicosScreen() {
   return <OficinaMode admin orders={ordersForOficina(snap)} />;
 }
 
+function Gate({ children }: { children: ReactNode }) {
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
+  const held = holdFor(cloudUser);
+  if (held) return <AccountHold status={held} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;
+  return children;
+}
+
+function AdminGate() {
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
+  if (cloudConfigured() && !cloudUser) return <Navigate to="/entrar" replace />;
+  if (!cloudUser?.platformAdmin) return <Navigate to="/" replace />;
+  if (cloudUser.companyStatus !== "active") {
+    const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+    return (
+      <main className="min-h-screen bg-[#f4f7f8] px-4 py-6 sm:px-8">
+        <div className="mx-auto max-w-5xl">
+          <a href={`${base}/`} className="mb-4 inline-block text-[15px] font-semibold text-[#0b6f8a]">Voltar</a>
+          <PlatformAdmin />
+        </div>
+      </main>
+    );
+  }
+  return <Frame><PlatformAdmin /></Frame>;
+}
+
 function AppRoutes() {
   return (
     <Routes>
       <Route path="/entrar" element={<LoginPage />} />
       <Route path="/" element={<Frame><Home /></Frame>} />
       <Route path="/ordens/nova" element={<Frame><NewOrder /></Frame>} />
-      <Route path="/ordens/:id/imprimir" element={<SheetPrint />} />
-      <Route path="/ordens/:id/servicos" element={<SheetServices />} />
-      <Route path="/ordens/:id/orcamento" element={<BillingView kind="orcamento" />} />
-      <Route path="/ordens/:id/fatura" element={<BillingView kind="fatura" />} />
-      <Route path="/ordens/:id/recibo" element={<BillingView kind="recibo" />} />
+      <Route path="/ordens/:id/imprimir" element={<Gate><SheetPrint /></Gate>} />
+      <Route path="/ordens/:id/servicos" element={<Gate><SheetServices /></Gate>} />
+      <Route path="/ordens/:id/orcamento" element={<Gate><BillingView kind="orcamento" /></Gate>} />
+      <Route path="/ordens/:id/fatura" element={<Gate><BillingView kind="fatura" /></Gate>} />
+      <Route path="/ordens/:id/recibo" element={<Gate><BillingView kind="recibo" /></Gate>} />
       <Route path="/ordens/:id" element={<Frame><OrderScreen /></Frame>} />
       <Route path="/clientes" element={<Frame><Clients /></Frame>} />
       <Route path="/clientes/novo" element={<Frame><NewClient /></Frame>} />
@@ -813,7 +838,7 @@ function AppRoutes() {
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
       <Route path="/agenda" element={<Frame><AgendaScreen /></Frame>} />
       <Route path="/resultados" element={<Frame><ResultsScreen /></Frame>} />
-      <Route path="/administracao" element={<Frame><PlatformAdmin /></Frame>} />
+      <Route path="/administracao" element={<AdminGate />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

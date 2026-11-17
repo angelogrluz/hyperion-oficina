@@ -1,17 +1,17 @@
-/** Dados da oficina nos documentos. O site só aparece no cabeçalho quando está preenchido. */
+/** Unused by the pages app. Documents read the workshop's own settings, which start empty. */
 export const company = {
-  legalName: "Hyperion Reparação Automóvel, Unipessoal, Lda",
-  nif: "518445356",
-  address: "Rua do Mexilhão, N19",
-  postalCode: "8400-105",
-  city: "Mexilhoeira da Carregação",
-  country: "Portugal",
-  phone: "+351 926 771 904",
-  email: "hyperioncarlab@gmail.com",
-  site: "oficinahyperion.pt",
-  siteUrl: "https://oficinahyperion.pt/",
-  ibanBank: "Santander",
-  iban: "PT50 0018 0003 6425 8007 0206 2",
+  legalName: "",
+  nif: "",
+  address: "",
+  postalCode: "",
+  city: "",
+  country: "",
+  phone: "",
+  email: "",
+  site: "",
+  siteUrl: "",
+  ibanBank: "",
+  iban: "",
 };
 
 /** Tipologias do lançamento de compras. Só as marcadas com stock mexem no inventário. */

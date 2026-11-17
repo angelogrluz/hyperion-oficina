@@ -24,7 +24,7 @@ import { can, readCurrentUserId, subscribeAccess } from "@/lib/user-settings";
 import { readCloudUser, subscribeCloud } from "@/browser/src/cloud";
 import { recordPath } from "@/lib/nav-history";
 import { logout } from "@/app/actions/auth";
-import { Logo } from "@/components/logo";
+import { ProductBackButton } from "@/components/product-mark";
 import { SheetSidebarProvider } from "@/components/sheet-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,7 +91,7 @@ function SidebarBody({ pathname, totals, extra }: { pathname: string; totals: Sh
   return (
     <>
       <div className="px-2 pt-3 pb-2">
-        <Logo light />
+        <ProductBackButton light />
       </div>
       <div className="flex-1 overflow-y-auto px-2 py-1 text-[17px]">
         {extra ? <div className="px-1">{extra}</div> : home ? (

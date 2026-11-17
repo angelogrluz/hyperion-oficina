@@ -1,3 +1,5 @@
+import { cloudBlankMode } from "@/lib/cloud-session";
+
 const SERVICES_KEY = "hyperion-oficina-servicos-internos";
 const ASSIGN_KEY = "hyperion-oficina-tecnicos";
 const LOG_KEY = "hyperion-oficina-tempos";
@@ -81,6 +83,7 @@ export function writeServices(items: InternalService[]) {
 }
 
 export function readAssignments() {
+  if (typeof localStorage !== "undefined" && cloudBlankMode() && !localStorage.getItem(ASSIGN_KEY)) return [];
   return read<Assignment[] | null>(ASSIGN_KEY, null) ?? defaultAssignments;
 }
 export function writeAssignments(items: Assignment[]) {
@@ -88,6 +91,7 @@ export function writeAssignments(items: Assignment[]) {
 }
 
 export function readLogs() {
+  if (typeof localStorage !== "undefined" && cloudBlankMode() && !localStorage.getItem(LOG_KEY)) return [];
   return read<WorkLog[] | null>(LOG_KEY, null) ?? defaultLogs;
 }
 export function writeLogs(items: WorkLog[]) {
@@ -95,6 +99,7 @@ export function writeLogs(items: WorkLog[]) {
 }
 
 export function readPunches() {
+  if (typeof localStorage !== "undefined" && cloudBlankMode() && !localStorage.getItem(PUNCH_KEY)) return [];
   return read<Punch[] | null>(PUNCH_KEY, null) ?? defaultPunches;
 }
 export function writePunches(items: Punch[]) {

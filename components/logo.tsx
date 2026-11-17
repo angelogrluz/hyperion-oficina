@@ -12,7 +12,7 @@ export function Logo({ light = false, onBeforeBack }: { light?: boolean; onBefor
   const src = companyLogoSrc(company, light);
   const name = companyDisplayName(company);
   const router = useRouter();
-  useEffect(() => { document.title = name ? `OficinaPlan · ${name}` : "OficinaPlan"; }, [name]);
+  useEffect(() => { document.title = "OficinaPlan"; }, []);
   return (
     <button
       type="button"
