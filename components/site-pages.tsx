@@ -232,6 +232,9 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
   const [info, setInfo] = useState("");
   const [pending, setPending] = useState(false);
   const [show, setShow] = useState(false);
+  const [username, setUsername] = useState("");
+  const [secret, setSecret] = useState("");
+  const staffPin = username.trim().toLowerCase() !== "admin";
   useEffect(() => {
     setActiveSlug(slug);
     let gone = false;
@@ -248,11 +251,15 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
           className="grid w-full max-w-md gap-4 rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(19,27,36,.08)] sm:p-8"
           onSubmit={(event) => {
             event.preventDefault();
-            const data = new FormData(event.currentTarget);
             setPending(true);
             setError("");
             setInfo("");
-            void signInWithUsername(slug, String(data.get("username") ?? ""), String(data.get("password") ?? "")).then(async (result) => {
+            if (staffPin && !/^\d{4}$/.test(secret)) {
+              setPending(false);
+              setError("O PIN tem de ter 4 dígitos.");
+              return;
+            }
+            void signInWithUsername(slug, username.trim(), secret).then(async (result) => {
               if ("error" in result && result.error) { setPending(false); setError(result.error); return; }
               const user = "user" in result ? result.user : undefined;
               if (!user || !slugMatches(user, slug)) {
@@ -279,16 +286,23 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
               <p className="text-[14px] text-[var(--muted-text)]">oficinaplan.com/{slug}</p>
             </div>
           </div>
-          <p className="text-[15px] text-[var(--muted-text)]">{notice || "Entra com o utilizador desta oficina. O administrador usa a palavra-passe. A equipa usa um PIN de 6 dígitos."}</p>
+          <p className="text-[15px] text-[var(--muted-text)]">{notice || "Entra com o utilizador desta oficina. O administrador usa a palavra-passe. A equipa usa um PIN de 4 dígitos."}</p>
           <label className="grid gap-1 text-[15px] font-medium">Utilizador
-            <Input name="username" required autoComplete="username" className="h-12 border-[var(--line)] text-[17px]" />
+            <Input name="username" required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} className="h-12 border-[var(--line)] text-[17px]" />
           </label>
-          <label className="grid gap-1 text-[15px] font-medium">PIN ou palavra-passe
+          <label className="grid gap-1 text-[15px] font-medium">{staffPin ? "PIN" : "Palavra-passe"}
             <span className="relative">
-              <Input name="password" type={show ? "text" : "password"} required minLength={6} autoComplete="current-password" className="h-12 border-[var(--line)] pr-16 text-[17px]" />
+              <Input name="password" type={show ? "text" : "password"} required autoComplete="current-password" inputMode={staffPin ? "numeric" : "text"} maxLength={staffPin ? 4 : undefined} value={secret} onChange={(event) => setSecret(staffPin ? event.target.value.replace(/\D/g, "").slice(0, 4) : event.target.value)} className="h-12 border-[var(--line)] pr-16 text-[17px]" />
               <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[var(--glow-deep)]" onClick={() => setShow((value) => !value)}>{show ? "Ocultar" : "Mostrar"}</button>
             </span>
           </label>
+          {staffPin ? (
+            <div data-testid="login-teclado" className="grid grid-cols-3 gap-2">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "←", "0", "C"].map((key) => (
+                <button key={key} type="button" className="h-12 rounded-xl bg-[var(--mist)] text-[20px] font-semibold" onClick={() => setSecret((value) => key === "C" ? "" : key === "←" ? value.slice(0, -1) : (value + key).slice(0, 4))}>{key}</button>
+              ))}
+            </div>
+          ) : null}
           {error ? <p className="text-[15px] text-[#9c4036]" role="alert">{error}</p> : null}
           {info ? <p className="text-[15px] text-[var(--glow-deep)]">{info}</p> : null}
           <Button type="submit" disabled={pending} className="h-12 bg-[var(--ink)] text-[17px] hover:bg-[var(--graphite)]">{pending ? "A entrar…" : "Entrar"}</Button>
@@ -296,8 +310,7 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
             type="button"
             className="justify-self-start text-[15px] font-medium text-[var(--glow-deep)]"
             onClick={(event) => {
-              const username = String(new FormData(event.currentTarget.form ?? undefined).get("username") ?? "").trim();
-              if (!username) { setError("Indica o utilizador."); return; }
+              if (!username.trim()) { setError("Indica o utilizador."); return; }
               setError("");
               void forgotOwnerPassword(slug, username).then((result) => {
                 if ("error" in result && result.error) setError(result.error);

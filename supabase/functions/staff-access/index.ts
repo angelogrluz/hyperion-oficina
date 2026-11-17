@@ -1,7 +1,9 @@
 // Staff usernames and PINs. Deploy as Edge Function name: staff-access.
 // JWT verification OFF: the login happens before there is a session.
 // The platform injects SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY.
-// PIN choice: staff use a 6-digit PIN, which is the Supabase password (minimum 6). No padding.
+// Staff PIN is exactly 4 digits. Supabase needs a password of at least 6 characters,
+// so the auth password is an HMAC of company id + PIN, keyed with the service role.
+// That password is never returned and is never computed in the browser.
 // The owner username is admin and keeps the existing password. This function never updates that password.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -33,6 +35,27 @@ Deno.serve(async (req) => {
     return json({ error: "Não foi possível concluir o pedido." }, 500);
   }
 });
+
+function isStaffPin(pin: string) {
+  return /^\d{4}$/.test(pin);
+}
+
+async function staffPassword(companyId: string, pin: string) {
+  if (!isStaffPin(pin)) return "";
+  const pepper = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(pepper),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${companyId}:${pin}`));
+  const bytes = new Uint8Array(signature);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -82,8 +105,10 @@ async function login(admin: ReturnType<typeof createClient>, url: string, anon: 
   const user = await admin.auth.admin.getUserById(userId);
   const email = user.data.user?.email ?? "";
   if (!email) return { error: "Utilizador ou PIN incorretos." };
+  const password = username === "admin" ? secret : await staffPassword(company.id, secret);
+  if (username !== "admin" && !password) return { error: "Utilizador ou PIN incorretos." };
   const signer = createClient(url, anon);
-  const signed = await signer.auth.signInWithPassword({ email, password: secret });
+  const signed = await signer.auth.signInWithPassword({ email, password });
   if (signed.error || !signed.data.session) return { error: "Utilizador ou PIN incorretos." };
   return {
     access_token: signed.data.session.access_token,
@@ -131,23 +156,27 @@ async function saveStaff(admin: ReturnType<typeof createClient>, callerId: strin
   if (taken && taken.user_id !== existingId) return { error: "Já existe um colaborador com este utilizador." };
   if (existingId) {
     const { data: row } = await admin.from("staff_accounts").select("user_id, kind").eq("company_id", companyId).eq("user_id", existingId).maybeSingle();
-    if (!row || row.kind === "owner") return { error: "Não é possível alterar esta conta." };
-    if (pin && !/^\d{6}$/.test(pin)) return { error: "O PIN tem de ter 6 dígitos." };
-    if (pin) {
-      const updated = await admin.auth.admin.updateUserById(existingId, { password: pin });
-      if (updated.error) return { error: "Não foi possível atualizar o PIN." };
+    if (row?.kind === "owner") return { error: "Não é possível alterar esta conta." };
+    if (row) {
+      if (pin && !isStaffPin(pin)) return { error: "O PIN tem de ter 4 dígitos." };
+      if (pin) {
+        const password = await staffPassword(companyId, pin);
+        const updated = await admin.auth.admin.updateUserById(existingId, { password });
+        if (updated.error) return { error: "Não foi possível atualizar o PIN." };
+      }
+      await admin.from("staff_accounts").update({ username }).eq("company_id", companyId).eq("user_id", existingId);
+      await admin.from("memberships").update({ role }).eq("company_id", companyId).eq("user_id", existingId);
+      return { ok: true, user_id: existingId };
     }
-    await admin.from("staff_accounts").update({ username }).eq("company_id", companyId).eq("user_id", existingId);
-    await admin.from("memberships").update({ role }).eq("company_id", companyId).eq("user_id", existingId);
-    return { ok: true, user_id: existingId };
   }
-  if (!/^\d{6}$/.test(pin)) return { error: "O PIN tem de ter 6 dígitos." };
+  if (!isStaffPin(pin)) return { error: "O PIN tem de ter 4 dígitos." };
+  const password = await staffPassword(companyId, pin);
   const email = `staff.${username}.${companyId.replace(/-/g, "")}@staff.oficinaplan.invalid`;
   const token = crypto.randomUUID().replace(/-/g, "");
   await admin.from("staff_invites").insert({ company_id: companyId, email, role, name, token, created_by: callerId });
   const created = await admin.auth.admin.createUser({
     email,
-    password: pin,
+    password,
     email_confirm: true,
     user_metadata: { full_name: name, staff_username: username },
   });

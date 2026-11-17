@@ -39,9 +39,11 @@ export async function saveStaffAccess(input: { companyId: string; username: stri
       user_id: input.userId ?? "",
     },
   });
+  const payload = data as { error?: string; user_id?: string } | null;
+  if (payload?.error) return { error: String(payload.error) };
   if (error) return { error: "A gestão de colaboradores ainda não está publicada no servidor." };
-  if (data?.error) return { error: String(data.error) };
-  return { userId: String(data?.user_id ?? "") };
+  if (!payload?.user_id) return { error: "O servidor não devolveu a conta." };
+  return { userId: String(payload.user_id) };
 }
 
 export async function setStaffActive(companyId: string, userId: string, active: boolean) {

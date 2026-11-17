@@ -41,6 +41,7 @@ export type WorkshopUser = {
   technician: boolean;
   clocksIn: boolean;
   pin: string;
+  linked?: boolean;
 };
 
 export type PermissionMatrix = Record<Exclude<RoleId, "admin">, Record<string, boolean>>;

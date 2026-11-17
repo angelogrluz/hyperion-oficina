@@ -28,13 +28,15 @@ import {
   readMatrix,
   readUsers,
   subscribeAccess,
+  readCurrentUserId,
+  writeCurrentUserId,
   writeMatrix,
   writeUsers,
   type PermissionMatrix,
   type RoleId,
   type WorkshopUser,
 } from "@/lib/user-settings";
-import { readServices, subscribeOps, writeServices, type InternalService } from "@/lib/workshop-ops";
+import { readAssignments, readLogs, readPunches, readServices, subscribeOps, writeAssignments, writeLogs, writePunches, writeServices, type InternalService } from "@/lib/workshop-ops";
 import { readServiceTypes, subscribeServiceTypes, writeServiceTypes, type ServiceType } from "@/lib/booking-settings";
 import { purchaseTypes } from "@/src/config";
 
@@ -235,9 +237,10 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
             <div>
               <p className="font-semibold">{user.name}{user.active ? "" : " (inativo)"}</p>
               <p className="text-[var(--muted-text)]">{ROLES.find((role) => role.id === user.role)?.label} · {user.technician ? "técnico" : "sem técnico"} · {user.clocksIn ? "pica o ponto" : "não pica o ponto"}</p>
+              {needsServerAccess(user, readCloudUser()?.userId) ? <p className="mt-1 inline-block rounded-full bg-[var(--warm-soft)] px-2 py-0.5 text-[13px] font-semibold text-[var(--ink)]">Sem acesso — define utilizador e PIN</p> : null}
             </div>
             <span className="flex gap-3">
-              <button type="button" className="text-[var(--glow)]" onClick={() => setEditing(user)}>Editar</button>
+              <button type="button" className="text-[var(--glow)]" onClick={() => { setStaffError(""); setEditing(user); }}>Editar</button>
               <button type="button" className="text-[#9c4036]" onClick={() => {
                 const active = !user.active;
                 writeUsers(users.map((item) => item.id === user.id ? { ...item, active } : item));
@@ -248,23 +251,27 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
           </li>
         ))}
       </ul>
-      {staffError ? <p className="text-[15px] text-[#9c4036]">{staffError}</p> : null}
-      {editing ? <UserForm user={editing} onCancel={() => setEditing(null)} onSave={(user, pin) => {
+      {editing ? <UserForm user={editing} serverError={staffError} onCancel={() => { setEditing(null); setStaffError(""); }} onSave={(user, pin) => {
         const cloud = readCloudUser();
         const owner = user.login.trim().toLowerCase() === "admin" || user.id === cloud?.userId;
+        const previousId = user.id;
         const apply = (saved: WorkshopUser) => {
-          const exists = users.some((item) => item.id === saved.id);
-          writeUsers(exists ? users.map((item) => item.id === saved.id ? saved : item) : [...users, saved]);
+          const next = users.some((item) => item.id === previousId)
+            ? users.map((item) => item.id === previousId ? saved : item)
+            : [...users, saved];
+          writeUsers(next);
+          if (previousId !== saved.id) retargetStaff(previousId, saved.id);
+          setStaffError("");
           setEditing(null);
         };
         if (!cloud?.companyId || owner) { apply(user); return; }
         const role = user.role === "admin" || user.role === "gestor" || user.role === "rececionista" ? user.role : "mecanico";
         void saveStaffAccess({ companyId: cloud.companyId, username: user.login, name: user.name, role, pin, userId: users.some((item) => item.id === user.id) ? user.id : "" }).then((result) => {
           if ("error" in result && result.error) { setStaffError(result.error); return; }
-          setStaffError("");
-          apply({ ...user, id: result.userId || user.id, pin: pin || user.pin, email: "" });
+          if (!("userId" in result) || !result.userId) { setStaffError("O servidor não devolveu a conta."); return; }
+          apply({ ...user, id: result.userId, pin: pin || user.pin, email: "", linked: true });
         });
-      }} /> : <button type="button" data-testid="utilizador-novo" className="h-10 w-fit rounded-lg bg-[var(--glow-deep)] px-3 font-semibold text-white" onClick={() => setEditing({ id: crypto.randomUUID(), name: "", login: "", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" })}>Adicionar colaborador</button>}
+      }} /> : <button type="button" data-testid="utilizador-novo" className="h-10 w-fit rounded-lg bg-[var(--glow-deep)] px-3 font-semibold text-white" onClick={() => { setStaffError(""); setEditing({ id: crypto.randomUUID(), name: "", login: "", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" }); }}>Adicionar colaborador</button>}
       <div data-testid="permissoes-matriz">
         <h2 className="text-[18px] font-semibold">Permissões</h2>
         <p className="mb-2 text-[15px] text-[var(--muted-text)]">O Admin tem sempre tudo. As outras funções editam-se aqui e aplicam-se ao utilizador atual.</p>
@@ -293,27 +300,42 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
   );
 }
 
-function UserForm({ user, onSave, onCancel }: { user: WorkshopUser; onSave: (user: WorkshopUser, pin: string) => void; onCancel: () => void }) {
+function needsServerAccess(user: WorkshopUser, cloudUserId?: string) {
+  if (user.login.trim().toLowerCase() === "admin" || (cloudUserId && user.id === cloudUserId)) return false;
+  return user.linked !== true;
+}
+
+function retargetStaff(previousId: string, nextId: string) {
+  if (!previousId || previousId === nextId) return;
+  writeAssignments(readAssignments().map((item) => item.userId === previousId ? { ...item, userId: nextId } : item));
+  writeLogs(readLogs().map((item) => item.userId === previousId ? { ...item, userId: nextId } : item));
+  writePunches(readPunches().map((item) => item.userId === previousId ? { ...item, userId: nextId } : item));
+  if (readCurrentUserId() === previousId) writeCurrentUserId(nextId);
+}
+
+function UserForm({ user, serverError, onSave, onCancel }: { user: WorkshopUser; serverError: string; onSave: (user: WorkshopUser, pin: string) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(user);
   const [pin, setPin] = useState("");
   const [formError, setFormError] = useState("");
   const owner = user.login.trim().toLowerCase() === "admin";
+  const needsPin = !owner && user.linked !== true;
   return (
     <form className="grid gap-2 rounded-xl bg-[var(--paper)] p-3 sm:grid-cols-2" onSubmit={(event) => {
       event.preventDefault();
       if (!draft.name.trim() || !draft.login.trim()) return;
       if (!owner && draft.login.trim().toLowerCase() === "admin") { setFormError("O utilizador Admin é só do dono da oficina."); return; }
-      if (!owner && pin && !/^\d{6}$/.test(pin)) { setFormError("O PIN tem de ter 6 dígitos."); return; }
-      if (!owner && !user.pin && !/^\d{6}$/.test(pin)) { setFormError("Define um PIN de 6 dígitos."); return; }
+      if (!owner && pin && !/^\d{4}$/.test(pin)) { setFormError("O PIN tem de ter 4 dígitos."); return; }
+      if (needsPin && !/^\d{4}$/.test(pin)) { setFormError("Define um PIN de 4 dígitos."); return; }
       setFormError("");
       onSave({ ...draft, name: draft.name.trim(), login: draft.login.trim().toLowerCase(), pin: pin || draft.pin }, pin);
     }}>
+      {serverError ? <p data-testid="utilizador-erro" role="alert" className="rounded-lg bg-[#fde8e6] px-3 py-2 text-[15px] font-semibold text-[#9c4036] sm:col-span-2">{serverError}</p> : null}
       <Field label="Nome" testId="utilizador-nome" value={draft.name} live onSave={(name) => setDraft((current) => ({ ...current, name }))} />
       <Field label="Utilizador" testId="utilizador-login" value={owner ? "Admin" : draft.login} live onSave={(login) => { if (!owner) setDraft((current) => ({ ...current, login })); }} />
-      {owner ? <p className="text-[15px] text-[var(--muted-text)] sm:col-span-2">O administrador entra com a palavra-passe da conta. O utilizador é Admin e não se muda aqui.</p> : <label className="grid gap-1 text-[16px]">PIN de 6 dígitos
-        <input data-testid="utilizador-pin" value={pin} inputMode="numeric" autoComplete="new-password" placeholder={user.pin ? "Deixa vazio para manter" : ""} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} className="h-10 rounded-lg border border-[var(--line)] px-3" />
+      {owner ? <p className="text-[15px] text-[var(--muted-text)] sm:col-span-2">O administrador entra com a palavra-passe da conta. O utilizador é Admin e não se muda aqui.</p> : <label className="grid gap-1 text-[16px]">PIN de 4 dígitos
+        <input data-testid="utilizador-pin" value={pin} inputMode="numeric" maxLength={4} autoComplete="new-password" placeholder={needsPin ? "4 dígitos" : "Deixa vazio para manter"} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 4))} className="h-10 rounded-lg border border-[var(--line)] px-3" />
       </label>}
-      {formError ? <p className="text-[14px] text-[#9c4036] sm:col-span-2">{formError}</p> : null}
+      {formError ? <p role="alert" className="text-[15px] font-semibold text-[#9c4036] sm:col-span-2">{formError}</p> : null}
       <label className="text-[16px]">Função
         <select data-testid="utilizador-funcao" value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value as RoleId }))} className="mt-1 h-10 w-full rounded-lg border bg-white px-2">
           {ROLES.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}

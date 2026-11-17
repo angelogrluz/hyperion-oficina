@@ -214,7 +214,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
       {pinFor === "ponto" ? (
         <form data-testid="ponto-teclado" className="fixed inset-0 z-[80] grid place-items-center bg-black/40 p-4" onSubmit={(event) => {
           event.preventDefault();
-          if (ponto.length < 4) { setPontoMsg("PIN incorreto."); return; }
+          if (!/^\d{4}$/.test(ponto)) { setPontoMsg("O PIN tem de ter 4 dígitos."); return; }
           const user = readUsers().find((item) => item.active && item.clocksIn && pinMatches(item.id, ponto));
           if (!user) { setPontoMsg("PIN incorreto."); return; }
           const hadOpen = readPunches().some((item) => item.userId === user.id && !item.outAt);
@@ -228,11 +228,11 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
         }}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6">
             <h2 className="text-[32px] font-semibold">Picar o ponto</h2>
-            <p data-testid="ponto-pin" className="mt-4 text-center text-[40px] tracking-[0.35em]">{(ponto || "").padEnd(6, "·").slice(0, 6)}</p>
+            <p data-testid="ponto-pin" className="mt-4 text-center text-[40px] tracking-[0.35em]">{(ponto || "").padEnd(4, "·").slice(0, 4)}</p>
             {pontoMsg ? <p data-testid="ponto-confirmacao" className="mt-3 text-center text-[22px] font-semibold">{pontoMsg}</p> : null}
             <div className="mt-4 grid grid-cols-3 gap-2">
               {["1","2","3","4","5","6","7","8","9","←","0","OK"].map((key) => (
-                <button key={key} type={key === "OK" ? "submit" : "button"} className="h-20 rounded-xl bg-[var(--mist)] text-[28px] font-semibold" onClick={() => { if (key === "←") setPonto((value) => value.slice(0, -1)); else if (key !== "OK") setPonto((value) => (value + key).slice(0, 6)); }}>{key}</button>
+                <button key={key} type={key === "OK" ? "submit" : "button"} className="h-20 rounded-xl bg-[var(--mist)] text-[28px] font-semibold" onClick={() => { if (key === "←") setPonto((value) => value.slice(0, -1)); else if (key !== "OK") setPonto((value) => (value + key).slice(0, 4)); }}>{key}</button>
               ))}
             </div>
             <button type="button" className="mt-3 h-14 w-full rounded-xl border text-[20px]" onClick={() => { setPinFor(""); setPontoMsg(""); }}>Fechar</button>
