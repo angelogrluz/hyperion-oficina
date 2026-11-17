@@ -2,7 +2,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { EcolubSettings } from "@/components/ecolub-settings";
-import { inviteStaff, readCloudUser, setCompanySlug, setMemberActive } from "@/browser/src/cloud";
+import { inviteStaff, readCloudUser, setCompanySlug, setMemberActive, subscribeCloud } from "@/browser/src/cloud";
+import { IntegrationsPanel } from "@/components/integrations-panel";
 import { cloudBlankMode } from "@/lib/cloud-session";
 import { slugError } from "@/lib/workshop-slug";
 import {
@@ -30,7 +31,7 @@ import {
   type WorkshopUser,
 } from "@/lib/user-settings";
 import { readServices, subscribeOps, writeServices, type InternalService } from "@/lib/workshop-ops";
-import { DOCUMENT_TYPES, billingReady, emptyBilling, readBillingSettings, readPlateLookup, subscribeIntegrations, writeBillingSettings, writePlateLookup, type BillingSettings } from "@/lib/billing-settings";
+import { readPlateLookup, subscribeIntegrations, writePlateLookup } from "@/lib/billing-settings";
 import { readServiceTypes, subscribeServiceTypes, writeServiceTypes, type ServiceType } from "@/lib/booking-settings";
 import { purchaseTypes } from "@/src/config";
 
@@ -42,7 +43,8 @@ const SECTIONS = [
   { id: "stock", title: "Stock e artigos", subtitle: "Tipologias que entram no inventário.", permit: "config.empresa" },
   { id: "utilizadores", title: "Colaboradores", subtitle: "Pessoas, funções e o acesso de cada uma. Com e-mail, enviamos um convite para entrar.", permit: "config.utilizadores" },
   { id: "servicos", title: "Serviços internos", subtitle: "Tarefas de oficina que não vão para a folha do cliente.", permit: "config.empresa" },
-  { id: "faturacao", title: "Faturação", subtitle: "Ligação à Moloni, preparada para a fase cloud.", permit: "config.empresa" },
+  { id: "integracoes", title: "Integrações", subtitle: "Ligações externas da oficina.", permit: "config.empresa" },
+  { id: "faturacao", title: "Faturação", subtitle: "A ligação faz-se em Integrações.", permit: "config.empresa" },
   { id: "matricula", title: "Matrícula", subtitle: "Onde vais buscar a foto da viatura, mais tarde.", permit: "config.empresa" },
   { id: "marcacoes", title: "Marcações", subtitle: "Duração de cada tipo de serviço na agenda.", permit: "config.empresa" },
 ] as const;
@@ -55,9 +57,9 @@ export function WorkshopSettings() {
   const users = useSyncExternalStore(subscribeAccess, readUsers, () => installationUsers);
   const matrix = useSyncExternalStore(subscribeAccess, readMatrix, readMatrix);
   const services = useSyncExternalStore(subscribeOps, readServices, readServices);
-  const billing = useSyncExternalStore(subscribeIntegrations, readBillingSettings, () => emptyBilling);
   const plateLookup = useSyncExternalStore(subscribeIntegrations, readPlateLookup, () => ({ apiUrl: "", apiKey: "" }));
   const serviceTypes = useSyncExternalStore(subscribeServiceTypes, readServiceTypes, readServiceTypes);
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const [section, setSection] = useState<SectionId>("empresa");
   const [notice, setNotice] = useState("");
   const current = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0];
@@ -74,7 +76,7 @@ export function WorkshopSettings() {
   return (
     <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Categorias de configuração">
-        {SECTIONS.map((item) => (
+        {SECTIONS.filter((item) => item.id !== "integracoes" || !cloudUser || cloudUser.role === "owner" || cloudUser.role === "admin" || cloudUser.platformAdmin).map((item) => (
           <button key={item.id} type="button" data-testid={`config-${item.id}`} onClick={() => setSection(item.id)} className={`min-w-[14rem] rounded-xl px-3 py-2 text-left lg:min-w-0 ${section === item.id ? "bg-[var(--glow)] text-white" : "bg-white text-[var(--charcoal)] ring-1 ring-[var(--line)]"}`}>
             <span className="block text-[16px] font-semibold">{item.title}</span>
             <span className={`mt-0.5 block text-[13px] leading-snug ${section === item.id ? "text-white/85" : "text-[var(--muted-text)]"}`}>{item.subtitle}</span>
@@ -96,7 +98,8 @@ export function WorkshopSettings() {
         {section === "stock" ? <StockFields /> : null}
         {section === "utilizadores" ? <UserFields users={users} matrix={matrix} /> : null}
         {section === "servicos" ? <ServiceFields services={services} /> : null}
-        {section === "faturacao" ? <BillingFields billing={billing} onNotice={setNotice} /> : null}
+        {section === "integracoes" ? <IntegrationsPanel /> : null}
+        {section === "faturacao" ? <BillingFields /> : null}
         {section === "matricula" ? <PlateFields lookup={plateLookup} onNotice={setNotice} /> : null}
         {section === "marcacoes" ? <BookingFields types={serviceTypes} /> : null}
         <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[var(--line)] px-3 text-[16px]" onClick={() => {
@@ -386,27 +389,9 @@ function SecretInput({ label, testId, stored, onCommit }: { label: string; testI
   );
 }
 
-function BillingFields({ billing, onNotice }: { billing: BillingSettings; onNotice: (message: string) => void }) {
-  function save(patch: Partial<BillingSettings>) {
-    writeBillingSettings({ ...readBillingSettings(), ...patch });
-    onNotice("Guardado");
-  }
+function BillingFields() {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <Field label="Client ID" testId="moloni-client-id" value={billing.clientId} onSave={(clientId) => save({ clientId })} />
-      <SecretInput label="Client Secret" testId="moloni-secret" stored={Boolean(billing.clientSecret)} onCommit={(clientSecret) => save({ clientSecret })} />
-      <Field label="Utilizador / e-mail" testId="moloni-user" value={billing.user} onSave={(user) => save({ user })} />
-      <SecretInput label="Palavra-passe" testId="moloni-password" stored={Boolean(billing.password)} onCommit={(password) => save({ password })} />
-      <Field label="Empresa" testId="moloni-empresa" value={billing.companyId} onSave={(companyId) => save({ companyId })} />
-      <Field label="Série de documentos" testId="moloni-serie" value={billing.series} onSave={(series) => save({ series })} />
-      <label className="grid gap-1 text-[16px]">Tipo de documento por defeito
-        <select data-testid="moloni-tipo" value={billing.documentType} onChange={(event) => save({ documentType: event.target.value as BillingSettings["documentType"] })} className="h-10 rounded-lg border px-2">
-          {DOCUMENT_TYPES.map((item) => <option key={item}>{item}</option>)}
-        </select>
-      </label>
-      <Field label="Método de pagamento por defeito" testId="moloni-pagamento" value={billing.paymentMethod} onSave={(paymentMethod) => save({ paymentMethod })} />
-      <button type="button" data-testid="moloni-testar" className="h-11 rounded-xl bg-[var(--charcoal)] px-4 text-[16px] font-semibold text-white sm:col-span-2" onClick={() => onNotice(billingReady(readBillingSettings()) ? "Os campos estão preenchidos. A ligação real à Moloni fica para a fase cloud — daqui não sai nenhum segredo." : "Ainda faltam campos. Preenche-os antes de testar.")}>Testar ligação</button>
-    </div>
+    <p className="text-[16px] text-[var(--muted-text)]">A ligação à faturação certificada está no separador Integrações. O segredo e a palavra-passe não ficam neste computador.</p>
   );
 }
 

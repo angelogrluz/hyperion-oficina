@@ -56,13 +56,13 @@ export function readBillingSettings(): BillingSettings {
   billingRaw = raw;
   const parsed = raw ? readJson(BILLING_KEY, emptyBilling) : emptyBilling;
   const documentType = DOCUMENT_TYPES.includes(parsed.documentType) ? parsed.documentType : "Fatura";
-  billingSnap = { ...emptyBilling, ...parsed, documentType };
+  billingSnap = { ...emptyBilling, ...parsed, documentType, clientSecret: "", password: "" };
   return billingSnap;
 }
 
 export function writeBillingSettings(next: BillingSettings) {
   if (typeof localStorage === "undefined") return;
-  localStorage.setItem(BILLING_KEY, JSON.stringify(next));
+  localStorage.setItem(BILLING_KEY, JSON.stringify({ ...next, clientSecret: "", password: "" }));
   void import("@/browser/src/cloud").then((cloud) => cloud.afterLocalWrite());
   billingRaw = "\0";
   listeners.forEach((listener) => listener());

@@ -22,6 +22,8 @@ import {
 import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
 import { purchaseTypeMovesStock } from "@/src/config";
 import { issueMoloniInvoice, issueMoloniQuote, SHEET_PAYMENTS } from "@/lib/moloni/service";
+import { issueCloudDocument } from "@/browser/src/moloni";
+import { readCloudUser } from "@/browser/src/cloud";
 import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
@@ -960,8 +962,20 @@ export async function issueQuoteRecord(orderId: string) {
   const sequence = serverQuote ? 1 : nextDocumentSequence(snap, year, "ORC");
   let issued;
   try {
-    issued = await issueMoloniQuote(moloniPayload(bundle, sequence, year));
-    if (serverQuote && issued) issued = { ...issued, documentNumber: serverQuote };
+    const payload = moloniPayload(bundle, sequence, year);
+    const cloudUser = readCloudUser();
+    const remote = cloudUser?.companyId
+      ? await issueCloudDocument({
+        companyId: cloudUser.companyId,
+        kind: "orcamento",
+        orderNumber: payload.orderNumber,
+        total: payload.total,
+        customer: payload.customer,
+        lines: payload.lines,
+      })
+      : null;
+    issued = remote ?? await issueMoloniQuote(payload);
+    if (issued.simulated && serverQuote) issued = { ...issued, documentNumber: serverQuote };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou o orçamento." };
   }
@@ -994,8 +1008,21 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
   const sequence = serverInvoice ? 1 : nextDocumentSequence(snap, year, "FT");
   let issued;
   try {
-    issued = await issueMoloniInvoice({ ...moloniPayload(bundle, sequence, year), paymentMethod });
-    if (serverInvoice && issued) issued = { ...issued, documentNumber: serverInvoice };
+    const payload = moloniPayload(bundle, sequence, year);
+    const cloudUser = readCloudUser();
+    const remote = cloudUser?.companyId
+      ? await issueCloudDocument({
+        companyId: cloudUser.companyId,
+        kind: "fatura",
+        orderNumber: payload.orderNumber,
+        paymentMethod,
+        total: payload.total,
+        customer: payload.customer,
+        lines: payload.lines,
+      })
+      : null;
+    issued = remote ?? await issueMoloniInvoice({ ...payload, paymentMethod });
+    if (issued.simulated && serverInvoice) issued = { ...issued, documentNumber: serverInvoice };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "A Moloni recusou a fatura." };
   }
