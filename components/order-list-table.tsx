@@ -68,9 +68,9 @@ export function OrderListTable({ rows }: { rows: OrderRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-[#d5ebed] bg-white">
+    <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
       <table className="w-full min-w-[860px] border-collapse text-xs">
-        <thead className="bg-[#e7f7f8] text-[#0b5f68]">
+        <thead className="bg-[var(--mist)] text-[var(--ink)]">
           <tr>
             {COLUMNS.map((column) => (
               <th key={column.key} className={cn("px-2 py-1.5 font-semibold", column.align === "right" && "text-right")}>
@@ -88,7 +88,7 @@ export function OrderListTable({ rows }: { rows: OrderRow[] }) {
                   value={filters[column.key]}
                   aria-label={`Filtrar ${column.label}`}
                   onChange={(event) => setFilters((current) => ({ ...current, [column.key]: event.target.value }))}
-                  className="h-7 w-full rounded border border-[#d5ebed] bg-white px-1.5 text-xs text-[#14343a]"
+                  className="h-7 w-full rounded border border-[var(--line)] bg-white px-1.5 text-xs text-[var(--ink)]"
                 />
               </th>
             ))}
@@ -97,28 +97,28 @@ export function OrderListTable({ rows }: { rows: OrderRow[] }) {
         <tbody>
           {visible.length === 0 ? (
             <tr>
-              <td colSpan={COLUMNS.length} className="px-2 py-6 text-center text-[#4d6d73]">
+              <td colSpan={COLUMNS.length} className="px-2 py-6 text-center text-[var(--muted-text)]">
                 Nenhuma folha de obra corresponde aos filtros.
               </td>
             </tr>
           ) : (
             visible.map((row, index) => (
-              <tr key={row.id} className={cn("border-t border-[#d5ebed] hover:bg-[#dff5f7]", index % 2 === 1 && "bg-[#f4fbfb]")}>
+              <tr key={row.id} className={cn("border-t border-[var(--line)] hover:bg-[var(--mist)]", index % 2 === 1 && "bg-[var(--paper)]")}>
                 <td className="px-2 py-1">
-                  <Link href={row.href} className="font-semibold text-[#0b8f9c]">{row.number}</Link>
+                  <Link href={row.href} className="font-semibold text-[var(--glow)]">{row.number}</Link>
                 </td>
                 <td className="px-2 py-1 whitespace-nowrap">{row.date}</td>
                 <td className="px-2 py-1 font-mono whitespace-nowrap">{row.plate}</td>
                 <td className="px-2 py-1">{row.vehicle}</td>
                 <td className="px-2 py-1">{row.client}</td>
                 <td className="px-2 py-1 whitespace-nowrap">{row.status}</td>
-                <td className="px-2 py-1 text-right font-medium text-[#0b8f9c] tabular-nums">{formatEUR(row.total)}</td>
+                <td className="px-2 py-1 text-right font-medium text-[var(--glow)] tabular-nums">{formatEUR(row.total)}</td>
               </tr>
             ))
           )}
         </tbody>
         <tfoot>
-          <tr className="border-t border-[#0b8f9c]/30 bg-[#e7f7f8] font-semibold text-[#0b5f68]">
+          <tr className="border-t border-[var(--glow)]/30 bg-[var(--mist)] font-semibold text-[var(--ink)]">
             <td className="px-2 py-1.5" colSpan={6}>{visible.length} folhas</td>
             <td className="px-2 py-1.5 text-right tabular-nums">{formatEUR(total)}</td>
           </tr>

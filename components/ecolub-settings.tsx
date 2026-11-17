@@ -22,9 +22,9 @@ export function EcolubSettings() {
           if (parsed !== null && parsed >= 0) writeEcolubRate(parsed);
           setDraft(null);
         }}
-        className="h-10 rounded-lg border border-[#d5ebed] px-3"
+        className="h-10 rounded-lg border border-[var(--line)] px-3"
       />
-      <span className="text-xs text-[#4d6d73]">Valor de origem: 0,09 € por litro. IVA 23% e margem 0%.</span>
+      <span className="text-xs text-[var(--muted-text)]">Valor de origem: 0,09 € por litro. IVA 23% e margem 0%.</span>
     </label>
   );
 }

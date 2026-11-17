@@ -79,7 +79,7 @@ export function LineGrid({
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[820px] border-collapse text-xs">
-        <thead className="bg-[#e7f7f8] text-[#0b5f68]">
+        <thead className="bg-[var(--mist)] text-[var(--ink)]">
           <tr>
             {COLUMNS.map((column) => (
               <th key={column.key} className={cn("px-1.5 py-1.5 font-semibold", column.align === "right" && "text-right")}>
@@ -98,7 +98,7 @@ export function LineGrid({
                   value={filters[column.key]}
                   aria-label={`Filtrar ${column.label}`}
                   onChange={(event) => setFilters((current) => ({ ...current, [column.key]: event.target.value }))}
-                  className="h-6 w-full rounded border border-[#d5ebed] px-1 text-xs"
+                  className="h-6 w-full rounded border border-[var(--line)] px-1 text-xs"
                 />
               </th>
             ))}
@@ -108,11 +108,11 @@ export function LineGrid({
         <tbody>
           {visible.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-2 py-6 text-center text-[#4d6d73]">Sem linhas neste filtro.</td>
+              <td colSpan={8} className="px-2 py-6 text-center text-[var(--muted-text)]">Sem linhas neste filtro.</td>
             </tr>
           ) : (
             visible.map((line, index) => (
-              <tr key={line.key} className={cn("border-t border-[#d5ebed]", index % 2 === 1 && "bg-[#f4fbfb]")}>
+              <tr key={line.key} className={cn("border-t border-[var(--line)]", index % 2 === 1 && "bg-[var(--paper)]")}>
                 <Cell>
                   <CellInput value={line.ref} disabled={locked} label="Referência" onChange={(value) => onChange(line.key, { ref: value })} />
                 </Cell>
@@ -131,9 +131,9 @@ export function LineGrid({
                 <Cell align="right">
                   <CellInput value={line.vatRate} disabled={locked} label="IVA" align="right" onChange={(value) => onChange(line.key, { vatRate: value })} />
                 </Cell>
-                <td className="px-2 py-0.5 text-right font-medium text-[#0b8f9c] tabular-nums">{formatEUR(line.total)}</td>
+                <td className="px-2 py-0.5 text-right font-medium text-[var(--glow)] tabular-nums">{formatEUR(line.total)}</td>
                 <td className="px-1 py-0.5 text-right">
-                  <button type="button" className="text-[#4d6d73] hover:text-[#0b5f68] disabled:opacity-40" disabled={locked} onClick={() => onRemove(line.key)} aria-label="Tirar linha">
+                  <button type="button" className="text-[var(--muted-text)] hover:text-[var(--ink)] disabled:opacity-40" disabled={locked} onClick={() => onRemove(line.key)} aria-label="Tirar linha">
                     ×
                   </button>
                 </td>
@@ -142,7 +142,7 @@ export function LineGrid({
           )}
         </tbody>
         <tfoot>
-          <tr className="border-t border-[#0b8f9c]/30 bg-[#e7f7f8] font-semibold text-[#0b5f68]">
+          <tr className="border-t border-[var(--glow)]/30 bg-[var(--mist)] font-semibold text-[var(--ink)]">
             <td className="px-2 py-1.5" colSpan={6}>{visible.length} linhas</td>
             <td className="px-2 py-1.5 text-right tabular-nums">{formatEUR(total)}</td>
             <td />
@@ -176,7 +176,7 @@ function CellInput({
       disabled={disabled}
       aria-label={label}
       onChange={(event) => onChange(event.target.value)}
-      className={cn("h-7 border-transparent bg-transparent px-1 text-xs shadow-none focus:border-[#0b8f9c] focus:bg-white", align === "right" && "text-right")}
+      className={cn("h-7 border-transparent bg-transparent px-1 text-xs shadow-none focus:border-[var(--glow)] focus:bg-white", align === "right" && "text-right")}
     />
   );
 }

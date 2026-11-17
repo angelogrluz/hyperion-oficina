@@ -120,7 +120,7 @@ export function ClientEditDialog({
         {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="button" className="bg-[#00a9fd] hover:bg-[#0096e0]" disabled={pending} onClick={() => void save()}>
+          <Button type="button" className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]" disabled={pending} onClick={() => void save()}>
             {pending ? "A guardar…" : "Guardar"}
           </Button>
         </DialogFooter>
@@ -219,7 +219,7 @@ export function NewClientDialog({
         {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="button" className="bg-[#00a9fd] hover:bg-[#0096e0]" disabled={pending} onClick={() => void save()}>
+          <Button type="button" className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]" disabled={pending} onClick={() => void save()}>
             {pending ? "A guardar…" : "Criar cliente"}
           </Button>
         </DialogFooter>
@@ -367,7 +367,7 @@ export function StockEntryDialog({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">
             Tipologia
-            <Input value="Produto (stock)" readOnly className="h-9 bg-[#f7f8fa]" />
+            <Input value="Produto (stock)" readOnly className="h-9 bg-[var(--paper)]" />
           </label>
           <label className="grid gap-1 text-xs">
             Referência
@@ -375,7 +375,7 @@ export function StockEntryDialog({
           </label>
           <label className="grid gap-1 text-xs">
             Descrição
-            <Input value={line.description} readOnly className="h-9 bg-[#f7f8fa]" />
+            <Input value={line.description} readOnly className="h-9 bg-[var(--paper)]" />
           </label>
           <label className="grid gap-1 text-xs">
             Quantidade a dar entrada
@@ -398,12 +398,12 @@ export function StockEntryDialog({
               className="h-9"
             />
             {listOpen ? (
-              <div className="absolute top-full right-0 left-0 z-20 mt-1 max-h-40 overflow-auto rounded-lg border border-[#d5ebed] bg-white py-1 shadow-lg">
+              <div className="absolute top-full right-0 left-0 z-20 mt-1 max-h-40 overflow-auto rounded-lg border border-[var(--line)] bg-white py-1 shadow-lg">
                 {filtered.map((item) => (
                   <button
                     key={item.id}
                     type="button"
-                    className="block w-full px-2 py-1.5 text-left hover:bg-[#e7f7f8]"
+                    className="block w-full px-2 py-1.5 text-left hover:bg-[var(--mist)]"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       setSupplierId(item.id);
@@ -417,14 +417,14 @@ export function StockEntryDialog({
                 {canCreate ? (
                   <button
                     type="button"
-                    className="block w-full px-2 py-1.5 text-left font-medium text-[#0b8f9c] hover:bg-[#e7f7f8]"
+                    className="block w-full px-2 py-1.5 text-left font-medium text-[var(--glow)] hover:bg-[var(--mist)]"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => void createSupplier()}
                   >
                     Criar fornecedor «{supplierQuery.trim()}»
                   </button>
                 ) : null}
-                {!filtered.length && !canCreate ? <p className="px-2 py-1.5 text-[#8d939c]">Sem fornecedores.</p> : null}
+                {!filtered.length && !canCreate ? <p className="px-2 py-1.5 text-[var(--steel)]">Sem fornecedores.</p> : null}
               </div>
             ) : null}
           </div>
@@ -457,7 +457,7 @@ export function StockEntryDialog({
             </Button>
           ) : null}
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="button" className="bg-[#00a9fd] hover:bg-[#0096e0]" disabled={pending} onClick={() => void save()}>
+          <Button type="button" className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]" disabled={pending} onClick={() => void save()}>
             {pending ? "A guardar…" : "Guardar"}
           </Button>
         </DialogFooter>

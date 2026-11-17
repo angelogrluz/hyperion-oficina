@@ -79,38 +79,38 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="overflow-x-auto rounded-xl border border-[#d5ebed] bg-white">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#d5ebed] px-3 py-2">
+      <section className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[var(--line)] px-3 py-2">
           <div className="flex items-center gap-2 text-[16px]">
-            <button type="button" className="rounded-md px-2 py-1 hover:bg-[#e7f7f8]" onClick={() => setCursor(shift(view === "dia" ? cursor : week, view === "dia" ? -1 : -7))}>‹</button>
+            <button type="button" className="rounded-md px-2 py-1 hover:bg-[var(--mist)]" onClick={() => setCursor(shift(view === "dia" ? cursor : week, view === "dia" ? -1 : -7))}>‹</button>
             <span className="font-medium">{view === "dia" ? cursor : `Semana de ${days[0].iso}`}</span>
-            <button type="button" className="rounded-md px-2 py-1 hover:bg-[#e7f7f8]" onClick={() => setCursor(shift(view === "dia" ? cursor : week, view === "dia" ? 1 : 7))}>›</button>
+            <button type="button" className="rounded-md px-2 py-1 hover:bg-[var(--mist)]" onClick={() => setCursor(shift(view === "dia" ? cursor : week, view === "dia" ? 1 : 7))}>›</button>
           </div>
           <div className="flex gap-2">
-            <button type="button" className={`h-9 rounded-lg px-3 text-[15px] ${view === "dia" ? "bg-[#00a9fd] text-white" : "bg-[#f4f6f8]"}`} onClick={() => setView("dia")}>Dia</button>
-            <button type="button" className={`h-9 rounded-lg px-3 text-[15px] ${view === "semana" ? "bg-[#00a9fd] text-white" : "bg-[#f4f6f8]"}`} onClick={() => setView("semana")}>Semana</button>
-            <button type="button" className="h-9 rounded-lg px-3 text-[15px] text-[#0b8f9c]" onClick={() => { setCursor(today); setDate(today); }}>Hoje</button>
+            <button type="button" className={`h-9 rounded-lg px-3 text-[15px] ${view === "dia" ? "bg-[var(--glow)] text-white" : "bg-[#f4f6f8]"}`} onClick={() => setView("dia")}>Dia</button>
+            <button type="button" className={`h-9 rounded-lg px-3 text-[15px] ${view === "semana" ? "bg-[var(--glow)] text-white" : "bg-[#f4f6f8]"}`} onClick={() => setView("semana")}>Semana</button>
+            <button type="button" className="h-9 rounded-lg px-3 text-[15px] text-[var(--glow)]" onClick={() => { setCursor(today); setDate(today); }}>Hoje</button>
           </div>
         </div>
         <div className="grid min-w-[720px]" style={{ gridTemplateColumns: `72px repeat(${Math.max(shown.length, 1)}, minmax(0,1fr))` }}>
           <div />
           {shown.map((day) => (
-            <button key={day.iso} type="button" onClick={() => { setCursor(day.iso); setDate(day.iso); setView("dia"); }} className={`border-l border-[#d5ebed] px-2 py-2 text-center text-[15px] ${day.iso === date ? "bg-[#00a9fd] text-white" : "bg-[#e7f7f8]"}`}>
+            <button key={day.iso} type="button" onClick={() => { setCursor(day.iso); setDate(day.iso); setView("dia"); }} className={`border-l border-[var(--line)] px-2 py-2 text-center text-[15px] ${day.iso === date ? "bg-[var(--glow)] text-white" : "bg-[var(--mist)]"}`}>
               {day.label} {Number(day.iso.slice(8))}
             </button>
           ))}
           {STARTS.map((clock) => (
             <div key={clock} className="contents">
-              <div className="border-t border-[#d5ebed] px-2 py-2 text-[13px] text-[#4d6d73]">{clock}</div>
+              <div className="border-t border-[var(--line)] px-2 py-2 text-[13px] text-[var(--muted-text)]">{clock}</div>
               {shown.map((day) => {
                 const items = appointments.filter((item) => lisbonISODate(new Date(item.startsAt)) === day.iso && lisbonTime(new Date(item.startsAt)) === clock);
                 return (
-                  <div key={`${day.iso}-${clock}`} className="min-h-12 border-t border-l border-[#d5ebed] p-1">
+                  <div key={`${day.iso}-${clock}`} className="min-h-12 border-t border-l border-[var(--line)] p-1">
                     {items.map((item) => {
                       const client = clients.find((person) => person.id === item.clientId);
                       const vehicle = vehicles.find((car) => car.id === item.vehicleId);
                       return (
-                        <div key={item.id} data-testid="marcacao" className="rounded-lg bg-[#e7f7f8] px-2 py-1 text-[14px] text-[#0b5f68]">
+                        <div key={item.id} data-testid="marcacao" className="rounded-lg bg-[var(--mist)] px-2 py-1 text-[14px] text-[var(--ink)]">
                           <p className="font-semibold">{item.title}</p>
                           <p>{client?.name} · {vehicle ? `${vehicle.plate}` : "sem viatura"}</p>
                           <div className="mt-1 flex gap-2">
@@ -127,7 +127,7 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
           ))}
         </div>
         {outside.length ? (
-          <div className="border-t border-[#d5ebed] px-3 py-2 text-[15px]">
+          <div className="border-t border-[var(--line)] px-3 py-2 text-[15px]">
             <p className="font-semibold">Marcações fora do horário habitual</p>
             <ul className="mt-1 grid gap-1">
               {outside.map((item) => <li key={item.id}>{lisbonISODate(new Date(item.startsAt))} {lisbonTime(new Date(item.startsAt))} · {item.title}</li>)}
@@ -135,7 +135,7 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
           </div>
         ) : null}
       </section>
-      <form data-testid="nova-marcacao" className="grid h-fit gap-2 rounded-xl border border-[#d5ebed] bg-white p-3" onSubmit={(event) => void create(event)}>
+      <form data-testid="nova-marcacao" className="grid h-fit gap-2 rounded-xl border border-[var(--line)] bg-white p-3" onSubmit={(event) => void create(event)}>
         <h2 className="text-[20px] font-semibold">Nova marcação</h2>
         <label className="text-[15px]">Cliente
           <select required value={clientId} onChange={(event) => { setClientId(event.target.value); setVehicleId(""); }} className="mt-1 h-11 w-full rounded-lg border px-2">
@@ -162,9 +162,9 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
             {STARTS.map((clock) => <option key={clock}>{clock}</option>)}
           </select>
         </label>
-        <p className="text-[14px] text-[#4d6d73]">A duração vem do tipo de serviço. A vaga tem de caber entre 9:00–13:00 ou 14:30–18:00, de segunda a sexta.</p>
+        <p className="text-[14px] text-[var(--muted-text)]">A duração vem do tipo de serviço. A vaga tem de caber entre 9:00–13:00 ou 14:30–18:00, de segunda a sexta.</p>
         {error ? <p className="text-[15px] text-[#d64545]">{error}</p> : null}
-        <button className="h-11 rounded-xl bg-[#00a9fd] font-semibold text-white">Marcar</button>
+        <button className="h-11 rounded-xl bg-[var(--glow)] font-semibold text-white">Marcar</button>
       </form>
     </div>
   );

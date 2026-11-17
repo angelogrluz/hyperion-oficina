@@ -991,7 +991,7 @@ export function DocumentEditor({
               <Button type="button" variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button>
               <Button
                 type="button"
-                className="bg-[#00a9fd] hover:bg-[#0096e0]"
+                className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]"
                 data-testid="emitir-fatura"
                 disabled={pending || !documentId || !payment}
                 onClick={() => {
@@ -1185,9 +1185,9 @@ export function DocumentEditor({
       </div>
 
       <aside className="grid gap-3 xl:sticky xl:top-16">
-        <section className="rounded-xl border border-[#d5ebed] bg-white p-3">
+        <section className="rounded-xl border border-[var(--line)] bg-white p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-[#0b8f9c]">Viatura</h2>
+            <h2 className="text-sm font-semibold text-[var(--glow)]">Viatura</h2>
             <Button type="button" variant="outline" className="h-7 px-2 text-xs" disabled={locked || !clientId} onClick={() => setVehicleOpen(true)}>Nova</Button>
           </div>
           <Field label="Viatura do cliente">
@@ -1241,7 +1241,7 @@ export function DocumentEditor({
               Procurar
             </Button>
           </div>
-          {plateNote ? <p className="mt-1 text-xs text-[#0b5f68]">{plateNote}</p> : <p className="mt-1 text-xs text-[#4d6d73]">Consulta simulada.</p>}
+          {plateNote ? <p className="mt-1 text-xs text-[var(--ink)]">{plateNote}</p> : <p className="mt-1 text-xs text-[var(--muted-text)]">Consulta simulada.</p>}
           <div className="mt-2 grid grid-cols-2 gap-2">
             <Field label="Marca"><Input value={brand} disabled={locked} onChange={(event) => { touch(); setBrand(event.target.value); }} className="h-8" /></Field>
             <Field label="Modelo"><Input value={model} disabled={locked} onChange={(event) => { touch(); setModel(event.target.value); }} className="h-8" /></Field>
@@ -1257,7 +1257,7 @@ export function DocumentEditor({
             <Field label="Quilómetros" className="col-span-2"><Input value={km} disabled={locked} inputMode="numeric" onChange={(event) => { touch(); setKm(event.target.value); }} className="h-8" /></Field>
           </div>
         </section>
-        <div className="rounded-xl border border-[#d5ebed] bg-white p-3">
+        <div className="rounded-xl border border-[var(--line)] bg-white p-3">
         <p className="text-sm text-muted-foreground">{number ?? "Novo orçamento"}</p>
         <dl className="mt-3 space-y-2 text-sm">
           <div className="flex justify-between"><dt>Base s/ IVA</dt><dd className="tabular-nums">{formatEUR(totals.base)}</dd></div>
@@ -1503,7 +1503,7 @@ function QuickVehicle({
               </Button>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">Consulta simulada, sem API paga.</p>
-            {note ? <p className="mt-1 text-xs text-[#0b5f68]">{note}</p> : null}
+            {note ? <p className="mt-1 text-xs text-[var(--ink)]">{note}</p> : null}
           </div>
           <Field label="Marca"><Input name="brand" required value={brand} onChange={(event) => setBrand(event.target.value)} className="h-10" /></Field>
           <Field label="Modelo"><Input name="model" required value={model} onChange={(event) => setModel(event.target.value)} className="h-10" /></Field>

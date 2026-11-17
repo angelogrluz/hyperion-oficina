@@ -1,5 +1,6 @@
 import { Link as RouterLink } from "react-router-dom";
 import type { ReactNode } from "react";
+import { workshopPath } from "@/lib/workshop-slug";
 
 export default function Link({
   href,
@@ -15,7 +16,7 @@ export default function Link({
   "data-testid"?: string;
 }) {
   return (
-    <RouterLink to={href} {...props}>
+    <RouterLink to={workshopPath(href)} {...props}>
       {children}
     </RouterLink>
   );

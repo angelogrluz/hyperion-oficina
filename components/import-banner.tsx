@@ -17,16 +17,16 @@ export function ImportBanner() {
     });
   }, []);
 
-  if (!open) return message ? <p className="mb-2 bg-[#e7f7f8] px-3 py-2 text-[16px]">{message}</p> : null;
+  if (!open) return message ? <p className="mb-2 bg-[var(--mist)] px-3 py-2 text-[16px]">{message}</p> : null;
 
   return (
-    <div data-testid="importar-dispositivo" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#00a9fd] bg-[#e7f7f8] px-3 py-3 text-[16px]">
+    <div data-testid="importar-dispositivo" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--glow)] bg-[var(--mist)] px-3 py-3 text-[16px]">
       <p>Encontrámos dados deste dispositivo. Queres copiá-los para a tua oficina na nuvem?</p>
       <div className="flex gap-2">
         <button
           type="button"
           disabled={pending}
-          className="h-10 rounded-lg bg-[#00a9fd] px-3 font-semibold text-white"
+          className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white"
           onClick={() => {
             setPending(true);
             void readDeviceSnapshot().then(async (snap) => {

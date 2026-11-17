@@ -28,7 +28,7 @@ export function PontosPage() {
       {!person ? (
         <div className="grid gap-3 sm:grid-cols-2">
           {users.map((user) => (
-            <button key={user.id} type="button" data-testid="ponto-nome" className="h-24 rounded-2xl bg-[#00a9fd] text-[28px] font-semibold text-white" onClick={() => { setPinFor(user.id); setPinError(""); }}>{user.name}</button>
+            <button key={user.id} type="button" data-testid="ponto-nome" className="h-24 rounded-2xl bg-[var(--glow)] text-[28px] font-semibold text-white" onClick={() => { setPinFor(user.id); setPinError(""); }}>{user.name}</button>
           ))}
         </div>
       ) : (
@@ -63,7 +63,7 @@ export function PontosPage() {
           <label className="text-[16px]">Entrada<input name="in" type="datetime-local" defaultValue={stamp(editing.inAt)} className="mt-1 h-12 w-full rounded-lg border px-2 text-[18px]" /></label>
           <label className="text-[16px]">Saída<input name="out" type="datetime-local" defaultValue={editing.outAt ? stamp(editing.outAt) : ""} className="mt-1 h-12 w-full rounded-lg border px-2 text-[18px]" /></label>
           <div className="flex gap-2">
-            <button className="h-12 rounded-xl bg-[#00a9fd] px-4 font-semibold text-white">Guardar ponto</button>
+            <button className="h-12 rounded-xl bg-[var(--glow)] px-4 font-semibold text-white">Guardar ponto</button>
             <button type="button" className="h-12 rounded-xl border px-4" onClick={() => setEditing(null)}>Cancelar</button>
           </div>
         </form>

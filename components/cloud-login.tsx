@@ -44,35 +44,35 @@ export function CloudLogin() {
       }}
     >
       <div>
-        <h2 className="text-[26px] font-semibold text-[#0e2433]">{mode === "criar" ? "Regista a tua oficina" : "Entrar"}</h2>
-        <p className="mt-1 text-[15px] text-[#5c6b76]">{mode === "criar" ? "Crias a conta e ficas à espera da ativação." : "Entra com o e-mail da tua oficina."}</p>
+        <h2 className="text-[26px] font-semibold text-[var(--ink)]">{mode === "criar" ? "Regista a tua oficina" : "Entrar"}</h2>
+        <p className="mt-1 text-[15px] text-[var(--muted-text)]">{mode === "criar" ? "Crias a conta e ficas à espera da ativação." : "Entra com o e-mail da tua oficina."}</p>
       </div>
       {mode === "criar" ? (
         <>
-          <label className="grid gap-1 text-[15px] font-medium text-[#0e2433]">Nome da oficina
+          <label className="grid gap-1 text-[15px] font-medium text-[var(--ink)]">Nome da oficina
             <Input name="company" required className="h-12 border-[#d5dde3] text-[17px]" placeholder="Oficina do João" />
           </label>
-          <label className="grid gap-1 text-[15px] font-medium text-[#0e2433]">O teu nome
+          <label className="grid gap-1 text-[15px] font-medium text-[var(--ink)]">O teu nome
             <Input name="owner" required autoComplete="name" className="h-12 border-[#d5dde3] text-[17px]" placeholder="João Silva" />
           </label>
         </>
       ) : null}
-      <label className="grid gap-1 text-[15px] font-medium text-[#0e2433]">E-mail
+      <label className="grid gap-1 text-[15px] font-medium text-[var(--ink)]">E-mail
         <Input name="email" type="email" autoComplete="username" required className="h-12 border-[#d5dde3] text-[17px]" data-testid="login-email" />
       </label>
-      <label className="grid gap-1 text-[15px] font-medium text-[#0e2433]">Palavra-passe
+      <label className="grid gap-1 text-[15px] font-medium text-[var(--ink)]">Palavra-passe
         <span className="relative">
           <Input name="password" type={showPassword ? "text" : "password"} autoComplete={mode === "criar" ? "new-password" : "current-password"} required minLength={6} className="h-12 border-[#d5dde3] pr-16 text-[17px]" data-testid="login-password" />
-          <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[#0b6f8a]" onClick={() => setShowPassword((value) => !value)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
+          <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[var(--glow-deep)]" onClick={() => setShowPassword((value) => !value)}>{showPassword ? "Ocultar" : "Mostrar"}</button>
         </span>
       </label>
       {error ? <p className="text-[15px] text-[#b42318]" role="alert" data-testid="login-erro">{error}</p> : null}
-      {info ? <p className="text-[15px] text-[#0b6f8a]" role="status">{info}</p> : null}
-      <Button type="submit" disabled={pending} className="h-12 bg-[#0e2433] text-[17px] hover:bg-[#16344a]">{pending ? "A aguardar…" : mode === "criar" ? "Criar conta" : "Entrar"}</Button>
+      {info ? <p className="text-[15px] text-[var(--glow-deep)]" role="status">{info}</p> : null}
+      <Button type="submit" disabled={pending} className="h-12 bg-[var(--ink)] text-[17px] hover:bg-[var(--graphite)]">{pending ? "A aguardar…" : mode === "criar" ? "Criar conta" : "Entrar"}</Button>
       {mode === "entrar" ? (
         <button
           type="button"
-          className="justify-self-start text-[15px] font-medium text-[#0b6f8a]"
+          className="justify-self-start text-[15px] font-medium text-[var(--glow-deep)]"
           onClick={(event) => {
             const form = event.currentTarget.form;
             const email = String(new FormData(form ?? undefined).get("email") ?? "").trim();

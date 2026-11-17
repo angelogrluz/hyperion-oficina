@@ -57,7 +57,7 @@ export function PlateSearch({
       <p className="text-xs text-muted-foreground">
         Formato AA-00-AA. A consulta está em <strong>simulação</strong> — não liga a uma API paga de matrículas.
       </p>
-      {message ? <p className="text-xs text-[#0b5f68]">{message}</p> : null}
+      {message ? <p className="text-xs text-[var(--ink)]">{message}</p> : null}
     </div>
   );
 }

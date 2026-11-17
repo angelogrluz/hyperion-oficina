@@ -2,7 +2,7 @@ import { APPROVAL_LABEL, type Approval } from "@/lib/approval";
 import { formatMediumDate, lisbonTime } from "@/lib/format";
 
 const STYLES: Record<Approval, string> = {
-  aguarda: "bg-[#f5a524] text-[#3a2a00]",
+  aguarda: "bg-[#f5a524] text-[var(--ink)]",
   aprovado: "bg-[#1f9d55] text-white",
   recusado: "bg-[#d64545] text-white",
 };

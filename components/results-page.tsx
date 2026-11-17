@@ -49,11 +49,11 @@ export function ResultsPage({ orders, purchases, purchaseLines }: { orders: Orde
   }, [orders, purchases, purchaseLines, year, quarter]);
 
   return (
-    <section data-testid="resultados" className="max-w-3xl rounded-xl border border-[#d5ebed] bg-white">
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[#d5ebed] px-4 py-3">
+    <section data-testid="resultados" className="max-w-3xl rounded-xl border border-[var(--line)] bg-white">
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
         <div>
           <h1 className="text-[22px] font-semibold">Resultados</h1>
-          <p className="text-[15px] text-[#4d6d73]">Estimativa de IVA do trimestre. O valor oficial é o da declaração do contabilista.</p>
+          <p className="text-[15px] text-[var(--muted-text)]">Estimativa de IVA do trimestre. O valor oficial é o da declaração do contabilista.</p>
         </div>
         <div className="flex gap-2">
           <label className="text-[14px]">Ano
@@ -68,9 +68,9 @@ export function ResultsPage({ orders, purchases, purchaseLines }: { orders: Orde
       </div>
       <table className="w-full text-[17px]">
         <tbody>
-          <tr className="border-t border-[#d5ebed]"><td className="px-4 py-3">IVA liquidado nas faturas</td><td data-testid="iva-liquidado" className="px-4 py-3 text-right font-semibold tabular-nums">{formatEUR(totals.salesVat)}</td></tr>
-          <tr className="border-t border-[#d5ebed]"><td className="px-4 py-3">IVA dedutível nas compras</td><td data-testid="iva-dedutivel" className="px-4 py-3 text-right font-semibold tabular-nums">{formatEUR(totals.purchaseVat)}</td></tr>
-          <tr className="border-t border-[#d5ebed] bg-[#e7f7f8]"><td className="px-4 py-3 font-semibold">IVA a pagar (estimativa)</td><td data-testid="iva-pagar" className="px-4 py-3 text-right text-[20px] font-semibold tabular-nums text-[#0b8f9c]">{formatEUR(totals.due)}</td></tr>
+          <tr className="border-t border-[var(--line)]"><td className="px-4 py-3">IVA liquidado nas faturas</td><td data-testid="iva-liquidado" className="px-4 py-3 text-right font-semibold tabular-nums">{formatEUR(totals.salesVat)}</td></tr>
+          <tr className="border-t border-[var(--line)]"><td className="px-4 py-3">IVA dedutível nas compras</td><td data-testid="iva-dedutivel" className="px-4 py-3 text-right font-semibold tabular-nums">{formatEUR(totals.purchaseVat)}</td></tr>
+          <tr className="border-t border-[var(--line)] bg-[var(--mist)]"><td className="px-4 py-3 font-semibold">IVA a pagar (estimativa)</td><td data-testid="iva-pagar" className="px-4 py-3 text-right text-[20px] font-semibold tabular-nums text-[var(--glow)]">{formatEUR(totals.due)}</td></tr>
         </tbody>
       </table>
     </section>

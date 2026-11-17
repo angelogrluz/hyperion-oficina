@@ -29,19 +29,19 @@ export default async function ResultsPage() {
     ["Clientes", String(clients)],
   ];
   return (
-    <section className="max-w-3xl rounded-xl border border-[#d5ebed] bg-white">
-      <h1 className="border-b border-[#d5ebed] px-4 py-3 text-lg font-semibold">Resultados da Empresa</h1>
+    <section className="max-w-3xl rounded-xl border border-[var(--line)] bg-white">
+      <h1 className="border-b border-[var(--line)] px-4 py-3 text-lg font-semibold">Resultados da Empresa</h1>
       <table className="w-full text-sm">
         <tbody>
           {rows.map(([label, value]) => (
-            <tr key={label} className="border-t border-[#d5ebed]">
+            <tr key={label} className="border-t border-[var(--line)]">
               <td className="px-4 py-2">{label}</td>
-              <td className="px-4 py-2 text-right font-medium text-[#0b8f9c] tabular-nums">{value}</td>
+              <td className="px-4 py-2 text-right font-medium text-[var(--glow)] tabular-nums">{value}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className="px-4 py-3 text-xs text-[#4d6d73]">Valores do mês corrente. A faturação certificada continua em simulação.</p>
+      <p className="px-4 py-3 text-xs text-[var(--muted-text)]">Valores do mês corrente. A faturação certificada continua em simulação.</p>
     </section>
   );
 }

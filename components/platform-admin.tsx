@@ -70,20 +70,20 @@ export function PlatformAdmin() {
     <section data-testid="admin-oficinaplan" className="grid gap-4">
       <div>
         <h1 className="text-[26px] font-semibold">Administração OficinaPlan</h1>
-        <p className="text-[16px] text-[#4d6d73]">Ativa a oficina depois de confirmares o pagamento. Não vês os dados dos clientes.</p>
+        <p className="text-[16px] text-[var(--muted-text)]">Ativa a oficina depois de confirmares o pagamento. Não vês os dados dos clientes.</p>
       </div>
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((item) => (
-          <button key={item.id} type="button" onClick={() => setFilter(item.id)} className={`h-10 rounded-full px-4 text-[16px] font-semibold ${filter === item.id ? "bg-[#22272a] text-white" : "bg-white ring-1 ring-[#d5ebed]"}`}>
+          <button key={item.id} type="button" onClick={() => setFilter(item.id)} className={`h-10 rounded-full px-4 text-[16px] font-semibold ${filter === item.id ? "bg-[var(--charcoal)] text-white" : "bg-white ring-1 ring-[var(--line)]"}`}>
             {item.label}
           </button>
         ))}
       </div>
       {error ? <p className="text-[16px] text-[#d64545]">{error}</p> : null}
-      <div className="overflow-x-auto rounded-xl border border-[#d5ebed] bg-white">
+      <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
         <table className="w-full min-w-[720px] text-left text-[16px]">
           <thead>
-            <tr className="text-[14px] text-[#4d6d73]">
+            <tr className="text-[14px] text-[var(--muted-text)]">
               <th className="px-3 py-2">Oficina</th>
               <th className="px-3 py-2">Dono</th>
               <th className="px-3 py-2">Data</th>
@@ -92,7 +92,7 @@ export function PlatformAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.length === 0 ? <tr><td colSpan={5} className="px-3 py-4 text-[#8d939c]">{error ? "A lista não chegou a carregar." : "Nenhuma oficina neste filtro."}</td></tr> : shown.map((row) => (
+            {shown.length === 0 ? <tr><td colSpan={5} className="px-3 py-4 text-[var(--steel)]">{error ? "A lista não chegou a carregar." : "Nenhuma oficina neste filtro."}</td></tr> : shown.map((row) => (
               <tr key={row.id} className="border-t border-[#eaeaf2]">
                 <td className="px-3 py-3 font-semibold">{row.name}</td>
                 <td className="px-3 py-3">{row.owner_email ?? "—"}</td>

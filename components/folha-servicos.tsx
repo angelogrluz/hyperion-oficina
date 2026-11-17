@@ -67,7 +67,7 @@ export function FolhaServicos({
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 text-black print:bg-white print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3">
-        <a href={backHref} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
+        <a href={backHref} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</a>
         <PrintButton />
       </div>
       <article data-testid="folha-servicos" className="print-keep mx-auto flex min-h-[277mm] max-w-[210mm] flex-col bg-white px-5 py-4 text-[12px] shadow-sm print:min-h-[260mm] print:shadow-none">

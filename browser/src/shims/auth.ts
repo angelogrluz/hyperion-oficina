@@ -1,4 +1,5 @@
 import { pinMatches, readUsers, writeCurrentUserId, type RoleId } from "@/lib/user-settings";
+import { OFFICE_ROLES } from "@/lib/workshop-slug";
 import { cloudConfigured, readCloudUser, signOut } from "../cloud";
 
 const SESSION_KEY = "hcl_browser_session";
@@ -14,9 +15,11 @@ export function readSession(): Session | null {
   if (cloudConfigured()) {
     const user = readCloudUser();
     if (!user) return null;
-    const office = user.platformAdmin || (user.companyStatus === "active" && user.role && user.role !== "tecnico");
+    const office = user.platformAdmin || (user.companyStatus === "active" && user.memberActive !== false && !!user.role && OFFICE_ROLES.has(user.role));
     if (!office) return null;
-    return { userId: user.userId, name: user.email, role: "admin", email: user.email };
+    const staff = readUsers().find((item) => item.email.trim().toLowerCase() === user.email.trim().toLowerCase() && item.active);
+    const role = staff && staff.role !== "mecanico" ? staff.role : "admin";
+    return { userId: user.userId, name: staff?.name || (user.role === "owner" ? "Admin" : user.email), role, email: user.email };
   }
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;

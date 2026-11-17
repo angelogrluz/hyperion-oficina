@@ -1,8 +1,9 @@
 import { StrictMode, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams, type Location } from "react-router-dom";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Toaster } from "sonner";
+import Link from "next/link";
 import { JobBoard } from "@/components/job-board";
 import { LoginForm } from "@/components/login-form";
 import { CloudLogin } from "@/components/cloud-login";
@@ -10,6 +11,8 @@ import { ImportBanner } from "@/components/import-banner";
 import { AccountHold } from "@/components/account-hold";
 import { EntryBrand } from "@/components/entry-brand";
 import { PlatformAdmin } from "@/components/platform-admin";
+import { BrandedLogin, Landing, PlatformScreen, RegisterPage, SlugFinder, useSignedInSlug } from "@/components/site-pages";
+import { getActiveSlug, OFFICE_ROLES, setActiveSlug, slugMatches } from "@/lib/workshop-slug";
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
 import { StockMovements } from "@/components/stock-movements";
@@ -36,7 +39,7 @@ import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval
 import { resolveLineIdentity } from "@/lib/line-ref";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { readSession } from "./shims/auth";
-import { bootCloud, cloudConfigured, readCloudUser, subscribeCloud } from "./cloud";
+import { bootCloud, cloudConfigured, readCloudUser, signOut, subscribeCloud } from "./cloud";
 import { saveClient, saveVehicle } from "./shims/records";
 import { clearWorkshopCache } from "@/lib/browser-cache";
 import { readSnapshot, resetDemo, subscribeSnapshot, type Snapshot } from "./store";
@@ -66,7 +69,7 @@ function ResetButton() {
   return (
     <button
       type="button"
-      className="mb-2 w-full rounded-lg bg-white px-2 py-2 text-left text-xs font-semibold text-[#0b8f9c]"
+      className="mb-2 w-full rounded-lg bg-white px-2 py-2 text-left text-xs font-semibold text-[var(--glow)]"
       onClick={() => {
         if (!window.confirm("Repor dados de demonstração? As alterações neste browser serão apagadas.")) return;
         clearWorkshopCache();
@@ -91,8 +94,8 @@ function Frame({ children }: { children: ReactNode }) {
   const onSheet = /^\/ordens\/.+/.test(pathname);
   const held = holdFor(cloudUser);
   if (held) return <AccountHold status={held} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;
-  if (!session) return <Navigate to="/entrar" replace />;
-  if (!snap) return <p className="p-8 text-sm text-[#4d6d73]">A carregar a oficina…</p>;
+  if (!session) return <Navigate to={getActiveSlug() ? `/${getActiveSlug()}` : "/entrar"} replace />;
+  if (!snap) return <p className="p-8 text-sm text-[var(--muted-text)]">A carregar a oficina…</p>;
   const totals = shellTotals(snap.orders.map((order) => ({
     status: order.status,
     dateIn: new Date(order.dateIn),
@@ -102,12 +105,43 @@ function Frame({ children }: { children: ReactNode }) {
     <Shell user={{ name: session.name, email: session.email ?? "" }} totals={totals} footerExtra={cloudConfigured() ? null : <ResetButton />}>
       <ImportBanner />
       {onSheet ? null : (
-        <p className="mb-2 bg-[#e7f7f8] px-2 py-1 text-[17px] text-[#0b5f68]">
+        <p className="mb-2 bg-[var(--mist)] px-2 py-1 text-[17px] text-[var(--ink)]">
           {cloudConfigured() ? "OficinaPlan. Os dados da oficina estão na tua conta." : "Servidor não configurado. Os dados ficam neste computador."}
         </p>
       )}
       {children}
     </Shell>
+  );
+}
+
+function DocumentLists({ kind }: { kind: "faturas" | "recibos" | "orcamentos" }) {
+  const snap = useSnap();
+  if (!snap) return null;
+  const title = kind === "faturas" ? "Faturas" : kind === "recibos" ? "Recibos" : "Orçamentos";
+  const rows = kind === "orcamentos"
+    ? snap.quotes.map((quote) => ({ id: quote.id, href: `/ordens/${snap.orders.find((order) => order.quoteId === quote.id)?.id ?? ""}`, number: quote.number, detail: quote.problem || "Orçamento", when: quote.date }))
+    : snap.orders
+      .filter((order) => kind === "recibos" ? Boolean(order.paidAt) : Boolean(order.invoiceNumber))
+      .map((order) => ({ id: order.id, href: `/ordens/${order.id}/${kind === "recibos" ? "recibo" : "fatura"}`, number: kind === "recibos" ? order.invoiceNumber ?? order.number : order.invoiceNumber ?? order.number, detail: order.problem || order.number, when: order.invoiceIssuedAt || order.dateIn }));
+  return (
+    <section className="grid gap-3">
+      <h1 className="text-[26px] font-semibold text-[var(--ink)]">{title}</h1>
+      {rows.length === 0 ? <p className="text-[16px] text-[var(--muted-text)]">Ainda não há {title.toLowerCase()}.</p> : (
+        <ul className="divide-y divide-[var(--line)] rounded-xl border border-[var(--line)] bg-white">
+          {rows.map((row) => (
+            <li key={row.id}>
+              <Link href={row.href || "/"} className="flex items-center justify-between gap-3 px-3 py-3 hover:bg-[var(--paper)]">
+                <span>
+                  <span className="block font-semibold">{row.number}</span>
+                  <span className="text-[15px] text-[var(--muted-text)]">{row.detail}</span>
+                </span>
+                <span className="text-[14px] text-[var(--steel)]">{row.when ? new Date(row.when).toLocaleDateString("pt-PT") : ""}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -148,14 +182,14 @@ function Home() {
             data-testid={`filter-${item}`}
             aria-pressed={filter === item}
             onClick={() => setFilter(item)}
-            className={`h-10 rounded-full px-4 text-[17px] font-semibold ${filter === item ? "bg-[#22272a] text-white" : "bg-white text-[#22272a] ring-1 ring-[#e1e2e5]"}`}
+            className={`h-10 rounded-full px-4 text-[17px] font-semibold ${filter === item ? "bg-[var(--charcoal)] text-white" : "bg-white text-[var(--charcoal)] ring-1 ring-[#e1e2e5]"}`}
           >
             {item === "todas" ? "Todas" : APPROVAL_LABEL[item]}
           </button>
         ))}
       </div>
       <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div>{jobs.length === 0 ? <p className="text-sm text-[#8d939c]">Nenhuma obra neste estado.</p> : <JobBoard jobs={jobs} />}</div>
+        <div>{jobs.length === 0 ? <p className="text-sm text-[var(--steel)]">Nenhuma obra neste estado.</p> : <JobBoard jobs={jobs} />}</div>
         <TechnicianStatus orders={ordersForOficina(snap)} />
       </div>
     </div>
@@ -326,13 +360,13 @@ function Clients() {
   if (!snap) return null;
   return (
     <div>
-      <PageHeader title="Listagem de Clientes" description="Selecione um cliente na tabela." action={<a className="inline-flex h-10 items-center rounded-lg bg-[#0b8f9c] px-4 text-sm text-white" href={`${import.meta.env.BASE_URL}clientes/novo`}>Novo cliente</a>} />
+      <PageHeader title="Listagem de Clientes" description="Selecione um cliente na tabela." action={<a className="inline-flex h-10 items-center rounded-lg bg-[var(--glow)] px-4 text-sm text-white" href={`${import.meta.env.BASE_URL}clientes/novo`}>Novo cliente</a>} />
       <TableShell>
         <thead><tr><Th>Nome</Th><Th>NIF</Th><Th>Telefone</Th><Th>E-mail</Th></tr></thead>
         <tbody>
           {snap.clients.map((client) => (
-            <tr key={client.id} className="border-t border-[#d5ebed]">
-              <Td><a className="font-medium text-[#0b8f9c]" href={`${import.meta.env.BASE_URL}clientes/${client.id}`}>{client.name}</a></Td>
+            <tr key={client.id} className="border-t border-[var(--line)]">
+              <Td><a className="font-medium text-[var(--glow)]" href={`${import.meta.env.BASE_URL}clientes/${client.id}`}>{client.name}</a></Td>
               <Td>{client.nif}</Td>
               <Td>{client.phone}</Td>
               <Td>{client.email}</Td>
@@ -346,7 +380,7 @@ function Clients() {
 
 function NewClient() {
   return (
-    <div className="max-w-2xl rounded-xl border border-[#d5ebed] bg-white p-4">
+    <div className="max-w-2xl rounded-xl border border-[var(--line)] bg-white p-4">
       <PageHeader title="Novo cliente" />
       <SaveForm action={(formData) => saveClient(null, formData)} next={(id) => `/clientes/${id}`}>
         <input name="name" required placeholder="Nome" className="h-10 rounded-lg border px-3" />
@@ -364,7 +398,7 @@ function NewVehicle() {
   const snap = useSnap();
   if (!snap) return null;
   return (
-    <div className="max-w-2xl rounded-xl border border-[#d5ebed] bg-white p-4">
+    <div className="max-w-2xl rounded-xl border border-[var(--line)] bg-white p-4">
       <PageHeader title="Nova viatura" description="A procura da matrícula está em simulação." />
       <SaveForm action={(formData) => saveVehicle(null, formData)} next={(id) => `/viaturas/${id}`}>
         <VehicleFields clients={snap.clients} />
@@ -378,12 +412,12 @@ function Vehicles() {
   if (!snap) return null;
   return (
     <div>
-      <PageHeader title="Listagem de Viaturas" action={<a className="text-sm font-medium text-[#0b8f9c]" href={`${import.meta.env.BASE_URL}viaturas/nova`}>Nova viatura</a>} />
+      <PageHeader title="Listagem de Viaturas" action={<a className="text-sm font-medium text-[var(--glow)]" href={`${import.meta.env.BASE_URL}viaturas/nova`}>Nova viatura</a>} />
       <TableShell>
         <thead><tr><Th>Viatura</Th><Th>Modelo</Th><Th>Cliente</Th></tr></thead>
         <tbody>
           {snap.vehicles.map((vehicle) => (
-            <tr key={vehicle.id} className="border-t border-[#d5ebed]">
+            <tr key={vehicle.id} className="border-t border-[var(--line)]">
               <Td className="font-mono">{vehicle.plate}</Td>
               <Td>{vehicle.brand} {vehicle.model}</Td>
               <Td>{snap.clients.find((client) => client.id === vehicle.clientId)?.name}</Td>
@@ -405,7 +439,7 @@ function Articles() {
         <thead><tr><Th>Família</Th><Th>Descrição</Th><Th>Ref.</Th><Th className="text-right">Custo</Th><Th className="text-right">PVP</Th><Th className="text-right">Qtd</Th></tr></thead>
         <tbody>
           {snap.articles.filter((article) => article.active).map((article) => (
-            <tr key={article.id} className="border-t border-[#d5ebed]">
+            <tr key={article.id} className="border-t border-[var(--line)]">
               <Td>{article.family}</Td>
               <Td>{article.description}</Td>
               <Td className="font-mono">{article.ref}</Td>
@@ -517,17 +551,17 @@ function LoginPage() {
   return (
     <main className="grid min-h-screen md:grid-cols-[1.08fr_0.92fr]">
       <EntryBrand />
-      <section className="flex flex-col items-center justify-center bg-[#f4f7f8] px-5 py-10">
+      <section className="flex flex-col items-center justify-center bg-[var(--paper)] px-5 py-10">
         <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(14,36,51,.08)] sm:p-8">
           {cloudConfigured() ? <CloudLogin /> : (
             <>
-              <h2 className="mb-1 text-[26px] font-semibold text-[#0e2433]">Entrar</h2>
-              <p className="mb-4 text-[15px] text-[#5c6b76]">Servidor não configurado. Continuas neste computador.</p>
+              <h2 className="mb-1 text-[26px] font-semibold text-[var(--ink)]">Entrar</h2>
+              <p className="mb-4 text-[15px] text-[var(--muted-text)]">Servidor não configurado. Continuas neste computador.</p>
               <LoginForm />
             </>
           )}
         </div>
-        <p className="mt-6 text-[14px] text-[#5c6b76] md:hidden">© OficinaPlan · geral@oficinaplan.com</p>
+        <p className="mt-6 text-[14px] text-[var(--muted-text)] md:hidden">© OficinaPlan · geral@oficinaplan.com</p>
       </section>
     </main>
   );
@@ -593,7 +627,7 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3">
-        <a href={`${import.meta.env.BASE_URL}ordens/${order.id}`} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
+        <a href={`${import.meta.env.BASE_URL}ordens/${order.id}`} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</a>
         <PrintButton />
       </div>
       <p className="no-print mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -771,7 +805,7 @@ function OficinaScreen() {
   const snap = useSnap();
   const held = holdFor(cloudUser);
   if (held) return <AccountHold status={held} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;
-  if (cloudConfigured() && !cloudUser) return <Navigate to="/entrar" replace />;
+  if (cloudConfigured() && !cloudUser) return <Navigate to={getActiveSlug() ? `/${getActiveSlug()}` : "/entrar"} replace />;
   if (!snap) return null;
   return (
     <>
@@ -801,9 +835,9 @@ function AdminGate() {
   if (cloudUser.companyStatus !== "active") {
     const base = import.meta.env.BASE_URL.replace(/\/$/, "");
     return (
-      <main className="min-h-screen bg-[#f4f7f8] px-4 py-6 sm:px-8">
+      <main className="min-h-screen bg-[var(--paper)] px-4 py-6 sm:px-8">
         <div className="mx-auto max-w-5xl">
-          <a href={`${base}/`} className="mb-4 inline-block text-[15px] font-semibold text-[#0b6f8a]">Voltar</a>
+          <a href={`${base}/`} className="mb-4 inline-block text-[15px] font-semibold text-[var(--glow-deep)]">Voltar</a>
           <PlatformAdmin />
         </div>
       </main>
@@ -812,10 +846,9 @@ function AdminGate() {
   return <Frame><PlatformAdmin /></Frame>;
 }
 
-function AppRoutes() {
+function WorkshopRoutes({ location }: { location?: Location }) {
   return (
-    <Routes>
-      <Route path="/entrar" element={<LoginPage />} />
+    <Routes location={location}>
       <Route path="/" element={<Frame><Home /></Frame>} />
       <Route path="/ordens/nova" element={<Frame><NewOrder /></Frame>} />
       <Route path="/ordens/:id/imprimir" element={<Gate><SheetPrint /></Gate>} />
@@ -833,15 +866,72 @@ function AppRoutes() {
       <Route path="/compras" element={<Frame><Purchases /></Frame>} />
       <Route path="/movimentos" element={<Frame><Movements /></Frame>} />
       <Route path="/modo-oficina" element={<OficinaScreen />} />
+      <Route path="/oficina" element={<OficinaScreen />} />
       <Route path="/tecnicos" element={<Frame><TecnicosScreen /></Frame>} />
       <Route path="/pontos" element={<Frame><PontosPage /></Frame>} />
       <Route path="/definicoes" element={<Frame><SettingsPage /></Frame>} />
+      <Route path="/faturas" element={<Frame><DocumentLists kind="faturas" /></Frame>} />
+      <Route path="/recibos" element={<Frame><DocumentLists kind="recibos" /></Frame>} />
+      <Route path="/orcamentos" element={<Frame><DocumentLists kind="orcamentos" /></Frame>} />
       <Route path="/agenda" element={<Frame><AgendaScreen /></Frame>} />
       <Route path="/resultados" element={<Frame><ResultsScreen /></Frame>} />
-      <Route path="/administracao" element={<AdminGate />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/administracao" element={<Navigate to="/admin" replace />} />
+      <Route path="*" element={<Navigate to={getActiveSlug() ? `/${getActiveSlug()}` : "/"} replace />} />
     </Routes>
   );
+}
+
+function SlugApp({ slug }: { slug: string }) {
+  const location = useLocation();
+  const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
+  setActiveSlug(slug);
+  const rest = location.pathname === `/${slug}` ? "/" : location.pathname.slice(slug.length + 1) || "/";
+  const routed = { ...location, pathname: rest.startsWith("/") ? rest : `/${rest}` };
+  const mine = !!cloudUser && slugMatches(cloudUser, slug);
+  const tablet = rest === "/oficina" || rest === "/modo-oficina";
+  if (cloudUser && mine && cloudUser.memberActive === false) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[var(--paper)] px-6 text-center">
+        <div>
+          <h1 className="text-[28px] font-semibold text-[var(--ink)]">O teu acesso a esta oficina está desativado.</h1>
+          <button type="button" className="mt-6 h-12 rounded-xl bg-[var(--ink)] px-5 font-semibold text-white" onClick={() => { void signOut().then(() => window.location.assign(`/${slug}`)); }}>Terminar sessão</button>
+        </div>
+      </main>
+    );
+  }
+  if (tablet) {
+    if (!mine) return <BrandedLogin slug={slug} notice="Entra com a conta de administrador ou gestor para abrir o tablet. A equipa depois usa o PIN." />;
+    return <OficinaScreen />;
+  }
+  if (mine && holdFor(cloudUser)) return <AccountHold status={holdFor(cloudUser) ?? "pending"} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;
+  const office = mine && cloudUser?.companyStatus === "active" && !!cloudUser.role && OFFICE_ROLES.has(cloudUser.role);
+  if (!office) return <BrandedLogin slug={slug} />;
+  return <WorkshopRoutes location={routed} />;
+}
+
+function AppRoutes() {
+  const configured = cloudConfigured();
+  const location = useLocation();
+  const signedInSlug = useSignedInSlug();
+  if (!configured) {
+    return (
+      <Routes>
+        <Route path="/entrar" element={<LoginPage />} />
+        <Route path="*" element={<WorkshopRoutes />} />
+      </Routes>
+    );
+  }
+  const path = location.pathname;
+  if (path === "/") return <Landing signedInSlug={signedInSlug} />;
+  if (path === "/entrar" || path.startsWith("/entrar/")) return <SlugFinder />;
+  if (path === "/registar") return <RegisterPage />;
+  if (path === "/admin" || path.startsWith("/admin/")) {
+    const user = readCloudUser();
+    return <PlatformScreen user={user}><PlatformAdmin /></PlatformScreen>;
+  }
+  const slug = path.split("/").filter(Boolean)[0] ?? "";
+  if (!slug) return <Landing signedInSlug={signedInSlug} />;
+  return <SlugApp slug={slug} />;
 }
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -853,7 +943,7 @@ function Root() {
     if (!configured) return;
     void bootCloud().finally(() => setReady(true));
   }, [configured]);
-  if (!ready) return <p className="p-8 text-[17px] text-[#4d6d73]">A ligar ao OficinaPlan…</p>;
+  if (!ready) return <p className="p-8 text-[17px] text-[var(--muted-text)]">A ligar ao OficinaPlan…</p>;
   return (
     <BrowserRouter basename={basename}>
       <AppUpdates />

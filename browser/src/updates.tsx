@@ -70,9 +70,9 @@ export function AppUpdates() {
 
   if (!remote || !unsaved) return null;
   return (
-    <div className="fixed top-2 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[#22272a] px-3 py-1.5 text-[17px] text-white shadow-lg">
+    <div className="fixed top-2 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--charcoal)] px-3 py-1.5 text-[17px] text-white shadow-lg">
       <span>Nova versão disponível –</span>
-      <button type="button" className="cursor-pointer font-semibold text-[#00a9fd]" onClick={() => reloadForVersion(remote)}>
+      <button type="button" className="cursor-pointer font-semibold text-[var(--glow)]" onClick={() => reloadForVersion(remote)}>
         Atualizar
       </button>
     </div>

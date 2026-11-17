@@ -68,14 +68,14 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
   return (
     <div className="grid gap-4">
       <div>
-        <h1 className="text-2xl font-semibold text-[#22272a]">Movimentos de stock</h1>
-        <p className="mt-1 max-w-3xl text-[17px] text-[#4d6d73]">
+        <h1 className="text-2xl font-semibold text-[var(--charcoal)]">Movimentos de stock</h1>
+        <p className="mt-1 max-w-3xl text-[17px] text-[var(--muted-text)]">
           Entradas das compras e das entradas de stock, e saídas das folhas de obra. Só produto e óleo mexem no inventário.
         </p>
       </div>
 
       <div className="relative max-w-xl">
-        <label className="grid gap-1 text-[16px] font-medium text-[#22272a]">
+        <label className="grid gap-1 text-[16px] font-medium text-[var(--charcoal)]">
           Referência
           <input
             data-testid="movimento-busca"
@@ -93,22 +93,22 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
                 choose(suggestions[0]);
               }
             }}
-            className="h-11 rounded-lg border border-[#d5ebed] bg-white px-3 text-[17px] outline-none focus:border-[#00a9fd]"
+            className="h-11 rounded-lg border border-[var(--line)] bg-white px-3 text-[17px] outline-none focus:border-[var(--glow)]"
           />
         </label>
         {open && suggestions.length ? (
-          <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-[#d5ebed] bg-white py-1 shadow-lg" role="listbox">
+          <ul className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-[var(--line)] bg-white py-1 shadow-lg" role="listbox">
             {suggestions.map((item) => (
               <li key={item.id}>
                 <button
                   type="button"
                   data-testid="movimento-opcao"
-                  className="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-[16px] hover:bg-[#e7f7f8]"
+                  className="flex w-full items-baseline justify-between gap-3 px-3 py-2 text-left text-[16px] hover:bg-[var(--mist)]"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => choose(item)}
                 >
                   <span><span className="font-mono font-semibold">{item.ref}</span> {item.description}</span>
-                  <span className="shrink-0 text-[#4d6d73]">stock {formatQty(item.stockQty)}</span>
+                  <span className="shrink-0 text-[var(--muted-text)]">stock {formatQty(item.stockQty)}</span>
                 </button>
               </li>
             ))}
@@ -117,16 +117,16 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
       </div>
 
       {!article ? (
-        <p className="rounded-xl border border-[#d5ebed] bg-white px-4 py-6 text-[17px] text-[#4d6d73]">
+        <p className="rounded-xl border border-[var(--line)] bg-white px-4 py-6 text-[17px] text-[var(--muted-text)]">
           Escolha uma referência para ver o extrato de stock.
         </p>
       ) : ledger ? (
         <>
-          <section className="grid gap-3 rounded-xl border border-[#d5ebed] bg-white p-4 sm:grid-cols-2 xl:grid-cols-6" data-testid="movimento-resumo">
+          <section className="grid gap-3 rounded-xl border border-[var(--line)] bg-white p-4 sm:grid-cols-2 xl:grid-cols-6" data-testid="movimento-resumo">
             <div className="xl:col-span-2">
-              <p className="font-mono text-[20px] font-semibold text-[#00a9fd]">{article.ref}</p>
-              <p className="text-[17px] text-[#22272a]">{article.description}</p>
-              <p className="text-[16px] text-[#4d6d73]">{article.isOil ? "Óleo" : article.family}</p>
+              <p className="font-mono text-[20px] font-semibold text-[var(--glow)]">{article.ref}</p>
+              <p className="text-[17px] text-[var(--charcoal)]">{article.description}</p>
+              <p className="text-[16px] text-[var(--muted-text)]">{article.isOil ? "Óleo" : article.family}</p>
             </div>
             <Stat label="Stock atual" value={formatQty(ledger.stock)} testId="movimento-stock" />
             <Stat label="Total entradas" value={formatQty(ledger.entered)} />
@@ -137,11 +137,11 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
           <div className="flex flex-wrap items-end gap-3">
             <label className="grid gap-1 text-[16px]">
               Desde
-              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-10 rounded-lg border border-[#d5ebed] bg-white px-2 text-[16px]" />
+              <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-10 rounded-lg border border-[var(--line)] bg-white px-2 text-[16px]" />
             </label>
             <label className="grid gap-1 text-[16px]">
               Até
-              <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-10 rounded-lg border border-[#d5ebed] bg-white px-2 text-[16px]" />
+              <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-10 rounded-lg border border-[var(--line)] bg-white px-2 text-[16px]" />
             </label>
             <div className="flex gap-1" data-testid="filtro-tipo">
               {([
@@ -153,7 +153,7 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
                   key={value}
                   type="button"
                   onClick={() => setKind(value)}
-                  className={`h-10 rounded-full px-4 text-[16px] font-semibold ${kind === value ? "bg-[#00a9fd] text-white" : "bg-white text-[#22272a] ring-1 ring-[#d5ebed]"}`}
+                  className={`h-10 rounded-full px-4 text-[16px] font-semibold ${kind === value ? "bg-[var(--glow)] text-white" : "bg-white text-[var(--charcoal)] ring-1 ring-[var(--line)]"}`}
                 >
                   {label}
                 </button>
@@ -161,9 +161,9 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-[#d5ebed] bg-white">
-            <table data-testid="movimento-tabela" className="w-full min-w-[980px] border-collapse text-[16px] text-[#22272a]">
-              <thead className="bg-[#e7f7f8] text-left">
+          <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
+            <table data-testid="movimento-tabela" className="w-full min-w-[980px] border-collapse text-[16px] text-[var(--charcoal)]">
+              <thead className="bg-[var(--mist)] text-left">
                 <tr>
                   {["Data", "Tipo", "Documento", "Entidade", "Qtd entrada", "Qtd saída", "Preço", "Stock acumulado"].map((label) => (
                     <th key={label} className="px-3 py-2 font-semibold whitespace-nowrap">{label}</th>
@@ -172,7 +172,7 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={8} className="px-3 py-6 text-[#4d6d73]">Sem movimentos neste filtro.</td></tr>
+                  <tr><td colSpan={8} className="px-3 py-6 text-[var(--muted-text)]">Sem movimentos neste filtro.</td></tr>
                 ) : rows.map((row) => (
                   <tr key={row.id} data-testid="movimento-linha" data-kind={row.kind} className="border-t border-[#eaeaf2]">
                     <td className="px-3 py-2 whitespace-nowrap">{formatMediumDate(new Date(row.date))}</td>
@@ -182,7 +182,7 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      {row.href ? <Link href={row.href} className="font-medium text-[#00a9fd] hover:underline">{row.document}</Link> : row.document}
+                      {row.href ? <Link href={row.href} className="font-medium text-[var(--glow)] hover:underline">{row.document}</Link> : row.document}
                     </td>
                     <td className="px-3 py-2">{row.entity}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{row.qtyIn ? formatQty(row.qtyIn) : ""}</td>
@@ -203,8 +203,8 @@ export function StockMovements({ data, initialRef = "" }: { data: StockMovementD
 function Stat({ label, value, testId }: { label: string; value: string; testId?: string }) {
   return (
     <div>
-      <p className="text-[14px] tracking-wide text-[#8d939c] uppercase">{label}</p>
-      <p data-testid={testId} className="text-[22px] font-semibold text-[#22272a] tabular-nums">{value}</p>
+      <p className="text-[14px] tracking-wide text-[var(--steel)] uppercase">{label}</p>
+      <p data-testid={testId} className="text-[22px] font-semibold text-[var(--charcoal)] tabular-nums">{value}</p>
     </div>
   );
 }

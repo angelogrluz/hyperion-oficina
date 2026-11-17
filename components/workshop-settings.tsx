@@ -2,8 +2,9 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { EcolubSettings } from "@/components/ecolub-settings";
-import { readCloudUser } from "@/browser/src/cloud";
+import { inviteStaff, readCloudUser, setCompanySlug, setMemberActive } from "@/browser/src/cloud";
 import { cloudBlankMode } from "@/lib/cloud-session";
+import { slugError } from "@/lib/workshop-slug";
 import {
   blankCompany,
   companyDisplayName,
@@ -39,7 +40,7 @@ const SECTIONS = [
   { id: "precos", title: "Preços e taxas", subtitle: "Mão de obra, margens, ECOLUB e IVA.", permit: "config.precos" },
   { id: "documentos", title: "Documentos", subtitle: "Banco, validade, rodapé e séries.", permit: "config.empresa" },
   { id: "stock", title: "Stock e artigos", subtitle: "Tipologias que entram no inventário.", permit: "config.empresa" },
-  { id: "utilizadores", title: "Utilizadores e permissões", subtitle: "Pessoas, funções e o que cada uma pode fazer.", permit: "config.utilizadores" },
+  { id: "utilizadores", title: "Colaboradores", subtitle: "Pessoas, funções e o acesso de cada uma. Com e-mail, enviamos um convite para entrar.", permit: "config.utilizadores" },
   { id: "servicos", title: "Serviços internos", subtitle: "Tarefas de oficina que não vão para a folha do cliente.", permit: "config.empresa" },
   { id: "faturacao", title: "Faturação", subtitle: "Ligação à Moloni, preparada para a fase cloud.", permit: "config.empresa" },
   { id: "matricula", title: "Matrícula", subtitle: "Onde vais buscar a foto da viatura, mais tarde.", permit: "config.empresa" },
@@ -74,21 +75,21 @@ export function WorkshopSettings() {
     <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
       <nav className="flex gap-2 overflow-x-auto lg:flex-col" aria-label="Categorias de configuração">
         {SECTIONS.map((item) => (
-          <button key={item.id} type="button" data-testid={`config-${item.id}`} onClick={() => setSection(item.id)} className={`min-w-[14rem] rounded-xl px-3 py-2 text-left lg:min-w-0 ${section === item.id ? "bg-[#00a9fd] text-white" : "bg-white text-[#22272a] ring-1 ring-[#d5ebed]"}`}>
+          <button key={item.id} type="button" data-testid={`config-${item.id}`} onClick={() => setSection(item.id)} className={`min-w-[14rem] rounded-xl px-3 py-2 text-left lg:min-w-0 ${section === item.id ? "bg-[var(--glow)] text-white" : "bg-white text-[var(--charcoal)] ring-1 ring-[var(--line)]"}`}>
             <span className="block text-[16px] font-semibold">{item.title}</span>
-            <span className={`mt-0.5 block text-[13px] leading-snug ${section === item.id ? "text-white/85" : "text-[#4d6d73]"}`}>{item.subtitle}</span>
+            <span className={`mt-0.5 block text-[13px] leading-snug ${section === item.id ? "text-white/85" : "text-[var(--muted-text)]"}`}>{item.subtitle}</span>
           </button>
         ))}
       </nav>
-      <section className="rounded-xl border border-[#d5ebed] bg-white p-4">
+      <section className="rounded-xl border border-[var(--line)] bg-white p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h1 className="text-[22px] font-semibold">{current.title}</h1>
-            <p className="text-[16px] text-[#4d6d73]">{current.subtitle}</p>
+            <p className="text-[16px] text-[var(--muted-text)]">{current.subtitle}</p>
           </div>
           {notice ? <p className="text-[15px] text-[#1f9d55]">{notice}</p> : null}
         </div>
-        {section === "empresa" ? <CompanyFields key={company.legalName + company.nif} company={company} onSave={saveCompany} /> : null}
+        {section === "empresa" ? <><SlugField notice={setNotice} /><CompanyFields key={company.legalName + company.nif} company={company} onSave={saveCompany} /></> : null}
         {section === "logo" ? <LogoFields company={company} onSave={saveCompany} onError={setNotice} /> : null}
         {section === "precos" ? <PriceFields prices={prices} onSave={savePrices} /> : null}
         {section === "documentos" ? <DocumentFields key={company.iban + company.footer} company={company} prices={prices} onCompany={saveCompany} onPrices={savePrices} /> : null}
@@ -98,7 +99,7 @@ export function WorkshopSettings() {
         {section === "faturacao" ? <BillingFields billing={billing} onNotice={setNotice} /> : null}
         {section === "matricula" ? <PlateFields lookup={plateLookup} onNotice={setNotice} /> : null}
         {section === "marcacoes" ? <BookingFields types={serviceTypes} /> : null}
-        <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[#d5ebed] px-3 text-[16px]" onClick={() => {
+        <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[var(--line)] px-3 text-[16px]" onClick={() => {
           if (cloudBlankMode()) {
             const name = readCloudUser()?.companyName ?? "";
             writeCompanySettings(blankCompany(name === "Oficina" ? "" : name));
@@ -114,6 +115,30 @@ export function WorkshopSettings() {
         </button>
       </section>
     </div>
+  );
+}
+
+function SlugField({ notice }: { notice: (message: string) => void }) {
+  const current = readCloudUser();
+  const [value, setValue] = useState(current?.slug ?? "");
+  return (
+    <form className="mb-4 grid gap-2 rounded-xl border border-[var(--line)] p-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => {
+      event.preventDefault();
+      const problem = slugError(value);
+      if (problem) { notice(problem); return; }
+      void setCompanySlug(value).then((result) => {
+        if ("error" in result && result.error) notice(result.error);
+        else { setValue(result.slug ?? value); notice("Endereço guardado. O link da oficina passou a ser este."); }
+      });
+    }}>
+      <label className="grid gap-1 text-[16px]">Endereço da oficina
+        <span className="flex h-10 items-center rounded-lg border border-[var(--line)] px-3">
+          <span className="text-[var(--muted-text)]">oficinaplan.com/</span>
+          <input value={value} onChange={(event) => setValue(event.target.value.toLowerCase())} className="min-w-0 flex-1 bg-transparent outline-none" autoCapitalize="none" />
+        </span>
+      </label>
+      <button type="submit" className="h-10 self-end rounded-lg bg-[var(--ink)] px-3 font-semibold text-white">Guardar endereço</button>
+    </form>
   );
 }
 
@@ -140,7 +165,7 @@ function LogoFields({ company, onSave, onError }: { company: CompanySettings; on
   const src = companyLogoSrc(company);
   return (
     <div className="grid gap-3">
-      <div className="flex min-h-24 items-center justify-center rounded-xl bg-[#f7f8fa] p-4">
+      <div className="flex min-h-24 items-center justify-center rounded-xl bg-[var(--paper)] p-4">
         {src ? <img src={src} alt="" data-testid="empresa-logo-preview" className="max-h-20 max-w-full bg-transparent object-contain" /> : <p data-testid="empresa-logo-preview" className="text-[22px] font-semibold">{companyDisplayName(company)}</p>}
       </div>
       <label className="text-[16px]">Carregar PNG, JPG ou SVG (sem fundo, de preferência)
@@ -153,7 +178,7 @@ function LogoFields({ company, onSave, onError }: { company: CompanySettings; on
       </label>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="h-10 rounded-lg border px-3 text-[16px]" onClick={() => onSave({ logoMode: "none", logoDataUrl: "" })}>Remover</button>
-        {cloudBlankMode() ? null : <button type="button" data-testid="empresa-logo-default" className="h-10 rounded-lg border border-[#00a9fd] px-3 text-[16px] text-[#00a9fd]" onClick={() => onSave({ logoMode: "default", logoDataUrl: "" })}>Repor logótipo inicial</button>}
+        {cloudBlankMode() ? null : <button type="button" data-testid="empresa-logo-default" className="h-10 rounded-lg border border-[var(--glow)] px-3 text-[16px] text-[var(--glow)]" onClick={() => onSave({ logoMode: "default", logoDataUrl: "" })}>Repor logótipo inicial</button>}
       </div>
     </div>
   );
@@ -163,7 +188,7 @@ function PriceFields({ prices, onSave }: { prices: PriceSettings; onSave: (patch
   const base = prices.hourly == null ? "vazio" : money(prices.hourly);
   return (
     <div className="grid gap-3">
-      <p className="text-[16px] text-[#4d6d73]">45,00 €/hora é o valor s/IVA. As categorias vazias usam esta taxa. O total da linha é a taxa × as horas.</p>
+      <p className="text-[16px] text-[var(--muted-text)]">45,00 €/hora é o valor s/IVA. As categorias vazias usam esta taxa. O total da linha é a taxa × as horas.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Money label="Mão de obra/hora (s/IVA)" testId="preco-hora" value={prices.hourly} onSave={(hourly) => onSave({ hourly })} />
         <Money label="Mecânica geral" testId="preco-mecanica" value={prices.mecanica} placeholder={base} onSave={(mecanica) => onSave({ mecanica })} />
@@ -173,7 +198,7 @@ function PriceFields({ prices, onSave }: { prices: PriceSettings; onSave: (patch
         <Money label="Margem produtos (%)" testId="margem-produto" value={prices.productMargin} onSave={(productMargin) => onSave({ productMargin: productMargin ?? (cloudBlankMode() ? 0 : 40) })} />
         <Money label="Margem óleo (%)" testId="margem-oleo" value={prices.oilMargin} onSave={(oilMargin) => onSave({ oilMargin: oilMargin ?? 30 })} />
       </div>
-      <div className="rounded-xl bg-[#f7f8fa] p-3"><EcolubSettings /></div>
+      <div className="rounded-xl bg-[var(--paper)] p-3"><EcolubSettings /></div>
     </div>
   );
 }
@@ -185,18 +210,18 @@ function DocumentFields({ company, prices, onCompany, onPrices }: { company: Com
       <Field label="Banco" testId="empresa-banco" value={company.bank} onSave={(bank) => onCompany({ bank })} />
       <Field label="IBAN" testId="empresa-iban" value={company.iban} onSave={(iban) => onCompany({ iban })} wide />
       <label className="grid gap-1 text-[16px] sm:col-span-2">Rodapé / observações padrão
-        <textarea data-testid="empresa-rodape" defaultValue={company.footer} onBlur={(event) => onCompany({ footer: event.target.value })} className="min-h-24 rounded-lg border border-[#d5ebed] px-3 py-2" />
+        <textarea data-testid="empresa-rodape" defaultValue={company.footer} onBlur={(event) => onCompany({ footer: event.target.value })} className="min-h-24 rounded-lg border border-[var(--line)] px-3 py-2" />
       </label>
-      <p className="text-[16px] text-[#4d6d73] sm:col-span-2">Séries em uso: folhas OR-ano-sequência, orçamentos ORC A/ano/sequência, faturas FT A/ano/sequência. A consulta de matrículas e a faturação continuam simuladas.</p>
+      <p className="text-[16px] text-[var(--muted-text)] sm:col-span-2">Séries em uso: folhas OR-ano-sequência, orçamentos ORC A/ano/sequência, faturas FT A/ano/sequência. A consulta de matrículas e a faturação continuam simuladas.</p>
     </div>
   );
 }
 
 function StockFields() {
   return (
-    <ul className="divide-y divide-[#eaeaf2] rounded-xl border border-[#d5ebed]">
+    <ul className="divide-y divide-[#eaeaf2] rounded-xl border border-[var(--line)]">
       {purchaseTypes.map((type) => (
-        <li key={type.id} className="flex justify-between px-3 py-2 text-[16px]"><span>{type.label}</span><span className={type.stock ? "font-semibold text-[#1f9d55]" : "text-[#8d939c]"}>{type.stock ? "Entra no stock" : "Despesa, sem stock"}</span></li>
+        <li key={type.id} className="flex justify-between px-3 py-2 text-[16px]"><span>{type.label}</span><span className={type.stock ? "font-semibold text-[#1f9d55]" : "text-[var(--steel)]"}>{type.stock ? "Entra no stock" : "Despesa, sem stock"}</span></li>
       ))}
     </ul>
   );
@@ -211,25 +236,34 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
           <li key={user.id} data-testid="utilizador" className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[16px]">
             <div>
               <p className="font-semibold">{user.name}{user.active ? "" : " (inativo)"}</p>
-              <p className="text-[#4d6d73]">{ROLES.find((role) => role.id === user.role)?.label} · {user.technician ? "técnico" : "sem técnico"} · {user.clocksIn ? "pica o ponto" : "não pica o ponto"}</p>
+              <p className="text-[var(--muted-text)]">{ROLES.find((role) => role.id === user.role)?.label} · {user.technician ? "técnico" : "sem técnico"} · {user.clocksIn ? "pica o ponto" : "não pica o ponto"}</p>
             </div>
             <span className="flex gap-3">
-              <button type="button" className="text-[#00a9fd]" onClick={() => setEditing(user)}>Editar</button>
-              <button type="button" className="text-[#d64545]" onClick={() => writeUsers(users.map((item) => item.id === user.id ? { ...item, active: false } : item))}>Desativar</button>
+              <button type="button" className="text-[var(--glow)]" onClick={() => setEditing(user)}>Editar</button>
+              <button type="button" className="text-[#9c4036]" onClick={() => { const active = !user.active; writeUsers(users.map((item) => item.id === user.id ? { ...item, active } : item)); if (user.email.trim()) void setMemberActive(user.email, active); }}>{user.active ? "Desativar" : "Ativar"}</button>
             </span>
           </li>
         ))}
       </ul>
-      {editing ? <UserForm user={editing} onCancel={() => setEditing(null)} onSave={(user) => { const exists = users.some((item) => item.id === user.id); writeUsers(exists ? users.map((item) => item.id === user.id ? user : item) : [...users, user]); setEditing(null); }} /> : <button type="button" data-testid="utilizador-novo" className="h-10 w-fit rounded-lg bg-[#00a9fd] px-3 font-semibold text-white" onClick={() => setEditing({ id: crypto.randomUUID(), name: "", login: "", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" })}>Adicionar utilizador</button>}
+      {editing ? <UserForm user={editing} onCancel={() => setEditing(null)} onSave={(user) => {
+        const exists = users.some((item) => item.id === user.id);
+        writeUsers(exists ? users.map((item) => item.id === user.id ? user : item) : [...users, user]);
+        setEditing(null);
+        const cloud = readCloudUser();
+        if (user.email.trim() && user.active && cloud?.companyId) {
+          const role = user.role === "admin" || user.role === "gestor" || user.role === "rececionista" ? user.role : "mecanico";
+          void inviteStaff({ email: user.email.trim(), role, name: user.name, companyId: cloud.companyId });
+        }
+      }} /> : <button type="button" data-testid="utilizador-novo" className="h-10 w-fit rounded-lg bg-[var(--glow-deep)] px-3 font-semibold text-white" onClick={() => setEditing({ id: crypto.randomUUID(), name: "", login: "", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" })}>Adicionar colaborador</button>}
       <div data-testid="permissoes-matriz">
         <h2 className="text-[18px] font-semibold">Permissões</h2>
-        <p className="mb-2 text-[15px] text-[#4d6d73]">O Admin tem sempre tudo. As outras funções editam-se aqui e aplicam-se ao utilizador atual.</p>
+        <p className="mb-2 text-[15px] text-[var(--muted-text)]">O Admin tem sempre tudo. As outras funções editam-se aqui e aplicam-se ao utilizador atual.</p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] border-collapse text-[15px]">
             <thead><tr><th className="p-2 text-left">Área</th>{ROLES.map((role) => <th key={role.id} className="p-2">{role.label}</th>)}</tr></thead>
             {PERMISSION_GROUPS.map((group) => (
               <tbody key={group.title}>
-                <tr className="bg-[#e7f7f8]"><td colSpan={5} className="px-2 py-1 font-semibold">{group.title}</td></tr>
+                <tr className="bg-[var(--mist)]"><td colSpan={5} className="px-2 py-1 font-semibold">{group.title}</td></tr>
                 {group.items.map(([id, label]) => (
                   <tr key={id} className="border-t">
                     <td className="px-2 py-1">{label}</td>
@@ -252,7 +286,7 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
 function UserForm({ user, onSave, onCancel }: { user: WorkshopUser; onSave: (user: WorkshopUser) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(user);
   return (
-    <form className="grid gap-2 rounded-xl bg-[#f7f8fa] p-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!draft.name.trim() || !draft.login.trim()) return; onSave({ ...draft, name: draft.name.trim(), login: draft.login.trim() }); }}>
+    <form className="grid gap-2 rounded-xl bg-[var(--paper)] p-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!draft.name.trim() || !draft.login.trim()) return; onSave({ ...draft, name: draft.name.trim(), login: draft.login.trim() }); }}>
       <Field label="Nome" testId="utilizador-nome" value={draft.name} live onSave={(name) => setDraft((current) => ({ ...current, name }))} />
       <Field label="Utilizador" testId="utilizador-login" value={draft.login} live onSave={(login) => setDraft((current) => ({ ...current, login }))} />
       <Field label="E-mail" testId="utilizador-email" value={draft.email} live onSave={(email) => setDraft((current) => ({ ...current, email }))} />
@@ -266,7 +300,7 @@ function UserForm({ user, onSave, onCancel }: { user: WorkshopUser; onSave: (use
       <label className="flex items-center gap-2 text-[16px]"><input data-testid="utilizador-tecnico" type="checkbox" checked={draft.technician} onChange={(event) => setDraft((current) => ({ ...current, technician: event.target.checked }))} /> Aparece como técnico</label>
       <label className="flex items-center gap-2 text-[16px]"><input data-testid="utilizador-ponto" type="checkbox" checked={draft.clocksIn} onChange={(event) => setDraft((current) => ({ ...current, clocksIn: event.target.checked }))} /> Pica o ponto</label>
       <div className="flex gap-2 sm:col-span-2">
-        <button type="submit" className="h-10 rounded-lg bg-[#00a9fd] px-3 font-semibold text-white">Guardar</button>
+        <button type="submit" className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white">Guardar</button>
         <button type="button" className="h-10 rounded-lg border bg-white px-3" onClick={onCancel}>Cancelar</button>
       </div>
     </form>
@@ -290,7 +324,7 @@ function ServiceFields({ services }: { services: InternalService[] }) {
       </ul>
       <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); if (!name.trim()) return; save([...services, { id: crypto.randomUUID(), name: name.trim(), active: true }]); setName(""); }}>
         <input data-testid="servico-novo" value={name} onChange={(event) => setName(event.target.value)} placeholder="Novo serviço interno" className="h-10 flex-1 rounded-lg border px-3" />
-        <button className="h-10 rounded-lg bg-[#00a9fd] px-3 font-semibold text-white">Adicionar</button>
+        <button className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white">Adicionar</button>
       </form>
     </div>
   );
@@ -299,7 +333,7 @@ function ServiceFields({ services }: { services: InternalService[] }) {
 function Field({ label, value, onSave, testId, wide, live }: { label: string; value: string; onSave: (value: string) => void; testId: string; wide?: boolean; live?: boolean }) {
   return (
     <label className={`grid gap-1 text-[16px] ${wide ? "sm:col-span-2" : ""}`}>{label}
-      <input data-testid={testId} defaultValue={live ? undefined : value} value={live ? value : undefined} onChange={live ? (event) => onSave(event.target.value) : undefined} onBlur={live ? undefined : (event) => onSave(event.target.value)} className="h-10 rounded-lg border border-[#d5ebed] px-3" />
+      <input data-testid={testId} defaultValue={live ? undefined : value} value={live ? value : undefined} onChange={live ? (event) => onSave(event.target.value) : undefined} onBlur={live ? undefined : (event) => onSave(event.target.value)} className="h-10 rounded-lg border border-[var(--line)] px-3" />
     </label>
   );
 }
@@ -309,7 +343,7 @@ function Money({ label, value, onSave, testId, placeholder }: { label: string; v
   const shown = draft ?? (value == null ? "" : money(value));
   return (
     <label className="grid gap-1 text-[16px]">{label}
-      <input data-testid={testId} value={shown} placeholder={placeholder} inputMode="decimal" onChange={(event) => setDraft(event.target.value)} onBlur={() => { const text = (draft ?? shown).trim(); if (!text) onSave(null); else { const parsed = Number(text.replace(",", ".")); if (Number.isFinite(parsed) && parsed >= 0) onSave(parsed); } setDraft(null); }} className="h-10 rounded-lg border border-[#d5ebed] px-3" />
+      <input data-testid={testId} value={shown} placeholder={placeholder} inputMode="decimal" onChange={(event) => setDraft(event.target.value)} onBlur={() => { const text = (draft ?? shown).trim(); if (!text) onSave(null); else { const parsed = Number(text.replace(",", ".")); if (Number.isFinite(parsed) && parsed >= 0) onSave(parsed); } setDraft(null); }} className="h-10 rounded-lg border border-[var(--line)] px-3" />
     </label>
   );
 }
@@ -347,7 +381,7 @@ function SecretInput({ label, testId, stored, onCommit }: { label: string; testI
   const [value, setValue] = useState("");
   return (
     <label className="grid gap-1 text-[16px]">{label}
-      <input data-testid={testId} type="password" autoComplete="new-password" value={value} placeholder={stored ? "Guardado — escreve só se quiseres mudar" : ""} onChange={(event) => setValue(event.target.value)} onBlur={() => { if (value.trim()) { onCommit(value.trim()); setValue(""); } }} className="h-10 rounded-lg border border-[#d5ebed] px-3" />
+      <input data-testid={testId} type="password" autoComplete="new-password" value={value} placeholder={stored ? "Guardado — escreve só se quiseres mudar" : ""} onChange={(event) => setValue(event.target.value)} onBlur={() => { if (value.trim()) { onCommit(value.trim()); setValue(""); } }} className="h-10 rounded-lg border border-[var(--line)] px-3" />
     </label>
   );
 }
@@ -371,7 +405,7 @@ function BillingFields({ billing, onNotice }: { billing: BillingSettings; onNoti
         </select>
       </label>
       <Field label="Método de pagamento por defeito" testId="moloni-pagamento" value={billing.paymentMethod} onSave={(paymentMethod) => save({ paymentMethod })} />
-      <button type="button" data-testid="moloni-testar" className="h-11 rounded-xl bg-[#22272a] px-4 text-[16px] font-semibold text-white sm:col-span-2" onClick={() => onNotice(billingReady(readBillingSettings()) ? "Os campos estão preenchidos. A ligação real à Moloni fica para a fase cloud — daqui não sai nenhum segredo." : "Ainda faltam campos. Preenche-os antes de testar.")}>Testar ligação</button>
+      <button type="button" data-testid="moloni-testar" className="h-11 rounded-xl bg-[var(--charcoal)] px-4 text-[16px] font-semibold text-white sm:col-span-2" onClick={() => onNotice(billingReady(readBillingSettings()) ? "Os campos estão preenchidos. A ligação real à Moloni fica para a fase cloud — daqui não sai nenhum segredo." : "Ainda faltam campos. Preenche-os antes de testar.")}>Testar ligação</button>
     </div>
   );
 }
@@ -379,7 +413,7 @@ function BillingFields({ billing, onNotice }: { billing: BillingSettings; onNoti
 function PlateFields({ lookup, onNotice }: { lookup: { apiUrl: string; apiKey: string }; onNotice: (message: string) => void }) {
   return (
     <div className="grid gap-3">
-      <p className="text-[16px] text-[#4d6d73]">Quando não houver foto da matrícula, a oficina mostra o carro neutro. A chamada à API fica para a fase cloud.</p>
+      <p className="text-[16px] text-[var(--muted-text)]">Quando não houver foto da matrícula, a oficina mostra o carro neutro. A chamada à API fica para a fase cloud.</p>
       <Field label="URL da API" testId="matricula-url" value={lookup.apiUrl} onSave={(apiUrl) => { writePlateLookup({ ...readPlateLookup(), apiUrl }); onNotice("Guardado"); }} />
       <SecretInput label="Chave" testId="matricula-chave" stored={Boolean(lookup.apiKey)} onCommit={(apiKey) => { writePlateLookup({ ...readPlateLookup(), apiKey }); onNotice("Guardado"); }} />
     </div>
@@ -392,7 +426,7 @@ function BookingFields({ types }: { types: ServiceType[] }) {
   return (
     <div className="grid gap-3">
       {types.map((item) => (
-        <div key={item.id} data-testid="tipo-servico" className="grid items-center gap-2 rounded-xl bg-[#f7f8fa] p-3 sm:grid-cols-[1fr_120px_auto]">
+        <div key={item.id} data-testid="tipo-servico" className="grid items-center gap-2 rounded-xl bg-[var(--paper)] p-3 sm:grid-cols-[1fr_120px_auto]">
           <input value={item.name} onChange={(event) => writeServiceTypes(types.map((row) => row.id === item.id ? { ...row, name: event.target.value } : row))} className="h-10 rounded-lg border px-2" />
           <label className="text-[14px]">Minutos
             <input type="number" min={15} value={item.minutes} onChange={(event) => writeServiceTypes(types.map((row) => row.id === item.id ? { ...row, minutes: Number(event.target.value) || 15 } : row))} className="mt-1 h-10 w-full rounded-lg border px-2" />
@@ -403,7 +437,7 @@ function BookingFields({ types }: { types: ServiceType[] }) {
       <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); if (!name.trim()) return; writeServiceTypes([...types, { id: crypto.randomUUID(), name: name.trim(), minutes: Number(minutes) || 60, active: true }]); setName(""); }}>
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Novo tipo" className="h-10 flex-1 rounded-lg border px-2" />
         <input value={minutes} onChange={(event) => setMinutes(event.target.value)} className="h-10 w-24 rounded-lg border px-2" />
-        <button className="h-10 rounded-lg bg-[#00a9fd] px-3 font-semibold text-white">Adicionar</button>
+        <button className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white">Adicionar</button>
       </form>
     </div>
   );

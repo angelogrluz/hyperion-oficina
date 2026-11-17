@@ -8,7 +8,7 @@ export const SUPABASE_URL = env.VITE_SUPABASE_URL || "https://jltzehisxmxywhxmdx
 // Public publishable key. Env still overrides when a non-empty value is set.
 export const SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY || "sb_publishable_sh6X9towv0X7joZPYNpZhw_X1NZ5Tko";
 
-export type CloudRole = "owner" | "admin" | "tecnico";
+export type CloudRole = "owner" | "admin" | "gestor" | "rececionista" | "mecanico" | "tecnico";
 export type CompanyStatus = "pending" | "active" | "suspended";
 export type CloudUser = {
   userId: string;
@@ -16,7 +16,9 @@ export type CloudUser = {
   role: CloudRole | null;
   companyId: string | null;
   companyName: string;
+  slug: string | null;
   companyStatus: CompanyStatus | null;
+  memberActive: boolean;
   platformAdmin: boolean;
 };
 
@@ -51,8 +53,10 @@ export function supabase(): SupabaseClient | null {
 type AccountRow = {
   company_id: string | null;
   company_name: string | null;
+  slug?: string | null;
   role: CloudRole | null;
   status: string | null;
+  member_active?: boolean | null;
   platform_admin: boolean;
 };
 
@@ -76,7 +80,9 @@ function closedUser(session: Session, row: AccountRow | null): CloudUser {
     role: row?.role ?? null,
     companyId,
     companyName: row?.company_name?.trim() || "Oficina",
+    slug: row?.slug?.trim().toLowerCase() || null,
     companyStatus: status ?? "pending",
+    memberActive: row?.member_active !== false,
     platformAdmin: Boolean(row?.platform_admin),
   };
   prepareCloudWorkspace(user);
@@ -140,6 +146,7 @@ export function readDeviceStash(): Record<string, string> | null {
 async function loadMembership(session: Session) {
   const db = supabase();
   if (!db) return null;
+  await db.rpc("claim_staff_invites");
   const rpc = await db.rpc("my_account");
   const row = rpc.error ? null : asAccount(rpc.data);
   if (rpc.error || !row || (!row.company_id && !row.platform_admin)) {
@@ -182,13 +189,13 @@ export async function signIn(email: string, password: string) {
   return { user: current };
 }
 
-export async function signUp(email: string, password: string, companyName: string, ownerName = "") {
+export async function signUp(email: string, password: string, companyName: string, ownerName = "", slug = "") {
   const db = supabase();
   if (!db) return { error: "O servidor ainda não está configurado." };
   const { data, error } = await db.auth.signUp({
     email: email.trim(),
     password,
-    options: { data: { company_name: companyName.trim() || "A minha oficina", full_name: ownerName.trim() } },
+    options: { data: { company_name: companyName.trim() || "A minha oficina", company_slug: slug.trim().toLowerCase(), full_name: ownerName.trim() } },
   });
   if (error) return { error: error.message };
   if (!data.session) return { error: "Conta criada. Confirma o e-mail se o projeto o exigir, e entra a seguir." };
@@ -198,13 +205,50 @@ export async function signUp(email: string, password: string, companyName: strin
   return { user: current };
 }
 
-export async function resetPassword(email: string) {
+export async function resetPassword(email: string, nextPath = "/entrar") {
   const db = supabase();
   if (!db) return { error: "O servidor ainda não está configurado." };
-  const base = (import.meta.env.BASE_URL || "/").replace(/\/?$/, "/");
-  const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}${base}entrar` });
+  const { error } = await db.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}${nextPath.startsWith("/") ? nextPath : `/${nextPath}`}` });
   if (error) return { error: "Não foi possível enviar o e-mail. Confirma o endereço." };
   return { error: "" };
+}
+
+export async function resolveCompanyPublic(slug: string) {
+  const db = supabase();
+  if (!db) return null;
+  const { data, error } = await db.rpc("resolve_company_public", { p_slug: slug });
+  if (error || !data || typeof data !== "object") return null;
+  const row = data as { slug?: string; name?: string; logo?: string | null };
+  if (!row.slug) return null;
+  return { slug: row.slug, name: row.name || slug, logo: row.logo || null };
+}
+
+export async function setCompanySlug(slug: string) {
+  const db = supabase();
+  if (!db) return { error: "O servidor ainda não está configurado." };
+  const { data, error } = await db.rpc("set_company_slug", { p_slug: slug });
+  if (error) return { error: error.message.includes("já está") ? "Este endereço já está a ser usado." : "Não foi possível guardar o endereço." };
+  if (current) current = { ...current, slug: String(data || slug).toLowerCase() };
+  emit();
+  return { slug: String(data || slug) };
+}
+
+export async function inviteStaff(input: { email: string; role: string; name: string; companyId: string }) {
+  const db = supabase();
+  if (!db) return { error: "O servidor ainda não está configurado." };
+  const { data, error } = await db.functions.invoke("invite-staff", {
+    body: { email: input.email, role: input.role, name: input.name, company_id: input.companyId },
+  });
+  if (error) return { error: "O convite por e-mail ainda não está publicado. A pessoa fica na equipa e pode usar o PIN. Quando a função estiver ativa, guarda outra vez para enviar o convite." };
+  const payload = data as { error?: string; message?: string } | null;
+  if (payload?.error) return { error: payload.error };
+  return { message: payload?.message || "Convite enviado." };
+}
+
+export async function setMemberActive(email: string, active: boolean) {
+  const db = supabase();
+  if (!db || !email.trim()) return;
+  await db.rpc("set_member_active", { p_email: email.trim(), p_active: active });
 }
 
 export async function signOut() {

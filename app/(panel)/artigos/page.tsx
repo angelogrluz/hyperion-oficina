@@ -42,7 +42,7 @@ export default async function ArticlesPage({ searchParams }: { searchParams: Pro
       />
       <div className="mb-3 flex flex-wrap gap-2">
         {TABS.map((item) => (
-          <Link key={item.id} href={item.id === "inventario" ? "/artigos" : `/artigos?separador=${item.id}`} className={`rounded-full px-3 py-1 text-sm ${tab === item.id ? "bg-[#0b8f9c] text-white" : "bg-[#e7f7f8] text-[#0b5f68]"}`}>
+          <Link key={item.id} href={item.id === "inventario" ? "/artigos" : `/artigos?separador=${item.id}`} className={`rounded-full px-3 py-1 text-sm ${tab === item.id ? "bg-[var(--glow)] text-white" : "bg-[var(--mist)] text-[var(--ink)]"}`}>
             {item.label}
           </Link>
         ))}

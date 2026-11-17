@@ -30,31 +30,31 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
 
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-      <section className="overflow-x-auto rounded-xl border border-[#d5ebed] bg-white">
-        <div className="flex items-center justify-between border-b border-[#d5ebed] px-3 py-2">
+      <section className="overflow-x-auto rounded-xl border border-[var(--line)] bg-white">
+        <div className="flex items-center justify-between border-b border-[var(--line)] px-3 py-2">
           <div className="flex gap-2 text-sm">
-            <Link className="rounded-md px-2 py-1 hover:bg-[#e7f7f8]" href={`/agenda?d=${shift(monday, -7)}`}>‹</Link>
+            <Link className="rounded-md px-2 py-1 hover:bg-[var(--mist)]" href={`/agenda?d=${shift(monday, -7)}`}>‹</Link>
             <span className="font-medium">Semana de {days[0].iso}</span>
-            <Link className="rounded-md px-2 py-1 hover:bg-[#e7f7f8]" href={`/agenda?d=${shift(monday, 7)}`}>›</Link>
+            <Link className="rounded-md px-2 py-1 hover:bg-[var(--mist)]" href={`/agenda?d=${shift(monday, 7)}`}>›</Link>
           </div>
-          <Link href={`/agenda?d=${today}`} className="text-sm text-[#0b8f9c]">Hoje</Link>
+          <Link href={`/agenda?d=${today}`} className="text-sm text-[var(--glow)]">Hoje</Link>
         </div>
         <div className="grid min-w-[760px] grid-cols-[64px_repeat(6,1fr)]">
           <div />
           {days.map((day) => (
-            <Link key={day.iso} href={`/agenda?d=${day.iso}`} className={`border-l border-[#d5ebed] px-2 py-2 text-center text-sm ${day.iso === selected ? "bg-[#0b8f9c] text-white" : "bg-[#e7f7f8] text-[#0b5f68]"}`}>
+            <Link key={day.iso} href={`/agenda?d=${day.iso}`} className={`border-l border-[var(--line)] px-2 py-2 text-center text-sm ${day.iso === selected ? "bg-[var(--glow)] text-white" : "bg-[var(--mist)] text-[var(--ink)]"}`}>
               {day.label} {Number(day.iso.slice(8))}
             </Link>
           ))}
           {HOURS.map((hour) => (
             <div key={hour} className="contents">
-              <div className="border-t border-[#d5ebed] px-2 py-3 text-xs text-[#4d6d73]">{String(hour).padStart(2, "0")}:00</div>
+              <div className="border-t border-[var(--line)] px-2 py-3 text-xs text-[var(--muted-text)]">{String(hour).padStart(2, "0")}:00</div>
               {days.map((day) => {
                 const items = appointments.filter((item) => lisbonISODate(item.startsAt) === day.iso && Number(lisbonTime(item.startsAt).slice(0, 2)) === hour);
                 return (
-                  <div key={`${day.iso}-${hour}`} className="min-h-12 border-t border-l border-[#d5ebed] p-1">
+                  <div key={`${day.iso}-${hour}`} className="min-h-12 border-t border-l border-[var(--line)] p-1">
                     {items.map((item) => (
-                      <div key={item.id} className="rounded bg-[#e7f7f8] px-1 py-1 text-xs text-[#0b5f68]">
+                      <div key={item.id} className="rounded bg-[var(--mist)] px-1 py-1 text-xs text-[var(--ink)]">
                         <p className="font-medium">{lisbonTime(item.startsAt)} {item.title}</p>
                         <p>{item.client.name}</p>
                         <DeleteAppointmentButton id={item.id} />
@@ -67,7 +67,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           ))}
         </div>
       </section>
-      <aside className="rounded-xl border border-[#d5ebed] bg-white p-4">
+      <aside className="rounded-xl border border-[var(--line)] bg-white p-4">
         <h2 className="mb-3 font-medium">Nova marcação · {selected}</h2>
         <AppointmentForm
           date={selected}

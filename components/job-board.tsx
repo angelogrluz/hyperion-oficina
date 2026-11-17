@@ -24,7 +24,7 @@ export function JobBoard({ jobs }: { jobs: JobCard[] }) {
       {jobs.map((job) => {
         const [day, time] = splitStamp(job.date);
         return (
-          <Link key={job.id} href={job.href} className="flex min-h-[340px] w-full flex-col items-center overflow-hidden rounded-2xl border border-[#e4e6ea] bg-white pt-4 text-center text-[#22272a] shadow-[0_6px_16px_rgba(34,39,42,.08)] hover:border-[#00a9fd]">
+          <Link key={job.id} href={job.href} className="flex min-h-[340px] w-full flex-col items-center overflow-hidden rounded-2xl border border-[#e4e6ea] bg-white pt-4 text-center text-[var(--charcoal)] shadow-[0_6px_16px_rgba(34,39,42,.08)] hover:border-[var(--glow)]">
             <p className="px-2 text-[22px] leading-tight font-bold tracking-tight">{job.plate}</p>
             <p className="mt-0.5 max-w-full truncate px-3 text-[17px] leading-tight text-[#9aa0a8]">{job.model}</p>
             <div className="flex flex-1 items-center justify-center">
@@ -32,8 +32,8 @@ export function JobBoard({ jobs }: { jobs: JobCard[] }) {
             </div>
             <ApprovalBadge approval={job.approval} at={job.approvalAt} testId={`card-approval-${job.id}`} />
             <p className="mt-1 text-[16px] text-[#9aa0a8]">{job.status}</p>
-            <p className="mt-1 mb-3 text-[26px] leading-none font-semibold text-[#00a9fd] tabular-nums">{formatEUR(job.total)}</p>
-            <div className="flex h-8 w-full items-center justify-between border-t border-[#eceef2] bg-[#f7f8fa] px-2 text-[16px] text-[#8d939c]">
+            <p className="mt-1 mb-3 text-[26px] leading-none font-semibold text-[var(--glow)] tabular-nums">{formatEUR(job.total)}</p>
+            <div className="flex h-8 w-full items-center justify-between border-t border-[#eceef2] bg-[var(--paper)] px-2 text-[16px] text-[var(--steel)]">
               <span className="flex items-center gap-1"><CalendarDays className="size-3" />{day}</span>
               <span>{time}</span>
             </div>

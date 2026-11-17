@@ -108,7 +108,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   }
 
   return (
-    <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} className={admin ? "min-h-[70vh] bg-white p-3 text-[#22272a]" : "min-h-screen bg-white p-4 text-[#22272a]"} onPointerDown={touch}>
+    <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} className={admin ? "min-h-[70vh] bg-white p-3 text-[var(--charcoal)]" : "min-h-screen bg-white p-4 text-[var(--charcoal)]"} onPointerDown={touch}>
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="w-52">{admin ? <h1 className="text-[28px] font-semibold">Técnicos</h1> : <ProductBackButton onBeforeBack={() => { if (orderId) { setOrderId(""); setChat(false); return true; } if (techId) { setTechId(""); setChat(false); return true; } return Boolean(readSession()?.role === "mecanico"); }} />}</div>
         {tech ? <button type="button" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => { setTechId(""); setOrderId(""); setChat(false); }}>{tech.name}</button> : <h1 className="text-[28px] font-semibold">{admin ? "" : "Modo oficina"}</h1>}
@@ -117,18 +117,18 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
         <div className="grid gap-4 pb-4">
           <div className="flex flex-wrap gap-2">
             {users.map((user) => (
-              <button key={user.id} type="button" data-testid="tecnico-nome" className="h-12 rounded-xl bg-[#00a9fd] px-4 text-[18px] font-semibold text-white" onClick={() => identify(user.id)}>{user.name}</button>
+              <button key={user.id} type="button" data-testid="tecnico-nome" className="h-12 rounded-xl bg-[var(--glow)] px-4 text-[18px] font-semibold text-white" onClick={() => identify(user.id)}>{user.name}</button>
             ))}
           </div>
           {admin ? null : (
             <div className="flex flex-wrap gap-2">
-              <button type="button" data-testid="picar-ponto" className="h-16 min-w-64 flex-1 rounded-2xl bg-[#22272a] text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
-              <button type="button" data-testid="servicos-internos" className="h-16 min-w-64 flex-1 rounded-2xl border-2 border-[#22272a] text-[24px] font-semibold" onClick={() => { setInternos(true); setServiceId(""); }}>Serviços internos</button>
+              <button type="button" data-testid="picar-ponto" className="h-16 min-w-64 flex-1 rounded-2xl bg-[var(--charcoal)] text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
+              <button type="button" data-testid="servicos-internos" className="h-16 min-w-64 flex-1 rounded-2xl border-2 border-[var(--charcoal)] text-[24px] font-semibold" onClick={() => { setInternos(true); setServiceId(""); }}>Serviços internos</button>
             </div>
           )}
           {admin ? null : <TechnicianTable users={users} orders={orders} services={services} now={now} />}
           {internos ? (
-            <div data-testid="lista-internos" className="grid gap-2 rounded-2xl border border-[#d5ebed] bg-white p-3">
+            <div data-testid="lista-internos" className="grid gap-2 rounded-2xl border border-[var(--line)] bg-white p-3">
               <div className="flex items-center justify-between"><h2 className="text-[20px] font-semibold">Serviços internos</h2><button type="button" onClick={() => setInternos(false)}>Fechar</button></div>
               {!serviceId ? services.map((service) => (
                 <button key={service.id} type="button" data-testid="interno-opcao" className="h-14 rounded-xl bg-[#f4f6f8] text-left text-[20px] font-semibold" onClick={() => setServiceId(service.id)}>{service.name}</button>
@@ -136,7 +136,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
                 <div className="grid gap-2">
                   <p className="text-[16px]">Quem começa {services.find((service) => service.id === serviceId)?.name}?</p>
                   {users.map((user) => (
-                    <button key={user.id} type="button" className="h-12 rounded-xl bg-[#00a9fd] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setInternos(false); setServiceId(""); }}>{user.name}</button>
+                    <button key={user.id} type="button" className="h-12 rounded-xl bg-[var(--glow)] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setInternos(false); setServiceId(""); }}>{user.name}</button>
                   ))}
                 </div>
               )}
@@ -147,22 +147,22 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
         <div className="grid gap-3">
           <button type="button" className="h-12 w-fit rounded-xl border px-4 text-[18px]" onClick={() => { setOrderId(""); setChat(false); }}>Voltar às obras</button>
           <h2 className="text-[26px] font-semibold">{order.number} · {order.plate}</h2>
-          <p className="text-[18px] text-[#4d6d73]">{order.vehicle}</p>
+          <p className="text-[18px] text-[var(--muted-text)]">{order.vehicle}</p>
           <ul className="grid gap-2">
-            {order.tasks.length ? order.tasks.map((task) => <li key={task} data-testid="tarefa" className="rounded-xl bg-[#f4f6f8] px-4 py-3 text-[20px]">{task}</li>) : <li className="text-[18px] text-[#8d939c]">Sem tarefas de serviço nesta obra.</li>}
+            {order.tasks.length ? order.tasks.map((task) => <li key={task} data-testid="tarefa" className="rounded-xl bg-[#f4f6f8] px-4 py-3 text-[20px]">{task}</li>) : <li className="text-[18px] text-[var(--steel)]">Sem tarefas de serviço nesta obra.</li>}
           </ul>
-          <p data-testid="relogio-tecnico" className="text-[42px] font-semibold tabular-nums text-[#00a9fd]">{formatClock(personMs(tech.id, "obra", order.id, now))}</p>
+          <p data-testid="relogio-tecnico" className="text-[42px] font-semibold tabular-nums text-[var(--glow)]">{formatClock(personMs(tech.id, "obra", order.id, now))}</p>
           <TimerButtons userId={tech.id} kind="obra" targetId={order.id} running={running?.kind === "obra" && running.targetId === order.id} />
-          <button type="button" data-testid="ajuda-tecnica" className="h-14 rounded-2xl border-2 border-[#00a9fd] text-[20px] font-semibold text-[#00a9fd]" onClick={() => { setChat(true); setMessages([{ from: "ajuda", text: `Viatura ${order.vehicle}, matrícula ${order.plate}. Tarefas: ${order.tasks.join("; ") || "nenhuma"}. O assistente fica disponível na fase cloud.` }]); }}>Ajuda técnica</button>
+          <button type="button" data-testid="ajuda-tecnica" className="h-14 rounded-2xl border-2 border-[var(--glow)] text-[20px] font-semibold text-[var(--glow)]" onClick={() => { setChat(true); setMessages([{ from: "ajuda", text: `Viatura ${order.vehicle}, matrícula ${order.plate}. Tarefas: ${order.tasks.join("; ") || "nenhuma"}. O assistente fica disponível na fase cloud.` }]); }}>Ajuda técnica</button>
           {chat ? (
-            <div data-testid="ajuda-chat" className="rounded-2xl border border-[#d5ebed] p-3">
+            <div data-testid="ajuda-chat" className="rounded-2xl border border-[var(--line)] p-3">
               <div className="mb-2 flex justify-between"><p className="text-[18px] font-semibold">Ajuda técnica</p><button type="button" onClick={() => setChat(false)}>Fechar</button></div>
               <ul className="grid max-h-64 gap-2 overflow-auto">
-                {messages.map((message, index) => <li key={index} className={`rounded-xl px-3 py-2 text-[16px] ${message.from === "ajuda" ? "bg-[#e7f7f8]" : "bg-[#f4f6f8]"}`}>{message.text}</li>)}
+                {messages.map((message, index) => <li key={index} className={`rounded-xl px-3 py-2 text-[16px] ${message.from === "ajuda" ? "bg-[var(--mist)]" : "bg-[#f4f6f8]"}`}>{message.text}</li>)}
               </ul>
               <form className="mt-2 flex gap-2" onSubmit={(event) => { event.preventDefault(); if (!draft.trim()) return; setMessages((current) => [...current, { from: "tecnico", text: draft.trim() }, { from: "ajuda", text: "Resposta automática ainda não está ligada. Fica para a fase cloud." }]); setDraft(""); }}>
                 <input value={draft} onChange={(event) => setDraft(event.target.value)} className="h-12 flex-1 rounded-xl border px-3 text-[18px]" placeholder="Escreva a dúvida" />
-                <button className="h-12 rounded-xl bg-[#00a9fd] px-4 font-semibold text-white">Enviar</button>
+                <button className="h-12 rounded-xl bg-[var(--glow)] px-4 font-semibold text-white">Enviar</button>
               </form>
             </div>
           ) : null}
@@ -181,7 +181,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
               return (
                 <div key={card.id} data-testid="obra-tecnico" data-order-id={card.id} className="flex items-center gap-2">
                   {reorder ? <span data-testid="drag-handle" aria-label="Arrastar obra" className="grid h-20 w-10 cursor-grab place-items-center rounded-xl bg-[#e1e2e5] text-[22px] select-none active:cursor-grabbing" onPointerDown={(event) => startDrag(event, tech.id, card.id)}>≡</span> : null}
-                  <button type="button" className={`h-20 flex-1 rounded-2xl px-4 text-left text-[22px] font-semibold ${active ? "bg-[#1f9d55] text-white" : "bg-[#e7f7f8]"}`} onClick={() => { if (!reorder) setOrderId(card.id); }}>
+                  <button type="button" className={`h-20 flex-1 rounded-2xl px-4 text-left text-[22px] font-semibold ${active ? "bg-[#1f9d55] text-white" : "bg-[var(--mist)]"}`} onClick={() => { if (!reorder) setOrderId(card.id); }}>
                     {card.number} · {card.plate}
                     <span className="mt-1 block text-[16px] font-normal">{card.vehicle}</span>
                   </button>
@@ -197,7 +197,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
                 <div key={service.id} data-testid="servico-oficina" className="flex items-center justify-between gap-2 rounded-2xl bg-[#f4f6f8] px-4 py-3">
                   <div>
                     <p className="text-[20px] font-semibold">{service.name}</p>
-                    {active ? <p data-testid="relogio-interno" className="text-[28px] font-semibold tabular-nums text-[#00a9fd]">{formatClock(personMs(tech.id, "interno", service.id, now))}</p> : null}
+                    {active ? <p data-testid="relogio-interno" className="text-[28px] font-semibold tabular-nums text-[var(--glow)]">{formatClock(personMs(tech.id, "interno", service.id, now))}</p> : null}
                   </div>
                   <TimerButtons userId={tech.id} kind="interno" targetId={service.id} running={active} />
                 </div>
@@ -227,7 +227,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
             {pontoMsg ? <p data-testid="ponto-confirmacao" className="mt-3 text-center text-[22px] font-semibold">{pontoMsg}</p> : null}
             <div className="mt-4 grid grid-cols-3 gap-2">
               {["1","2","3","4","5","6","7","8","9","←","0","OK"].map((key) => (
-                <button key={key} type={key === "OK" ? "submit" : "button"} className="h-20 rounded-xl bg-[#e7f7f8] text-[28px] font-semibold" onClick={() => { if (key === "←") setPonto((value) => value.slice(0, -1)); else if (key !== "OK") setPonto((value) => (value + key).slice(0, 4)); }}>{key}</button>
+                <button key={key} type={key === "OK" ? "submit" : "button"} className="h-20 rounded-xl bg-[var(--mist)] text-[28px] font-semibold" onClick={() => { if (key === "←") setPonto((value) => value.slice(0, -1)); else if (key !== "OK") setPonto((value) => (value + key).slice(0, 4)); }}>{key}</button>
               ))}
             </div>
             <button type="button" className="mt-3 h-14 w-full rounded-xl border text-[20px]" onClick={() => { setPinFor(""); setPontoMsg(""); }}>Fechar</button>
@@ -248,10 +248,10 @@ function paceClass(elapsed: number, hours: number | null) {
 
 function TechnicianTable({ users, orders, services, now }: { users: Array<{ id: string; name: string }>; orders: OficinaOrder[]; services: Array<{ id: string; name: string }>; now: number }) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-[#d5ebed] bg-white">
+    <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-white">
       <table data-testid="oficina-tabela" className="w-full min-w-[760px] text-left text-[16px]">
         <thead>
-          <tr className="text-[14px] text-[#4d6d73]">
+          <tr className="text-[14px] text-[var(--muted-text)]">
             <th className="px-3 py-2 font-semibold">Nome</th>
             <th className="px-3 py-2 font-semibold">Marca e modelo</th>
             <th className="px-3 py-2 font-semibold">Nº obra</th>
@@ -300,7 +300,7 @@ export function TechnicianStatus({ orders }: { orders: OficinaOrder[] }) {
   const techs = useSyncExternalStore(subscribeAccess, readUsers, readUsers).filter((user) => user.active && user.technician);
   const services = readServices();
   return (
-    <aside data-testid="tecnicos-agora" className="h-fit rounded-2xl border border-[#d5ebed] bg-white p-4">
+    <aside data-testid="tecnicos-agora" className="h-fit rounded-2xl border border-[var(--line)] bg-white p-4">
       <h2 className="text-[20px] font-semibold">Técnicos agora</h2>
       <ul className="mt-3 grid gap-3">
         {techs.map((tech) => {
@@ -311,7 +311,7 @@ export function TechnicianStatus({ orders }: { orders: OficinaOrder[] }) {
             ? services.find((service) => service.id === open.targetId)?.name ?? "Serviço interno"
             : orders.find((item) => item.id === open.targetId);
           const label = typeof place === "string" || !place ? place || "Serviço" : `${place.clientName} · ${place.plate} · ${place.number}`;
-          return <li key={tech.id} data-testid="tecnico-ocupado" className="rounded-xl bg-[#e7f7f8] px-3 py-2 text-[17px]"><span className="font-semibold">{tech.name}</span><span className="mt-1 block">{label}</span><span className="text-[22px] font-semibold tabular-nums text-[#00a9fd]">{elapsed}</span></li>;
+          return <li key={tech.id} data-testid="tecnico-ocupado" className="rounded-xl bg-[var(--mist)] px-3 py-2 text-[17px]"><span className="font-semibold">{tech.name}</span><span className="mt-1 block">{label}</span><span className="text-[22px] font-semibold tabular-nums text-[var(--glow)]">{elapsed}</span></li>;
         })}
       </ul>
     </aside>

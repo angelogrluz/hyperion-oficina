@@ -11,7 +11,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
-  --color-copper: #0b8f9c;
+  --color-copper: var(--glow);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -51,40 +51,56 @@
 }
 
 :root {
+  /* Sampled from /login-hero.webp: graphite workshop, steel, screen glow, warm lamps. */
+  --ink: #131b24;
+  --charcoal: #1c2630;
+  --graphite: #24303a;
+  --steel: #4c5561;
+  --steel-blue: #3e5164;
+  --glow: #428ac8;
+  --glow-deep: #1e5a8a;
+  --warm: #c4a574;
+  --warm-soft: #f3efe6;
+  --mist: #e6ebf0;
+  --paper: #f3f5f7;
+  --line: #d5dbe1;
+  --text: #1a232c;
+  --muted-text: #5c6770;
+  --canvas: #f7f9fb;
   --font-geist-sans: "Source Sans Pro", "Source Sans 3", sans-serif;
   --font-geist-mono: ui-monospace, Consolas, "DejaVu Sans Mono", monospace;
-  --background: #ffffff;
-  --foreground: #22272a;
+  --background: var(--canvas);
+  --foreground: var(--text);
   --card: #ffffff;
-  --card-foreground: #14343a;
+  --card-foreground: var(--ink);
   --popover: #ffffff;
-  --popover-foreground: #14343a;
-  --primary: #0b8f9c;
+  --popover-foreground: var(--ink);
+  --primary: var(--glow-deep);
   --primary-foreground: #ffffff;
-  --secondary: #e7f7f8;
-  --secondary-foreground: #0b5f68;
-  --muted: #f4fbfb;
-  --muted-foreground: #4d6d73;
-  --accent: #dff5f7;
-  --accent-foreground: #0b5f68;
-  --destructive: #b42318;
-  --border: #d5ebed;
-  --input: #c5e3e6;
-  --ring: #0b8f9c;
+  --secondary: var(--mist);
+  --secondary-foreground: var(--ink);
+  --muted: var(--paper);
+  --muted-foreground: var(--muted-text);
+  --accent: var(--mist);
+  --accent-foreground: var(--ink);
+  --destructive: #9c4036;
+  --border: var(--line);
+  --input: var(--line);
+  --ring: var(--glow);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: #0b8f9c;
+  --sidebar: var(--ink);
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #0b8f9c;
-  --sidebar-accent: #087a86;
+  --sidebar-primary: var(--glow);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--graphite);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #79c5cd;
-  --sidebar-ring: #ffffff;
+  --sidebar-border: var(--steel);
+  --sidebar-ring: var(--glow);
 }
 
 .dark {

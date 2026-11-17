@@ -71,14 +71,14 @@ export function FolhaPrint({
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 text-black print:bg-white print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3">
-        <a href={backHref} className="text-sm font-medium text-[#0b8f9c]">Voltar à folha</a>
+        <a href={backHref} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</a>
         <PrintButton />
       </div>
       <article data-testid="folha-impressa" className="print-keep mx-auto max-w-[210mm] bg-white px-8 py-8 text-[12px] shadow-sm print:shadow-none">
         <div className="flex items-start justify-between gap-6 border-b border-neutral-300 pb-4">
           <CompanyBlock showIban />
           <div className="text-right">
-            <p className="text-[10px] font-semibold tracking-[0.14em] text-[#0b8f9c] uppercase">Folha de obra</p>
+            <p className="text-[10px] font-semibold tracking-[0.14em] text-[var(--glow)] uppercase">Folha de obra</p>
             <p className="mt-1 text-xl font-bold">{number}</p>
             <p className="text-neutral-600">Entrada: {dateLabel}</p>
           </div>
