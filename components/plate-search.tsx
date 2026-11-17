@@ -47,7 +47,7 @@ export function PlateSearch({
               onFound(result.vehicle);
               onPlateChange(result.vehicle.plate);
               setMessage(result.message);
-              toast.success("Dados da matrícula preenchidos (simulação).");
+              toast.success(result.message || "Dados da matrícula preenchidos.");
             });
           }}
         >
@@ -55,7 +55,7 @@ export function PlateSearch({
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Formato AA-00-AA. A consulta está em <strong>simulação</strong> — não liga a uma API paga de matrículas.
+        Formato AA-00-AA. Uma matrícula já consultada não volta a gastar crédito. Sem fornecedor definido, a procura fica desligada.
       </p>
       {message ? <p className="text-xs text-[var(--ink)]">{message}</p> : null}
     </div>

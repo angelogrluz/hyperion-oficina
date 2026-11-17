@@ -1,4 +1,5 @@
 import { Field } from "@/components/field";
+import { NifInput } from "@/components/nif-input";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -12,8 +13,12 @@ export function ClientFields({
       <Field label="Nome" className="md:col-span-2">
         <Input name="name" required defaultValue={client?.name} className="h-10 bg-background" />
       </Field>
-      <Field label="NIF">
-        <Input name="nif" required defaultValue={client?.nif} inputMode="numeric" className="h-10 bg-background" />
+      <NifInput defaultValue={client?.nif} />
+      <Field label="Código postal">
+        <Input name="postalCode" className="h-10 bg-background" />
+      </Field>
+      <Field label="Localidade">
+        <Input name="city" className="h-10 bg-background" />
       </Field>
       <Field label="Telefone">
         <Input name="phone" defaultValue={client?.phone} className="h-10 bg-background" />

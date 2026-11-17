@@ -56,9 +56,9 @@ function AppMenu({ pathname, totals, extra, onNavigate }: { pathname: string; to
 
   return (
     <div className="flex h-full flex-col bg-[var(--charcoal)] text-white">
-      <div className="border-b border-white/10 px-4 py-4">
+      <Link href="/" className="block border-b border-white/10 px-4 py-4" aria-label="Ir para o painel" data-testid="logo-inicio">
         {logo ? <img src={logo} alt={name} className="mx-auto max-h-14 w-full object-contain" /> : <p className="text-[18px] font-semibold leading-tight">{name}</p>}
-      </div>
+      </Link>
       <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Menu da gestão">
         <MenuLink href="/" label="Painel" active={pathname === "/"} onNavigate={onNavigate} />
         {showBilling ? (
@@ -132,6 +132,7 @@ export function Shell({
   const [query, setQuery] = useState("");
   useSyncExternalStore(subscribeAccess, readCurrentUserId, () => "");
   const ready = useSyncExternalStore(subscribeCompanySettings, () => companyReady(readCompanySettings()), () => true);
+  const companyName = useSyncExternalStore(subscribeCompanySettings, () => companyDisplayName(readCompanySettings()), () => "Oficina");
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "light" as const);
 
   return (
@@ -147,6 +148,7 @@ export function Shell({
                 <button type="button" className="grid size-10 place-items-center rounded-lg text-[var(--ink)] lg:hidden" onClick={() => setOpen(true)} aria-label="Abrir menu">
                   <Menu />
                 </button>
+                <Link href="/" className="max-w-[42vw] truncate text-[15px] font-semibold text-[var(--ink)] sm:max-w-[180px]" data-testid="logo-cabecalho">{companyName}</Link>
                 <form
                   className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 md:max-w-sm"
                   onSubmit={(event) => {

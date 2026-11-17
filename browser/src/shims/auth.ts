@@ -17,9 +17,11 @@ export function readSession(): Session | null {
     if (!user) return null;
     const office = user.platformAdmin || (user.companyStatus === "active" && user.memberActive !== false && !!user.role && OFFICE_ROLES.has(user.role));
     if (!office) return null;
-    const staff = readUsers().find((item) => item.email.trim().toLowerCase() === user.email.trim().toLowerCase() && item.active);
+    const staff = readUsers().find((item) => item.id === user.userId && item.active)
+      ?? readUsers().find((item) => item.email.trim().toLowerCase() === user.email.trim().toLowerCase() && item.active);
+    const synthetic = user.email.endsWith("@staff.oficinaplan.invalid");
     const role = staff && staff.role !== "mecanico" ? staff.role : "admin";
-    return { userId: user.userId, name: staff?.name || (user.role === "owner" ? "Admin" : user.email), role, email: user.email };
+    return { userId: user.userId, name: staff?.name || (user.role === "owner" ? "Admin" : synthetic ? staff?.login || "Equipa" : user.email), role, email: synthetic ? staff?.login || "" : user.email };
   }
   const raw = localStorage.getItem(SESSION_KEY);
   if (!raw) return null;

@@ -9,6 +9,7 @@ import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
 import { ensureConsumidorFinal, saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
 import { moveSymptoms, writeStockLink, type CachedClient } from "@/lib/browser-cache";
 import { controlClass, Field, Select } from "@/components/field";
+import { NifInput } from "@/components/nif-input";
 import { FolhaView } from "@/components/folha-view";
 import { LineGrid } from "@/components/line-grid";
 import { Button } from "@/components/ui/button";
@@ -1398,7 +1399,9 @@ function QuickClient({
           }}
         >
           <Field label="Nome"><Input name="name" required className="h-10" /></Field>
-          <Field label="NIF"><Input name="nif" required className="h-10" /></Field>
+          <NifInput />
+          <Field label="Código postal"><Input name="postalCode" className="h-10" /></Field>
+          <Field label="Localidade"><Input name="city" className="h-10" /></Field>
           <Field label="Telefone"><Input name="phone" className="h-10" /></Field>
           <Field label="E-mail"><Input name="email" type="email" className="h-10" /></Field>
           <Field label="Morada"><Textarea name="address" /></Field>

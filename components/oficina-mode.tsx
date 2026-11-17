@@ -50,7 +50,6 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   const [now, setNow] = useState(Date.now());
   const [ponto, setPonto] = useState("");
   const [pontoMsg, setPontoMsg] = useState("");
-  const [internos, setInternos] = useState(false);
   const theme = useSyncExternalStore(subscribeTheme, readTheme, () => "light" as const);
   const [serviceId, setServiceId] = useState("");
   useEffect(() => { if (!admin) recordPath("/modo-oficina"); }, [admin]);
@@ -60,19 +59,18 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   }, []);
 
   useEffect(() => {
-    if (admin || chat || (!techId && !internos)) return;
+    if (admin || chat || (!techId && !serviceId)) return;
     const timer = window.setInterval(() => {
       if (Date.now() - touched > 15000) {
         setTechId("");
         setOrderId("");
         setChat(false);
-        setInternos(false);
         setServiceId("");
         setReorder(false);
       }
     }, 400);
     return () => window.clearInterval(timer);
-  }, [admin, chat, techId, internos, touched]);
+  }, [admin, chat, techId, serviceId, touched]);
 
   const tech = users.find((user) => user.id === techId);
   const queue = readAssignments().filter((item) => item.userId === techId).sort((a, b) => a.position - b.position);
@@ -112,6 +110,11 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
 
   return (
     <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} data-theme={admin ? undefined : theme} className={admin ? "min-h-[70vh] bg-white p-3 text-[var(--charcoal)]" : "min-h-screen bg-white p-4 text-[var(--charcoal)]"} onPointerDown={touch}>
+      {admin ? null : (
+        <div className="mb-4 flex justify-center">
+          <button type="button" data-testid="picar-ponto" className="h-16 min-w-72 rounded-2xl bg-[var(--charcoal)] px-8 text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
+        </div>
+      )}
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="w-52">{admin ? <h1 className="text-[28px] font-semibold">Técnicos</h1> : <ProductBackButton onBeforeBack={() => { if (orderId) { setOrderId(""); setChat(false); return true; } if (techId) { setTechId(""); setChat(false); return true; } return Boolean(readSession()?.role === "mecanico"); }} />}</div>
         <div className="flex items-center gap-2">
@@ -127,27 +130,22 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
             ))}
           </div>
           {admin ? null : (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" data-testid="picar-ponto" className="h-16 min-w-64 flex-1 rounded-2xl bg-[var(--charcoal)] text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
-              <button type="button" data-testid="servicos-internos" className="h-16 min-w-64 flex-1 rounded-2xl border-2 border-[var(--charcoal)] text-[24px] font-semibold" onClick={() => { setInternos(true); setServiceId(""); }}>Serviços internos</button>
+            <label className="grid gap-1 text-[18px] font-semibold" data-testid="servicos-internos">Serviços internos
+              <select data-testid="servicos-internos-lista" value={serviceId} onChange={(event) => setServiceId(event.target.value)} className="h-14 rounded-2xl border-2 border-[var(--charcoal)] bg-white px-3 text-[20px]">
+                <option value="">Escolher…</option>
+                {services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+              </select>
+            </label>
+          )}
+          {admin || !serviceId ? null : (
+            <div className="grid gap-2">
+              <p className="text-[16px]">Quem começa {services.find((service) => service.id === serviceId)?.name}?</p>
+              {users.map((user) => (
+                <button key={user.id} type="button" className="h-12 rounded-xl bg-[var(--glow)] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setServiceId(""); }}>{user.name}</button>
+              ))}
             </div>
           )}
           {admin ? null : <TechnicianTable users={users} orders={orders} services={services} now={now} />}
-          {internos ? (
-            <div data-testid="lista-internos" className="grid gap-2 rounded-2xl border border-[var(--line)] bg-white p-3">
-              <div className="flex items-center justify-between"><h2 className="text-[20px] font-semibold">Serviços internos</h2><button type="button" onClick={() => setInternos(false)}>Fechar</button></div>
-              {!serviceId ? services.map((service) => (
-                <button key={service.id} type="button" data-testid="interno-opcao" className="h-14 rounded-xl bg-[#f4f6f8] text-left text-[20px] font-semibold" onClick={() => setServiceId(service.id)}>{service.name}</button>
-              )) : (
-                <div className="grid gap-2">
-                  <p className="text-[16px]">Quem começa {services.find((service) => service.id === serviceId)?.name}?</p>
-                  {users.map((user) => (
-                    <button key={user.id} type="button" className="h-12 rounded-xl bg-[var(--glow)] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setInternos(false); setServiceId(""); }}>{user.name}</button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : null}
         </div>
       ) : order ? (
         <div className="grid gap-3">
@@ -158,6 +156,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
             {order.tasks.length ? order.tasks.map((task) => <li key={task} data-testid="tarefa" className="rounded-xl bg-[#f4f6f8] px-4 py-3 text-[20px]">{task}</li>) : <li className="text-[18px] text-[var(--steel)]">Sem tarefas de serviço nesta obra.</li>}
           </ul>
           <p data-testid="relogio-tecnico" className="text-[42px] font-semibold tabular-nums text-[var(--glow)]">{formatClock(personMs(tech.id, "obra", order.id, now))}</p>
+          <p className="text-[15px] text-[var(--muted-text)]">Tempo acumulado. Se retomares a tarefa, continua daqui.</p>
           <TimerButtons userId={tech.id} kind="obra" targetId={order.id} running={running?.kind === "obra" && running.targetId === order.id} />
           <button type="button" data-testid="ajuda-tecnica" className="h-14 rounded-2xl border-2 border-[var(--glow)] text-[20px] font-semibold text-[var(--glow)]" onClick={() => { setChat(true); setMessages([{ from: "ajuda", text: `Viatura ${order.vehicle}, matrícula ${order.plate}. Tarefas: ${order.tasks.join("; ") || "nenhuma"}. O assistente fica disponível na fase cloud.` }]); }}>Ajuda técnica</button>
           {chat ? (
@@ -195,27 +194,27 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
               );
             })}
           </div>
-          <h2 className="text-[22px] font-semibold">Serviços internos</h2>
-          <div className="grid gap-2">
-            {services.map((service) => {
-              const active = running?.kind === "interno" && running.targetId === service.id;
-              return (
-                <div key={service.id} data-testid="servico-oficina" className="flex items-center justify-between gap-2 rounded-2xl bg-[#f4f6f8] px-4 py-3">
-                  <div>
-                    <p className="text-[20px] font-semibold">{service.name}</p>
-                    {active ? <p data-testid="relogio-interno" className="text-[28px] font-semibold tabular-nums text-[var(--glow)]">{formatClock(personMs(tech.id, "interno", service.id, now))}</p> : null}
-                  </div>
-                  <TimerButtons userId={tech.id} kind="interno" targetId={service.id} running={active} />
-                </div>
-              );
-            })}
-          </div>
+          <label className="grid gap-1 text-[22px] font-semibold" data-testid="servicos-internos">Serviços internos
+            <select data-testid="servicos-internos-lista" value={serviceId} onChange={(event) => setServiceId(event.target.value)} className="h-14 rounded-2xl border-2 border-[var(--charcoal)] bg-white px-3 text-[20px] font-semibold">
+              <option value="">Escolher…</option>
+              {services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
+            </select>
+          </label>
+          {serviceId ? (
+            <div data-testid="servico-oficina" className="flex items-center justify-between gap-2 rounded-2xl bg-[#f4f6f8] px-4 py-3">
+              <div>
+                <p className="text-[20px] font-semibold">{services.find((service) => service.id === serviceId)?.name}</p>
+                <p data-testid="relogio-interno" className="text-[28px] font-semibold tabular-nums text-[var(--glow)]">{formatClock(personMs(tech.id, "interno", serviceId, now))}</p>
+              </div>
+              <TimerButtons userId={tech.id} kind="interno" targetId={serviceId} running={running?.kind === "interno" && running.targetId === serviceId} />
+            </div>
+          ) : null}
         </div>
       )}
       {pinFor === "ponto" ? (
         <form data-testid="ponto-teclado" className="fixed inset-0 z-[80] grid place-items-center bg-black/40 p-4" onSubmit={(event) => {
           event.preventDefault();
-          if (ponto.length !== 4) { setPontoMsg("PIN incorreto."); return; }
+          if (ponto.length < 4) { setPontoMsg("PIN incorreto."); return; }
           const user = readUsers().find((item) => item.active && item.clocksIn && pinMatches(item.id, ponto));
           if (!user) { setPontoMsg("PIN incorreto."); return; }
           const hadOpen = readPunches().some((item) => item.userId === user.id && !item.outAt);
@@ -229,11 +228,11 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
         }}>
           <div className="w-full max-w-md rounded-2xl bg-white p-6">
             <h2 className="text-[32px] font-semibold">Picar o ponto</h2>
-            <p data-testid="ponto-pin" className="mt-4 text-center text-[40px] tracking-[0.35em]">{(ponto || "").padEnd(4, "·").slice(0, 4)}</p>
+            <p data-testid="ponto-pin" className="mt-4 text-center text-[40px] tracking-[0.35em]">{(ponto || "").padEnd(6, "·").slice(0, 6)}</p>
             {pontoMsg ? <p data-testid="ponto-confirmacao" className="mt-3 text-center text-[22px] font-semibold">{pontoMsg}</p> : null}
             <div className="mt-4 grid grid-cols-3 gap-2">
               {["1","2","3","4","5","6","7","8","9","←","0","OK"].map((key) => (
-                <button key={key} type={key === "OK" ? "submit" : "button"} className="h-20 rounded-xl bg-[var(--mist)] text-[28px] font-semibold" onClick={() => { if (key === "←") setPonto((value) => value.slice(0, -1)); else if (key !== "OK") setPonto((value) => (value + key).slice(0, 4)); }}>{key}</button>
+                <button key={key} type={key === "OK" ? "submit" : "button"} className="h-20 rounded-xl bg-[var(--mist)] text-[28px] font-semibold" onClick={() => { if (key === "←") setPonto((value) => value.slice(0, -1)); else if (key !== "OK") setPonto((value) => (value + key).slice(0, 6)); }}>{key}</button>
               ))}
             </div>
             <button type="button" className="mt-3 h-14 w-full rounded-xl border text-[20px]" onClick={() => { setPinFor(""); setPontoMsg(""); }}>Fechar</button>

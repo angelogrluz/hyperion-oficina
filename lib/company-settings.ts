@@ -23,7 +23,58 @@ export type CompanySettings = {
   defaultVat: number;
   logoMode: LogoMode;
   logoDataUrl: string;
+  openingHours?: DayHours[];
+  targets?: Record<string, YearTarget>;
 };
+
+export type DayHours = {
+  open: boolean;
+  start: string;
+  end: string;
+  lunch: boolean;
+  lunchStart: string;
+  lunchEnd: string;
+};
+
+export type YearTarget = {
+  revenue: number;
+  margin: number;
+  months: Array<{ revenue: number; margin: number }>;
+};
+
+export const WEEKDAYS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"] as const;
+export const WEEKDAY_LETTERS = ["S", "T", "Q", "Q", "S", "S", "D"] as const;
+
+export function defaultOpeningHours(): DayHours[] {
+  return WEEKDAYS.map((_, index) => ({
+    open: index < 5,
+    start: "09:00",
+    end: "18:00",
+    lunch: index < 5,
+    lunchStart: "13:00",
+    lunchEnd: "14:00",
+  }));
+}
+
+export function readOpeningHours(company: CompanySettings) {
+  const fallback = defaultOpeningHours();
+  if (!Array.isArray(company.openingHours) || company.openingHours.length !== 7) return fallback;
+  return company.openingHours.map((day, index) => ({ ...fallback[index], ...day }));
+}
+
+export function emptyYearTarget(): YearTarget {
+  return { revenue: 0, margin: 0, months: Array.from({ length: 12 }, () => ({ revenue: 0, margin: 0 })) };
+}
+
+export function spreadTarget(revenue: number, margin: number): YearTarget {
+  const months = Array.from({ length: 12 }, () => ({
+    revenue: Math.round((revenue / 12) * 100) / 100,
+    margin,
+  }));
+  const drift = Math.round((revenue - months.reduce((sum, month) => sum + month.revenue, 0)) * 100) / 100;
+  months[0].revenue = Math.round((months[0].revenue + drift) * 100) / 100;
+  return { revenue, margin, months };
+}
 
 /** Empty workshop. The name is the only value copied from sign-up. */
 export function blankCompany(name = ""): CompanySettings {

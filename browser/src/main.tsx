@@ -16,6 +16,7 @@ import { getActiveSlug, OFFICE_ROLES, setActiveSlug, slugMatches } from "@/lib/w
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
 import { StockMovements } from "@/components/stock-movements";
+import { NifInput } from "@/components/nif-input";
 import { SaveForm } from "@/components/save-form";
 import { Shell } from "@/components/shell";
 import { SimulationBanner } from "@/components/simulation-banner";
@@ -384,7 +385,9 @@ function NewClient() {
       <PageHeader title="Novo cliente" />
       <SaveForm action={(formData) => saveClient(null, formData)} next={(id) => `/clientes/${id}`}>
         <input name="name" required placeholder="Nome" className="h-10 rounded-lg border px-3" />
-        <input name="nif" required placeholder="NIF" className="h-10 rounded-lg border px-3" />
+        <NifInput />
+        <input name="postalCode" placeholder="Código postal" className="h-10 rounded-lg border px-3" />
+        <input name="city" placeholder="Localidade" className="h-10 rounded-lg border px-3" />
         <input name="phone" placeholder="Telefone" className="h-10 rounded-lg border px-3" />
         <input name="email" placeholder="E-mail" className="h-10 rounded-lg border px-3" />
         <textarea name="address" placeholder="Morada" className="rounded-lg border px-3 py-2" />
@@ -399,7 +402,7 @@ function NewVehicle() {
   if (!snap) return null;
   return (
     <div className="max-w-2xl rounded-xl border border-[var(--line)] bg-white p-4">
-      <PageHeader title="Nova viatura" description="A procura da matrícula está em simulação." />
+      <PageHeader title="Nova viatura" description="A procura da matrícula só corre quando a chave e o fornecedor estiverem definidos." />
       <SaveForm action={(formData) => saveVehicle(null, formData)} next={(id) => `/viaturas/${id}`}>
         <VehicleFields clients={snap.clients} />
       </SaveForm>
@@ -756,7 +759,7 @@ function ResultsScreen() {
         invoiceIssuedAt: order.invoiceIssuedAt,
         dateOut: order.dateOut,
         updatedAt: order.updatedAt,
-        lines: snap.lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice, discountPercent: line.discountPercent, vatRate: line.vatRate })),
+        lines: snap.lines.filter((line) => line.orderId === order.id).map((line) => ({ quantity: line.quantity, unitPrice: line.unitPrice, unitCost: line.unitCost, discountPercent: line.discountPercent, vatRate: line.vatRate })),
       }))}
       purchases={snap.purchases.map((purchase) => ({ id: purchase.id, date: purchase.date, voided: purchase.voided }))}
       purchaseLines={snap.purchaseLines.map((line) => ({ purchaseId: line.purchaseId, quantity: line.quantity, cost: line.cost, vatRate: line.vatRate }))}

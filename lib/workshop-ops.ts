@@ -17,6 +17,7 @@ export type WorkLog = {
   targetId: string;
   startedAt: string;
   endedAt: string | null;
+  carriedMs?: number;
 };
 
 export type Punch = { id: string; userId: string; inAt: string; outAt: string | null };
@@ -145,9 +146,10 @@ export function openLog(userId: string) {
 }
 
 export function startWork(userId: string, kind: "obra" | "interno", targetId: string) {
+  const carriedMs = personMs(userId, kind, targetId);
   const now = new Date().toISOString();
   const logs = readLogs().map((item) => (item.userId === userId && !item.endedAt ? { ...item, endedAt: now } : item));
-  logs.push({ id: crypto.randomUUID(), userId, kind, targetId, startedAt: now, endedAt: null });
+  logs.push({ id: crypto.randomUUID(), userId, kind, targetId, startedAt: now, endedAt: null, carriedMs });
   writeLogs(logs);
 }
 
@@ -172,9 +174,13 @@ export function formatClock(ms: number) {
 }
 
 export function personMs(userId: string, kind: "obra" | "interno", targetId: string, now = Date.now()) {
-  return readLogs()
-    .filter((item) => item.userId === userId && item.kind === kind && item.targetId === targetId)
-    .reduce((sum, item) => sum + ((item.endedAt ? new Date(item.endedAt).getTime() : now) - new Date(item.startedAt).getTime()), 0);
+  const mine = readLogs().filter((item) => item.userId === userId && item.kind === kind && item.targetId === targetId);
+  const latest = mine.reduce<WorkLog | null>((best, item) => (!best || item.startedAt > best.startedAt ? item : best), null);
+  if (latest && typeof latest.carriedMs === "number") {
+    const end = latest.endedAt ? new Date(latest.endedAt).getTime() : now;
+    return Math.max(0, latest.carriedMs) + Math.max(0, end - new Date(latest.startedAt).getTime());
+  }
+  return mine.reduce((sum, item) => sum + ((item.endedAt ? new Date(item.endedAt).getTime() : now) - new Date(item.startedAt).getTime()), 0);
 }
 
 export function punch(userId: string) {

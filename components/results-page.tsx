@@ -1,10 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { lineAmounts, round2 } from "@/lib/domain";
 import { formatEUR, lisbonParts } from "@/lib/format";
+import { readCompanySettings, subscribeCompanySettings } from "@/lib/company-settings";
 
-type Order = { status: string; invoiceNumber: string | null; invoiceIssuedAt: string | null; dateOut: string | null; updatedAt: string; lines: Array<{ quantity: number; unitPrice: number; discountPercent?: number; vatRate: number }> };
+type Order = { status: string; invoiceNumber: string | null; invoiceIssuedAt: string | null; dateOut: string | null; updatedAt: string; lines: Array<{ quantity: number; unitPrice: number; unitCost?: number; discountPercent?: number; vatRate: number }> };
 type Purchase = { id: string; date: string; voided: boolean };
 type PurchaseLine = { purchaseId: string; quantity: number; cost: number; vatRate: number };
 
@@ -30,6 +32,28 @@ export function ResultsPage({ orders, purchases, purchaseLines }: { orders: Orde
   const now = quarterOf(new Date());
   const [year, setYear] = useState(now.year);
   const [quarter, setQuarter] = useState(now.quarter);
+  const targets = useSyncExternalStore(subscribeCompanySettings, () => readCompanySettings().targets?.[String(year)], () => undefined);
+  const months = useMemo(() => {
+    return Array.from({ length: 12 }, (_, index) => {
+      const start = new Date(Date.UTC(year, index, 1));
+      const end = new Date(Date.UTC(year, index + 1, 1));
+      let revenue = 0;
+      let base = 0;
+      let margin = 0;
+      for (const order of orders) {
+        if (!order.invoiceNumber) continue;
+        const when = order.invoiceIssuedAt || order.dateOut || order.updatedAt;
+        if (!inRange(when, start, end)) continue;
+        for (const line of order.lines) {
+          const amounts = lineAmounts({ quantity: line.quantity, unitPrice: line.unitPrice, unitCost: line.unitCost ?? 0, discountPercent: line.discountPercent ?? 0, vatRate: line.vatRate });
+          revenue += amounts.total;
+          base += amounts.base;
+          margin += amounts.margin;
+        }
+      }
+      return { revenue: round2(revenue), marginPct: base > 0 ? round2((margin / base) * 100) : 0, targetRevenue: targets?.months[index]?.revenue ?? 0, targetMargin: targets?.months[index]?.margin ?? 0 };
+    });
+  }, [orders, year, targets]);
   const totals = useMemo(() => {
     const { start, end } = range(year, quarter);
     let salesVat = 0;
@@ -73,6 +97,24 @@ export function ResultsPage({ orders, purchases, purchaseLines }: { orders: Orde
           <tr className="border-t border-[var(--line)] bg-[var(--mist)]"><td className="px-4 py-3 font-semibold">IVA a pagar (estimativa)</td><td data-testid="iva-pagar" className="px-4 py-3 text-right text-[20px] font-semibold tabular-nums text-[var(--glow)]">{formatEUR(totals.due)}</td></tr>
         </tbody>
       </table>
+      <div className="border-t border-[var(--line)] px-4 py-3">
+        <h2 className="text-[18px] font-semibold">Objetivos de {year}</h2>
+        <p className="text-[14px] text-[var(--muted-text)]">A faturação é o total faturado. A margem bruta compara o preço sem IVA com o custo.</p>
+        <table className="mt-2 w-full text-[15px]">
+          <thead><tr className="text-left text-[var(--muted-text)]"><th className="py-1">Mês</th><th className="text-right">Faturação</th><th className="text-right">Objetivo</th><th className="text-right">Margem</th><th className="text-right">Objetivo</th></tr></thead>
+          <tbody>
+            {months.map((month, index) => (
+              <tr key={index} className="border-t border-[var(--line)]">
+                <td className="py-1">{["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][index]}</td>
+                <td className="text-right tabular-nums">{formatEUR(month.revenue)}</td>
+                <td className="text-right tabular-nums">{formatEUR(month.targetRevenue)}</td>
+                <td className="text-right tabular-nums">{month.marginPct.toLocaleString("pt-PT")}%</td>
+                <td className="text-right tabular-nums">{month.targetMargin.toLocaleString("pt-PT")}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

@@ -2,10 +2,14 @@
 
 import { useState, useSyncExternalStore } from "react";
 import { EcolubSettings } from "@/components/ecolub-settings";
-import { inviteStaff, readCloudUser, setCompanySlug, setMemberActive, subscribeCloud } from "@/browser/src/cloud";
+import { readCloudUser, subscribeCloud } from "@/browser/src/cloud";
+import { saveStaffAccess, setStaffActive } from "@/browser/src/staff-access";
+import { OpeningHoursFields } from "@/components/opening-hours";
+import { AnnualTargets } from "@/components/annual-targets";
+import { DataMigration } from "@/components/data-migration";
 import { IntegrationsPanel } from "@/components/integrations-panel";
 import { cloudBlankMode } from "@/lib/cloud-session";
-import { slugError } from "@/lib/workshop-slug";
+import { getActiveSlug } from "@/lib/workshop-slug";
 import {
   blankCompany,
   companyDisplayName,
@@ -31,7 +35,6 @@ import {
   type WorkshopUser,
 } from "@/lib/user-settings";
 import { readServices, subscribeOps, writeServices, type InternalService } from "@/lib/workshop-ops";
-import { readPlateLookup, subscribeIntegrations, writePlateLookup } from "@/lib/billing-settings";
 import { readServiceTypes, subscribeServiceTypes, writeServiceTypes, type ServiceType } from "@/lib/booking-settings";
 import { purchaseTypes } from "@/src/config";
 
@@ -41,12 +44,14 @@ const SECTIONS = [
   { id: "precos", title: "Preços e taxas", subtitle: "Mão de obra, margens, ECOLUB e IVA.", permit: "config.precos" },
   { id: "documentos", title: "Documentos", subtitle: "Banco, validade, rodapé e séries.", permit: "config.empresa" },
   { id: "stock", title: "Stock e artigos", subtitle: "Tipologias que entram no inventário.", permit: "config.empresa" },
-  { id: "utilizadores", title: "Colaboradores", subtitle: "Pessoas, funções e o acesso de cada uma. Com e-mail, enviamos um convite para entrar.", permit: "config.utilizadores" },
+  { id: "utilizadores", title: "Colaboradores", subtitle: "Nome, função, utilizador e PIN. Sem convite e sem registo próprio.", permit: "config.utilizadores" },
   { id: "servicos", title: "Serviços internos", subtitle: "Tarefas de oficina que não vão para a folha do cliente.", permit: "config.empresa" },
   { id: "integracoes", title: "Integrações", subtitle: "Ligações externas da oficina.", permit: "config.empresa" },
   { id: "faturacao", title: "Faturação", subtitle: "A ligação faz-se em Integrações.", permit: "config.empresa" },
   { id: "matricula", title: "Matrícula", subtitle: "Onde vais buscar a foto da viatura, mais tarde.", permit: "config.empresa" },
   { id: "marcacoes", title: "Marcações", subtitle: "Duração de cada tipo de serviço na agenda.", permit: "config.empresa" },
+  { id: "objetivos", title: "Objetivos", subtitle: "Faturação e margem bruta do ano, mês a mês.", permit: "config.empresa" },
+  { id: "migracao", title: "Migração de Dados", subtitle: "Exportar e importar clientes, viaturas, fornecedores, serviços e produtos.", permit: "config.empresa" },
 ] as const;
 
 type SectionId = (typeof SECTIONS)[number]["id"];
@@ -57,7 +62,6 @@ export function WorkshopSettings() {
   const users = useSyncExternalStore(subscribeAccess, readUsers, () => installationUsers);
   const matrix = useSyncExternalStore(subscribeAccess, readMatrix, readMatrix);
   const services = useSyncExternalStore(subscribeOps, readServices, readServices);
-  const plateLookup = useSyncExternalStore(subscribeIntegrations, readPlateLookup, () => ({ apiUrl: "", apiKey: "" }));
   const serviceTypes = useSyncExternalStore(subscribeServiceTypes, readServiceTypes, readServiceTypes);
   const cloudUser = useSyncExternalStore(subscribeCloud, readCloudUser, () => null);
   const [section, setSection] = useState<SectionId>("empresa");
@@ -91,7 +95,7 @@ export function WorkshopSettings() {
           </div>
           {notice ? <p className="text-[15px] text-[#1f9d55]">{notice}</p> : null}
         </div>
-        {section === "empresa" ? <><SlugField notice={setNotice} /><CompanyFields key={company.legalName + company.nif} company={company} onSave={saveCompany} /></> : null}
+        {section === "empresa" ? <><SlugField /><CompanyFields key={company.legalName + company.nif} company={company} onSave={saveCompany} /></> : null}
         {section === "logo" ? <LogoFields company={company} onSave={saveCompany} onError={setNotice} /> : null}
         {section === "precos" ? <PriceFields prices={prices} onSave={savePrices} /> : null}
         {section === "documentos" ? <DocumentFields key={company.iban + company.footer} company={company} prices={prices} onCompany={saveCompany} onPrices={savePrices} /> : null}
@@ -100,8 +104,10 @@ export function WorkshopSettings() {
         {section === "servicos" ? <ServiceFields services={services} /> : null}
         {section === "integracoes" ? <IntegrationsPanel /> : null}
         {section === "faturacao" ? <BillingFields /> : null}
-        {section === "matricula" ? <PlateFields lookup={plateLookup} onNotice={setNotice} /> : null}
+        {section === "matricula" ? <PlateFields /> : null}
         {section === "marcacoes" ? <BookingFields types={serviceTypes} /> : null}
+        {section === "objetivos" ? <AnnualTargets company={company} onSave={saveCompany} /> : null}
+        {section === "migracao" ? <DataMigration /> : null}
         <button type="button" data-testid="repor-empresa" className="mt-6 h-10 rounded-lg border border-[var(--line)] px-3 text-[16px]" onClick={() => {
           if (cloudBlankMode()) {
             const name = readCloudUser()?.companyName ?? "";
@@ -121,27 +127,15 @@ export function WorkshopSettings() {
   );
 }
 
-function SlugField({ notice }: { notice: (message: string) => void }) {
+function SlugField() {
   const current = readCloudUser();
-  const [value, setValue] = useState(current?.slug ?? "");
+  const slug = current?.slug || getActiveSlug();
   return (
-    <form className="mb-4 grid gap-2 rounded-xl border border-[var(--line)] p-3 sm:grid-cols-[1fr_auto]" onSubmit={(event) => {
-      event.preventDefault();
-      const problem = slugError(value);
-      if (problem) { notice(problem); return; }
-      void setCompanySlug(value).then((result) => {
-        if ("error" in result && result.error) notice(result.error);
-        else { setValue(result.slug ?? value); notice("Endereço guardado. O link da oficina passou a ser este."); }
-      });
-    }}>
-      <label className="grid gap-1 text-[16px]">Endereço da oficina
-        <span className="flex h-10 items-center rounded-lg border border-[var(--line)] px-3">
-          <span className="text-[var(--muted-text)]">oficinaplan.com/</span>
-          <input value={value} onChange={(event) => setValue(event.target.value.toLowerCase())} className="min-w-0 flex-1 bg-transparent outline-none" autoCapitalize="none" />
-        </span>
-      </label>
-      <button type="submit" className="h-10 self-end rounded-lg bg-[var(--ink)] px-3 font-semibold text-white">Guardar endereço</button>
-    </form>
+    <div className="mb-4 rounded-xl border border-[var(--line)] p-3" data-testid="endereco-oficina">
+      <p className="text-[16px] font-medium">Endereço da oficina</p>
+      <p className="mt-1 text-[16px]">oficinaplan.com/{slug || "…"}</p>
+      <p className="mt-1 text-[14px] text-[var(--muted-text)]">Este link só pode ser alterado na administração do OficinaPlan.</p>
+    </div>
   );
 }
 
@@ -158,7 +152,7 @@ function CompanyFields({ company, onSave }: { company: CompanySettings; onSave: 
       <Field label="País" testId="empresa-pais" value={company.country} onSave={(country) => onSave({ country })} />
       <Field label="E-mail" testId="empresa-email" value={company.email} onSave={(email) => onSave({ email })} />
       <Field label="Website" testId="empresa-site" value={company.site} onSave={(site) => onSave({ site })} />
-      <Field label="Horário" testId="empresa-horario" value={company.hours} onSave={(hours) => onSave({ hours })} wide />
+      <OpeningHoursFields company={company} onSave={onSave} />
       <Money label="IVA por defeito (%)" testId="iva-defeito" value={company.defaultVat} onSave={(defaultVat) => onSave({ defaultVat: defaultVat ?? 23 })} />
     </div>
   );
@@ -232,6 +226,7 @@ function StockFields() {
 
 function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: PermissionMatrix }) {
   const [editing, setEditing] = useState<WorkshopUser | null>(null);
+  const [staffError, setStaffError] = useState("");
   return (
     <div className="grid gap-4">
       <ul className="divide-y divide-[#eaeaf2] rounded-xl border">
@@ -243,20 +238,32 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
             </div>
             <span className="flex gap-3">
               <button type="button" className="text-[var(--glow)]" onClick={() => setEditing(user)}>Editar</button>
-              <button type="button" className="text-[#9c4036]" onClick={() => { const active = !user.active; writeUsers(users.map((item) => item.id === user.id ? { ...item, active } : item)); if (user.email.trim()) void setMemberActive(user.email, active); }}>{user.active ? "Desativar" : "Ativar"}</button>
+              <button type="button" className="text-[#9c4036]" onClick={() => {
+                const active = !user.active;
+                writeUsers(users.map((item) => item.id === user.id ? { ...item, active } : item));
+                const cloud = readCloudUser();
+                if (cloud?.companyId && user.id) void setStaffActive(cloud.companyId, user.id, active);
+              }}>{user.active ? "Desativar" : "Ativar"}</button>
             </span>
           </li>
         ))}
       </ul>
-      {editing ? <UserForm user={editing} onCancel={() => setEditing(null)} onSave={(user) => {
-        const exists = users.some((item) => item.id === user.id);
-        writeUsers(exists ? users.map((item) => item.id === user.id ? user : item) : [...users, user]);
-        setEditing(null);
+      {staffError ? <p className="text-[15px] text-[#9c4036]">{staffError}</p> : null}
+      {editing ? <UserForm user={editing} onCancel={() => setEditing(null)} onSave={(user, pin) => {
         const cloud = readCloudUser();
-        if (user.email.trim() && user.active && cloud?.companyId) {
-          const role = user.role === "admin" || user.role === "gestor" || user.role === "rececionista" ? user.role : "mecanico";
-          void inviteStaff({ email: user.email.trim(), role, name: user.name, companyId: cloud.companyId });
-        }
+        const owner = user.login.trim().toLowerCase() === "admin" || user.id === cloud?.userId;
+        const apply = (saved: WorkshopUser) => {
+          const exists = users.some((item) => item.id === saved.id);
+          writeUsers(exists ? users.map((item) => item.id === saved.id ? saved : item) : [...users, saved]);
+          setEditing(null);
+        };
+        if (!cloud?.companyId || owner) { apply(user); return; }
+        const role = user.role === "admin" || user.role === "gestor" || user.role === "rececionista" ? user.role : "mecanico";
+        void saveStaffAccess({ companyId: cloud.companyId, username: user.login, name: user.name, role, pin, userId: users.some((item) => item.id === user.id) ? user.id : "" }).then((result) => {
+          if ("error" in result && result.error) { setStaffError(result.error); return; }
+          setStaffError("");
+          apply({ ...user, id: result.userId || user.id, pin: pin || user.pin, email: "" });
+        });
       }} /> : <button type="button" data-testid="utilizador-novo" className="h-10 w-fit rounded-lg bg-[var(--glow-deep)] px-3 font-semibold text-white" onClick={() => setEditing({ id: crypto.randomUUID(), name: "", login: "", email: "", role: "mecanico", active: true, technician: true, clocksIn: true, pin: "" })}>Adicionar colaborador</button>}
       <div data-testid="permissoes-matriz">
         <h2 className="text-[18px] font-semibold">Permissões</h2>
@@ -286,14 +293,27 @@ function UserFields({ users, matrix }: { users: WorkshopUser[]; matrix: Permissi
   );
 }
 
-function UserForm({ user, onSave, onCancel }: { user: WorkshopUser; onSave: (user: WorkshopUser) => void; onCancel: () => void }) {
+function UserForm({ user, onSave, onCancel }: { user: WorkshopUser; onSave: (user: WorkshopUser, pin: string) => void; onCancel: () => void }) {
   const [draft, setDraft] = useState(user);
+  const [pin, setPin] = useState("");
+  const [formError, setFormError] = useState("");
+  const owner = user.login.trim().toLowerCase() === "admin";
   return (
-    <form className="grid gap-2 rounded-xl bg-[var(--paper)] p-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); if (!draft.name.trim() || !draft.login.trim()) return; onSave({ ...draft, name: draft.name.trim(), login: draft.login.trim() }); }}>
+    <form className="grid gap-2 rounded-xl bg-[var(--paper)] p-3 sm:grid-cols-2" onSubmit={(event) => {
+      event.preventDefault();
+      if (!draft.name.trim() || !draft.login.trim()) return;
+      if (!owner && draft.login.trim().toLowerCase() === "admin") { setFormError("O utilizador Admin é só do dono da oficina."); return; }
+      if (!owner && pin && !/^\d{6}$/.test(pin)) { setFormError("O PIN tem de ter 6 dígitos."); return; }
+      if (!owner && !user.pin && !/^\d{6}$/.test(pin)) { setFormError("Define um PIN de 6 dígitos."); return; }
+      setFormError("");
+      onSave({ ...draft, name: draft.name.trim(), login: draft.login.trim().toLowerCase(), pin: pin || draft.pin }, pin);
+    }}>
       <Field label="Nome" testId="utilizador-nome" value={draft.name} live onSave={(name) => setDraft((current) => ({ ...current, name }))} />
-      <Field label="Utilizador" testId="utilizador-login" value={draft.login} live onSave={(login) => setDraft((current) => ({ ...current, login }))} />
-      <Field label="E-mail" testId="utilizador-email" value={draft.email} live onSave={(email) => setDraft((current) => ({ ...current, email }))} />
-      <Field label="PIN numérico" testId="utilizador-pin" value={draft.pin} live onSave={(pin) => setDraft((current) => ({ ...current, pin: pin.replace(/\D/g, "") }))} />
+      <Field label="Utilizador" testId="utilizador-login" value={owner ? "Admin" : draft.login} live onSave={(login) => { if (!owner) setDraft((current) => ({ ...current, login })); }} />
+      {owner ? <p className="text-[15px] text-[var(--muted-text)] sm:col-span-2">O administrador entra com a palavra-passe da conta. O utilizador é Admin e não se muda aqui.</p> : <label className="grid gap-1 text-[16px]">PIN de 6 dígitos
+        <input data-testid="utilizador-pin" value={pin} inputMode="numeric" autoComplete="new-password" placeholder={user.pin ? "Deixa vazio para manter" : ""} onChange={(event) => setPin(event.target.value.replace(/\D/g, "").slice(0, 6))} className="h-10 rounded-lg border border-[var(--line)] px-3" />
+      </label>}
+      {formError ? <p className="text-[14px] text-[#9c4036] sm:col-span-2">{formError}</p> : null}
       <label className="text-[16px]">Função
         <select data-testid="utilizador-funcao" value={draft.role} onChange={(event) => setDraft((current) => ({ ...current, role: event.target.value as RoleId }))} className="mt-1 h-10 w-full rounded-lg border bg-white px-2">
           {ROLES.map((role) => <option key={role.id} value={role.id}>{role.label}</option>)}
@@ -380,29 +400,14 @@ function resizeLogo(file: File) {
   });
 }
 
-function SecretInput({ label, testId, stored, onCommit }: { label: string; testId: string; stored: boolean; onCommit: (value: string) => void }) {
-  const [value, setValue] = useState("");
-  return (
-    <label className="grid gap-1 text-[16px]">{label}
-      <input data-testid={testId} type="password" autoComplete="new-password" value={value} placeholder={stored ? "Guardado — escreve só se quiseres mudar" : ""} onChange={(event) => setValue(event.target.value)} onBlur={() => { if (value.trim()) { onCommit(value.trim()); setValue(""); } }} className="h-10 rounded-lg border border-[var(--line)] px-3" />
-    </label>
-  );
-}
-
 function BillingFields() {
   return (
     <p className="text-[16px] text-[var(--muted-text)]">A ligação à faturação certificada está no separador Integrações. O segredo e a palavra-passe não ficam neste computador.</p>
   );
 }
 
-function PlateFields({ lookup, onNotice }: { lookup: { apiUrl: string; apiKey: string }; onNotice: (message: string) => void }) {
-  return (
-    <div className="grid gap-3">
-      <p className="text-[16px] text-[var(--muted-text)]">Quando não houver foto da matrícula, a oficina mostra o carro neutro. A chamada à API fica para a fase cloud.</p>
-      <Field label="URL da API" testId="matricula-url" value={lookup.apiUrl} onSave={(apiUrl) => { writePlateLookup({ ...readPlateLookup(), apiUrl }); onNotice("Guardado"); }} />
-      <SecretInput label="Chave" testId="matricula-chave" stored={Boolean(lookup.apiKey)} onCommit={(apiKey) => { writePlateLookup({ ...readPlateLookup(), apiKey }); onNotice("Guardado"); }} />
-    </div>
-  );
+function PlateFields() {
+  return <p className="text-[16px] text-[var(--muted-text)]">A chave do módulo de matrículas está em Integrações. Sem foto, a viatura mostra uma silhueta preta. A consulta fica desligada até o fornecedor estar definido.</p>;
 }
 
 function BookingFields({ types }: { types: ServiceType[] }) {

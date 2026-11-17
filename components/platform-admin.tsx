@@ -7,6 +7,7 @@ import type { CompanyStatus } from "@/browser/src/cloud";
 type CompanyRow = {
   id: string;
   name: string;
+  slug?: string | null;
   status: CompanyStatus;
   created_at: string;
   approved_at: string | null;
@@ -26,6 +27,7 @@ export function PlatformAdmin() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("pending");
   const [error, setError] = useState("");
   const [pendingId, setPendingId] = useState("");
+  const [slugDraft, setSlugDraft] = useState<Record<string, string>>({});
 
   async function load() {
     const db = supabase();
@@ -85,6 +87,7 @@ export function PlatformAdmin() {
           <thead>
             <tr className="text-[14px] text-[var(--muted-text)]">
               <th className="px-3 py-2">Oficina</th>
+              <th className="px-3 py-2">Endereço</th>
               <th className="px-3 py-2">Dono</th>
               <th className="px-3 py-2">Data</th>
               <th className="px-3 py-2">Estado</th>
@@ -92,9 +95,26 @@ export function PlatformAdmin() {
             </tr>
           </thead>
           <tbody>
-            {shown.length === 0 ? <tr><td colSpan={5} className="px-3 py-4 text-[var(--steel)]">{error ? "A lista não chegou a carregar." : "Nenhuma oficina neste filtro."}</td></tr> : shown.map((row) => (
+            {shown.length === 0 ? <tr><td colSpan={6} className="px-3 py-4 text-[var(--steel)]">{error ? "A lista não chegou a carregar." : "Nenhuma oficina neste filtro."}</td></tr> : shown.map((row) => (
               <tr key={row.id} className="border-t border-[#eaeaf2]">
                 <td className="px-3 py-3 font-semibold">{row.name}</td>
+                <td className="px-3 py-3">
+                  <form className="flex gap-2" onSubmit={(event) => {
+                    event.preventDefault();
+                    const db = supabase();
+                    if (!db) return;
+                    const slug = (slugDraft[row.id] ?? row.slug ?? "").trim().toLowerCase();
+                    setPendingId(row.id);
+                    void db.rpc("admin_set_company_slug", { p_company_id: row.id, p_slug: slug }).then(({ error: rpcError }) => {
+                      setPendingId("");
+                      if (rpcError) setError(rpcError.message);
+                      else void load();
+                    });
+                  }}>
+                    <input value={slugDraft[row.id] ?? row.slug ?? ""} onChange={(event) => setSlugDraft((current) => ({ ...current, [row.id]: event.target.value.toLowerCase() }))} className="h-9 w-36 rounded-lg border px-2" aria-label={`Endereço de ${row.name}`} />
+                    <button type="submit" disabled={pendingId === row.id} className="h-9 rounded-lg border px-2 text-[14px]">Guardar</button>
+                  </form>
+                </td>
                 <td className="px-3 py-3">{row.owner_email ?? "—"}</td>
                 <td className="px-3 py-3">{row.created_at ? new Date(row.created_at).toLocaleDateString("pt-PT") : "—"}</td>
                 <td className="px-3 py-3">{row.status === "active" ? "Ativa" : row.status === "suspended" ? "Suspensa" : "Pendente"}</td>

@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Link } from "react-router-dom";
-import { inviteStaff, readCloudUser, resetPassword, resolveCompanyPublic, setCompanySlug, signIn, signOut, signUp, subscribeCloud, type CloudUser } from "@/browser/src/cloud";
+import { readCloudUser, resolveCompanyPublic, signIn, signOut, signUp, subscribeCloud, type CloudUser } from "@/browser/src/cloud";
 import { EntryBrand } from "@/components/entry-brand";
 import { ProductMark } from "@/components/product-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { forgotOwnerPassword, signInWithUsername } from "@/browser/src/staff-access";
 import { setActiveSlug, slugError, slugMatches, suggestSlug } from "@/lib/workshop-slug";
 
 export function Landing({ signedInSlug }: { signedInSlug?: string | null }) {
@@ -251,7 +252,7 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
             setPending(true);
             setError("");
             setInfo("");
-            void signIn(String(data.get("email") ?? ""), String(data.get("password") ?? "")).then(async (result) => {
+            void signInWithUsername(slug, String(data.get("username") ?? ""), String(data.get("password") ?? "")).then(async (result) => {
               if ("error" in result && result.error) { setPending(false); setError(result.error); return; }
               const user = "user" in result ? result.user : undefined;
               if (!user || !slugMatches(user, slug)) {
@@ -278,11 +279,11 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
               <p className="text-[14px] text-[var(--muted-text)]">oficinaplan.com/{slug}</p>
             </div>
           </div>
-          <p className="text-[15px] text-[var(--muted-text)]">{notice || "Entra com o e-mail da tua conta nesta oficina."}</p>
-          <label className="grid gap-1 text-[15px] font-medium">E-mail
-            <Input name="email" type="email" required autoComplete="username" className="h-12 border-[var(--line)] text-[17px]" />
+          <p className="text-[15px] text-[var(--muted-text)]">{notice || "Entra com o utilizador desta oficina. O administrador usa a palavra-passe. A equipa usa um PIN de 6 dígitos."}</p>
+          <label className="grid gap-1 text-[15px] font-medium">Utilizador
+            <Input name="username" required autoComplete="username" className="h-12 border-[var(--line)] text-[17px]" />
           </label>
-          <label className="grid gap-1 text-[15px] font-medium">Palavra-passe
+          <label className="grid gap-1 text-[15px] font-medium">PIN ou palavra-passe
             <span className="relative">
               <Input name="password" type={show ? "text" : "password"} required minLength={6} autoComplete="current-password" className="h-12 border-[var(--line)] pr-16 text-[17px]" />
               <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[var(--glow-deep)]" onClick={() => setShow((value) => !value)}>{show ? "Ocultar" : "Mostrar"}</button>
@@ -295,12 +296,12 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
             type="button"
             className="justify-self-start text-[15px] font-medium text-[var(--glow-deep)]"
             onClick={(event) => {
-              const email = String(new FormData(event.currentTarget.form ?? undefined).get("email") ?? "").trim();
-              if (!email) { setError("Indica o e-mail para recuperares a palavra-passe."); return; }
+              const username = String(new FormData(event.currentTarget.form ?? undefined).get("username") ?? "").trim();
+              if (!username) { setError("Indica o utilizador."); return; }
               setError("");
-              void resetPassword(email, `/${slug}`).then((result) => {
-                if (result.error) setError(result.error);
-                else setInfo("Enviámos um e-mail para definires uma palavra-passe nova.");
+              void forgotOwnerPassword(slug, username).then((result) => {
+                if ("error" in result && result.error) setError(result.error);
+                else setInfo(result.message || "Se este utilizador for o administrador, enviámos um e-mail para repor a palavra-passe.");
               });
             }}
           >Esqueci-me da palavra-passe</button>
