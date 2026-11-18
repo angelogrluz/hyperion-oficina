@@ -72,7 +72,12 @@ function write<T>(key: string, value: T) {
 
 export function subscribeOps(listener: () => void) {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  const onSettings = () => listener();
+  if (typeof window !== "undefined") window.addEventListener("oficinaplan-settings", onSettings);
+  return () => {
+    listeners.delete(listener);
+    if (typeof window !== "undefined") window.removeEventListener("oficinaplan-settings", onSettings);
+  };
 }
 
 export function readServices() {

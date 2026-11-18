@@ -51,7 +51,6 @@ function AppMenu({ pathname, totals, extra, onNavigate }: { pathname: string; to
   const faturas = allow("faturacao.ver");
   const orcamentos = allow("orcamentos.ver");
   const showBilling = faturas || orcamentos;
-  const tecnicos = allow("tecnicos") ? "/tecnicos" : allow("pontos") ? "/pontos" : allow("oficina") ? "/oficina" : "";
   const active = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href));
 
   return (
@@ -86,7 +85,8 @@ function AppMenu({ pathname, totals, extra, onNavigate }: { pathname: string; to
         {allow("clientes.ver") ? <MenuLink href="/clientes" label="Clientes e Viaturas" active={active("/clientes") || active("/viaturas")} onNavigate={onNavigate} /> : null}
         {allow("artigos.ver") ? <MenuLink href="/artigos" label="Stock e Peças" active={active("/artigos") || active("/movimentos")} onNavigate={onNavigate} /> : null}
         {allow("compras") ? <MenuLink href="/compras" label="Fornecedores e Compras" active={active("/compras")} onNavigate={onNavigate} /> : null}
-        {tecnicos ? <MenuLink href={tecnicos} label="Técnicos" active={active("/tecnicos") || active("/pontos")} onNavigate={onNavigate} /> : null}
+        {allow("tecnicos") ? <MenuLink href="/tecnicos" label="Técnicos" active={active("/tecnicos")} onNavigate={onNavigate} /> : null}
+        {allow("pontos") ? <MenuLink href="/pontos" label="Pontos" active={active("/pontos")} onNavigate={onNavigate} /> : null}
         {allow("oficina") ? <MenuLink href="/oficina" label="Modo oficina" active={active("/oficina") || active("/modo-oficina")} onNavigate={onNavigate} /> : null}
         {allow("relatorios") ? <MenuLink href="/resultados" label="Análise financeira" active={active("/resultados")} onNavigate={onNavigate} /> : null}
         {(allow("config.empresa") || allow("config.precos") || allow("config.utilizadores")) ? <MenuLink href="/definicoes" label="Definições" active={active("/definicoes")} onNavigate={onNavigate} /> : null}
