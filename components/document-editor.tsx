@@ -39,7 +39,8 @@ import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
 import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/labels";
 import { workshopPath } from "@/lib/workshop-slug";
-import { officialDocumentPdf } from "@/browser/src/moloni";
+import { moloniStatus, officialDocumentPdf } from "@/browser/src/moloni";
+import { readCloudUser } from "@/browser/src/cloud";
 import { rememberOfficialDocument } from "@/browser/src/store";
 
 export type EditorArticle = {
@@ -126,6 +127,50 @@ function reorderSheetLines(lines: Line[], dragKey: string, beforeKey: string | n
   rest.splice(at, 0, ...moving);
   const unchanged = rest.length === lines.length && rest.every((item, position) => item.key === lines[position]?.key);
   return unchanged ? lines : rest;
+}
+
+/**
+ * The «Faturar» dialog lives outside the editor instance. Every save gives the order a new
+ * updatedAt, and the order screen remounts the editor on that key; component state would lose the
+ * open dialog, the chosen payment and any error. Keyed by order id so a remount keeps it open.
+ */
+type InvoiceDialogState = { payment: string; error: string | null; busy: boolean };
+const invoiceDialogs = new Map<string, InvoiceDialogState>();
+const invoiceDialogListeners = new Set<() => void>();
+const invoiceDialogMounts = new Map<string, number>();
+
+function writeInvoiceDialog(key: string, next: InvoiceDialogState | null) {
+  if (next) {
+    for (const other of [...invoiceDialogs.keys()]) if (other !== key) invoiceDialogs.delete(other);
+    invoiceDialogs.set(key, next);
+  } else if (invoiceDialogs.has(key)) {
+    invoiceDialogs.delete(key);
+  } else {
+    return;
+  }
+  for (const listener of invoiceDialogListeners) listener();
+}
+
+function subscribeInvoiceDialog(listener: () => void) {
+  invoiceDialogListeners.add(listener);
+  return () => {
+    invoiceDialogListeners.delete(listener);
+  };
+}
+
+function useInvoiceDialog(key: string) {
+  const state = useSyncExternalStore(subscribeInvoiceDialog, () => invoiceDialogs.get(key) ?? null, () => null);
+  useEffect(() => {
+    invoiceDialogMounts.set(key, (invoiceDialogMounts.get(key) ?? 0) + 1);
+    return () => {
+      invoiceDialogMounts.set(key, (invoiceDialogMounts.get(key) ?? 1) - 1);
+      // A remount mounts the new editor right away; only forget the dialog when the order is really closed.
+      window.setTimeout(() => {
+        if (!invoiceDialogMounts.get(key)) writeInvoiceDialog(key, null);
+      }, 0);
+    };
+  }, [key]);
+  return state;
 }
 
 export function DocumentEditor({
@@ -235,14 +280,41 @@ export function DocumentEditor({
   const [dirty, setDirty] = useState(Boolean(draft && documentId));
   const [revision, setRevision] = useState(0);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">(draft && documentId ? "dirty" : "saved");
-  const [payment, setPayment] = useState<string>("");
   const revisionRef = useRef(0);
   const [pending, startTransition] = useTransition();
   const [clientOpen, setClientOpen] = useState(false);
   const [clientSeed, setClientSeed] = useState<ClientSeed | null>(null);
   const [vehicleOpen, setVehicleOpen] = useState(false);
-  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const invoiceKey = documentId ?? "nova";
+  const invoiceDialog = useInvoiceDialog(invoiceKey);
+  const invoiceOpen = Boolean(invoiceDialog);
+  const payment = invoiceDialog?.payment ?? "";
+  const invoiceBusy = Boolean(invoiceDialog?.busy);
+  const [billingMode, setBillingMode] = useState<"simulacao" | "teste" | "real" | null>(null);
+  function setInvoiceOpen(open: boolean) {
+    if (!open && invoiceDialogs.get(invoiceKey)?.busy) return;
+    writeInvoiceDialog(invoiceKey, open ? { payment: invoiceDialogs.get(invoiceKey)?.payment ?? "", error: null, busy: false } : null);
+  }
+  function setPayment(method: string) {
+    const current = invoiceDialogs.get(invoiceKey);
+    if (current) writeInvoiceDialog(invoiceKey, { ...current, payment: method, error: null });
+  }
   const [issued, setIssued] = useState<string | null>(invoice?.number ?? null);
+
+  useEffect(() => {
+    if (!invoiceOpen) return;
+    const companyId = readCloudUser()?.companyId;
+    if (!companyId) return;
+    let alive = true;
+    void moloniStatus(companyId).then((status) => {
+      if (!alive) return;
+      const info = status as { connected?: boolean; testMode?: boolean };
+      setBillingMode(info.connected ? (info.testMode === false ? "real" : "teste") : "simulacao");
+    }).catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [invoiceOpen]);
 
   const ownedVehicles = vehicleList.filter((vehicle) => vehicle.clientId === clientId);
   const matches = useMemo(() => {
@@ -981,7 +1053,8 @@ export function DocumentEditor({
           approvalAt={approvalAt}
           onApproval={chooseApproval}
           onFlush={() => {
-            if (documentId) void flush({ silent: true, navigate: false });
+            // Only save on blur when something changed: every save remounts the editor.
+            if (documentId && dirty) void flush({ silent: true, navigate: false });
           }}
           isNew={!documentId}
           saveState={saveState}
@@ -1016,18 +1089,22 @@ export function DocumentEditor({
             });
           }}
         />
-        <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}>
-          <DialogContent className="sm:max-w-lg">
+        <Dialog open={invoiceOpen} onOpenChange={(open) => setInvoiceOpen(open)}>
+          <DialogContent className="sm:max-w-lg" data-testid="dialogo-faturar">
             <DialogHeader>
               <DialogTitle>Faturar</DialogTitle>
               <DialogDescription>
-                Sem programa de faturação ligado, a fatura fica em simulação. Escolhe o modo de pagamento. O documento não tem validade fiscal.
+                {billingMode === "real"
+                  ? "A fatura é emitida no programa de faturação ligado e comunicada à AT. Confirma o total e escolhe o modo de pagamento."
+                  : billingMode === "teste"
+                    ? "Modo de teste ligado: a fatura fica como rascunho no programa de faturação, sem validade fiscal. Escolhe o modo de pagamento."
+                    : "Sem programa de faturação ligado, a fatura fica em simulação. Escolhe o modo de pagamento. O documento não tem validade fiscal."}
               </DialogDescription>
             </DialogHeader>
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
               Total a comunicar: {formatEUR(totals.total)} ({formatEUR(totals.base)} + IVA).
             </div>
-            <fieldset className="grid gap-2">
+            <fieldset className="grid gap-2" disabled={invoiceBusy}>
               <legend className="mb-1 text-sm font-medium">Modo de pagamento</legend>
               {SHEET_PAYMENTS.map((method) => (
                 <label key={method} className="flex items-center gap-2 text-sm">
@@ -1042,34 +1119,42 @@ export function DocumentEditor({
                 </label>
               ))}
             </fieldset>
+            {invoiceDialog?.error ? <p data-testid="faturar-erro" role="alert" className="text-sm text-red-700">{invoiceDialog.error}</p> : null}
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setInvoiceOpen(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" disabled={invoiceBusy} onClick={() => setInvoiceOpen(false)}>Cancelar</Button>
               <Button
                 type="button"
                 className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]"
                 data-testid="emitir-fatura"
-                disabled={pending || !documentId || !payment}
+                disabled={invoiceBusy || pending || !documentId || !payment}
                 onClick={() => {
-                  if (!documentId || !payment) return;
+                  if (!documentId || !payment || invoiceDialogs.get(invoiceKey)?.busy) return;
+                  const key = invoiceKey;
                   const method = payment;
-                  setInvoiceOpen(false);
-                  startTransition(async () => {
-                    const saved = await flush({ silent: true, navigate: false });
-                    if (!saved.ok) {
-                      setInvoiceOpen(true);
-                      return;
+                  const needsSave = dirty;
+                  const fail = (message: string) => writeInvoiceDialog(key, { payment: method, error: message, busy: false });
+                  writeInvoiceDialog(key, { payment: method, error: null, busy: true });
+                  void (async () => {
+                    try {
+                      const saved = needsSave ? await flush({ silent: true, navigate: false }) : { ok: true as const, id: documentId };
+                      if (!saved.ok) {
+                        fail("Não foi possível gravar a folha antes de faturar. Revê os erros e tenta outra vez.");
+                        return;
+                      }
+                      const result = await issueInvoice(saved.id, method);
+                      if (!result.ok) {
+                        fail(result.error);
+                        return;
+                      }
+                      writeInvoiceDialog(key, null);
+                      toast.success(`Fatura ${result.documentNumber}`);
+                    } catch (failure) {
+                      fail(failure instanceof Error && failure.message ? failure.message : "Não foi possível emitir a fatura.");
                     }
-                    const result = await issueInvoice(saved.id, method);
-                    if (!result.ok) {
-                      setError(result.error);
-                      setInvoiceOpen(true);
-                      return;
-                    }
-                    toast.success(`Fatura ${result.documentNumber}`);
-                  });
+                  })();
                 }}
               >
-                {pending ? "A emitir…" : "Emitir fatura"}
+                {invoiceBusy ? "A emitir…" : "Emitir fatura"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -1373,7 +1458,7 @@ export function DocumentEditor({
           touch();
         }}
       />
-      <Dialog open={invoiceOpen} onOpenChange={setInvoiceOpen}>
+      <Dialog open={invoiceOpen} onOpenChange={(open) => setInvoiceOpen(open)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Emitir fatura simulada</DialogTitle>

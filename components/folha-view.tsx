@@ -540,7 +540,12 @@ export function FolhaView({
   }, [lineEditMode, locked, onRemove, selectedKey]);
 
   return (
-    <div className="grid items-start gap-3 pb-16 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(230px,15vw,280px)]" onBlur={() => onFlush?.()}>
+    <div className="grid items-start gap-3 pb-16 xl:grid-cols-[minmax(0,1fr)_var(--sheet)] [--sheet:clamp(230px,15vw,280px)]" onBlur={(event) => {
+      // Focus moving into a dialog (Faturar, cliente, stock) is not leaving the sheet.
+      const next = event.relatedTarget instanceof Element ? event.relatedTarget : null;
+      if (next?.closest('[role="dialog"], [data-slot="dialog-content"]')) return;
+      onFlush?.();
+    }}>
       <div className="min-w-0 bg-white text-[var(--charcoal)]">
         <SymptomList documentId={documentId || "rascunho"} />
         <div className="mt-2 flex flex-wrap items-end gap-1 border-b border-[#eaeaf2] px-2 py-1">
