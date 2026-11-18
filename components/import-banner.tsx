@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { cloudActive, importAlreadyDone, markImported, readDeviceStash, saveCompanyState } from "@/browser/src/cloud";
-import { forgetCloudMemory, readDeviceSnapshot } from "@/browser/src/store";
+import { cloudActive, importAlreadyDone, markImported, readCloudUser, readDeviceStash, saveCompanyState } from "@/browser/src/cloud";
+import { forgetCloudMemory, readDeviceSnapshot, readSnapshot } from "@/browser/src/store";
+
+// «Agora não» is remembered per workshop on this device (not just for the tab).
+const dismissKey = () => `oficinaplan-import-dismissed:${readCloudUser()?.companyId ?? ""}`;
 
 export function ImportBanner() {
   const [open, setOpen] = useState(false);
@@ -10,11 +13,16 @@ export function ImportBanner() {
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    if (!cloudActive() || importAlreadyDone() || sessionStorage.getItem("oficinaplan-import-skip") === "1") return;
-    void readDeviceSnapshot().then((snap) => {
-      const stash = readDeviceStash();
-      if (snap || stash) setOpen(true);
-    });
+    if (!cloudActive() || importAlreadyDone() || localStorage.getItem(dismissKey()) === "1") return;
+    let alive = true;
+    void Promise.all([readDeviceSnapshot(), readSnapshot()]).then(([snap, cloud]) => {
+      if (!alive) return;
+      const deviceHasData = Boolean(snap && (snap.orders.length || snap.clients.length));
+      // Only offer when the cloud workshop is still empty: importing replaces what is there.
+      const cloudEmpty = !cloud.orders.length && !cloud.clients.length && !cloud.vehicles.length;
+      if (deviceHasData && cloudEmpty) setOpen(true);
+    }).catch(() => undefined);
+    return () => { alive = false; };
   }, []);
 
   if (!open) return message ? <p className="mb-2 bg-[var(--mist)] px-3 py-2 text-[16px]">{message}</p> : null;
@@ -77,7 +85,7 @@ export function ImportBanner() {
         >
           {pending ? "A importar…" : "Importar dados deste dispositivo"}
         </button>
-        <button type="button" className="h-10 rounded-lg border px-3" onClick={() => { sessionStorage.setItem("oficinaplan-import-skip", "1"); setOpen(false); }}>Agora não</button>
+        <button type="button" className="h-10 rounded-lg border px-3" onClick={() => { localStorage.setItem(dismissKey(), "1"); setOpen(false); }}>Agora não</button>
       </div>
     </div>
   );

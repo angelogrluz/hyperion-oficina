@@ -39,8 +39,9 @@ import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
 import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/labels";
 import { workshopPath } from "@/lib/workshop-slug";
-import { moloniStatus, officialDocumentPdf } from "@/browser/src/moloni";
+import { officialDocumentPdf } from "@/browser/src/moloni";
 import { readCloudUser } from "@/browser/src/cloud";
+import { billingSummary, refreshBillingState, useBillingState } from "@/browser/src/billing-status";
 import { rememberOfficialDocument } from "@/browser/src/store";
 
 export type EditorArticle = {
@@ -246,7 +247,7 @@ export function DocumentEditor({
   const [brand, setBrand] = useState(draft?.brand ?? startingVehicle?.brand ?? "");
   const [model, setModel] = useState(draft?.model ?? startingVehicle?.model ?? "");
   const [version, setVersion] = useState(draft?.version ?? startingVehicle?.version ?? "");
-  const [year, setYear] = useState(draft?.year ?? (startingVehicle ? String(startingVehicle.year) : ""));
+  const [year, setYear] = useState(yearText(draft?.year ?? startingVehicle?.year));
   const [vin, setVin] = useState(draft?.vin ?? startingVehicle?.vin ?? "");
   const [engine, setEngine] = useState(draft?.engine ?? startingVehicle?.engine ?? "");
   const [engineCode, setEngineCode] = useState(draft?.engineCode ?? startingVehicle?.engineCode ?? "");
@@ -290,7 +291,6 @@ export function DocumentEditor({
   const invoiceOpen = Boolean(invoiceDialog);
   const payment = invoiceDialog?.payment ?? "";
   const invoiceBusy = Boolean(invoiceDialog?.busy);
-  const [billingMode, setBillingMode] = useState<"simulacao" | "teste" | "real" | null>(null);
   function setInvoiceOpen(open: boolean) {
     if (!open && invoiceDialogs.get(invoiceKey)?.busy) return;
     writeInvoiceDialog(invoiceKey, open ? { payment: invoiceDialogs.get(invoiceKey)?.payment ?? "", error: null, busy: false } : null);
@@ -301,19 +301,11 @@ export function DocumentEditor({
   }
   const [issued, setIssued] = useState<string | null>(invoice?.number ?? null);
 
+  // Known before the dialog opens (loaded with the sheet), refreshed in the background when it opens.
+  const billing = useBillingState();
+  const billingMode = billing.loaded ? billing.mode : null;
   useEffect(() => {
-    if (!invoiceOpen) return;
-    const companyId = readCloudUser()?.companyId;
-    if (!companyId) return;
-    let alive = true;
-    void moloniStatus(companyId).then((status) => {
-      if (!alive) return;
-      const info = status as { connected?: boolean; testMode?: boolean };
-      setBillingMode(info.connected ? (info.testMode === false ? "real" : "teste") : "simulacao");
-    }).catch(() => undefined);
-    return () => {
-      alive = false;
-    };
+    if (invoiceOpen) void refreshBillingState(true);
   }, [invoiceOpen]);
 
   const ownedVehicles = vehicleList.filter((vehicle) => vehicle.clientId === clientId);
@@ -441,7 +433,7 @@ export function DocumentEditor({
     setBrand(vehicle.brand);
     setModel(vehicle.model);
     setVersion(vehicle.version);
-    setYear(vehicle.year ? String(vehicle.year) : "");
+    setYear(yearText(vehicle.year));
     setVin(vehicle.vin);
     setEngine(vehicle.engine);
     setEngineCode(vehicle.engineCode ?? "");
@@ -527,7 +519,7 @@ export function DocumentEditor({
       formData.set("brand", brand);
       formData.set("model", model);
       formData.set("version", version);
-      formData.set("year", year);
+      formData.set("year", yearText(year));
       formData.set("vin", vin);
       formData.set("engine", engine);
       formData.set("engineCode", engineCode);
@@ -552,7 +544,7 @@ export function DocumentEditor({
           brand: savedVehicle.brand,
           model: savedVehicle.model,
           version,
-          year: year ? Number(year) : null,
+          year: yearText(year) ? Number(yearText(year)) : null,
           vin,
           engine,
           engineCode,
@@ -755,6 +747,7 @@ export function DocumentEditor({
     unitCost?: string;
     vatRate?: string;
     articleId?: string | null;
+    kind?: "mao_de_obra" | "peca" | "";
   }) {
     touch();
     const article = draft.articleId
@@ -778,13 +771,13 @@ export function DocumentEditor({
           }
         : {
             key: crypto.randomUUID(),
-            kind: (draft.ref.trim() ? "peca" : "mao_de_obra") as "peca" | "mao_de_obra",
+            kind: (draft.kind || (draft.ref.trim() ? "peca" : "mao_de_obra")) as "peca" | "mao_de_obra",
             description: draft.description,
             quantity: draft.quantity || "1",
             unitPrice: draft.unitPrice.trim() ? draft.unitPrice : draft.ref.trim() ? num(labourRate) : (labourUnitPrice(draft.description) == null ? "" : num(labourUnitPrice(draft.description) ?? 0)),
             unitCost: draft.unitCost || "0",
             discount: "0",
-            vatRate: num(readCompanySettings().defaultVat),
+            vatRate: draft.vatRate?.trim() ? draft.vatRate : num(readCompanySettings().defaultVat),
             note: "",
             articleId: null,
             ref: draft.ref,
@@ -1027,6 +1020,20 @@ export function DocumentEditor({
           onNextInspection={(value) => { touch(); setNextInspection(value); }}
           onNextService={(value) => { touch(); setNextService(value); }}
           onLookup={() => {
+            // 1) the workshop's own vehicles; 2) the external lookup, if there is one.
+            const own = plate.trim() ? vehicleList.find((item) => platesMatch(item.plate, normalizePlate(plate))) : undefined;
+            if (own) {
+              touch();
+              setError(null);
+              setVehicleId(own.id);
+              fillVehicle(own);
+              if (!clientId && own.clientId) chooseClient(own.clientId);
+              else if (clientId && own.clientId && own.clientId !== clientId) {
+                const owner = clientList.find((item) => item.id === own.clientId);
+                toast.message(`Esta viatura está registada em nome de ${owner?.name ?? "outro cliente"}.`);
+              }
+              return;
+            }
             startTransition(async () => {
               const result = await lookupPlate(plate);
               if (!result.found || !("vehicle" in result) || !result.vehicle) {
@@ -1040,7 +1047,7 @@ export function DocumentEditor({
               setBrand(found.brand);
               setModel(found.model);
               setVersion(found.version);
-              setYear(String(found.year));
+              setYear(yearText(found.year));
               setFuel(found.fuel);
               setEngine(found.engine);
               setVin(found.vin ?? "");
@@ -1072,7 +1079,19 @@ export function DocumentEditor({
               if (!documentId) router.push(`/ordens/${saved.id}`);
             });
           }}
-          canInvoice={(savedStatus === "concluida" || status === "concluida") && !locked && !invoice?.number}
+          canInvoice={Boolean(documentId) && !locked && !invoice?.number && status !== "faturada" && savedStatus !== "faturada"}
+          invoiceHint={!documentId ? "Cria a obra para poder faturar." : lines.length === 0 ? "Adiciona linhas para poder faturar." : null}
+          hasLines={lines.length > 0}
+          billingNote={billingSummary(billing)}
+          clientVehicles={clientId ? ownedVehicles.map((item) => ({ id: item.id, plate: item.plate, label: `${item.plate} · ${item.brand} ${item.model}`.trim() })) : []}
+          onPickVehicle={(id) => {
+            const picked = vehicleList.find((item) => item.id === id);
+            if (!picked) return;
+            touch();
+            setError(null);
+            setVehicleId(id);
+            fillVehicle(picked);
+          }}
           quoteNumber={quoteNumber}
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
@@ -1094,13 +1113,23 @@ export function DocumentEditor({
             <DialogHeader>
               <DialogTitle>Faturar</DialogTitle>
               <DialogDescription>
-                {billingMode === "real"
-                  ? "A fatura é emitida no programa de faturação ligado e comunicada à AT. Confirma o total e escolhe o modo de pagamento."
-                  : billingMode === "teste"
-                    ? "Modo de teste ligado: a fatura fica como rascunho no programa de faturação, sem validade fiscal. Escolhe o modo de pagamento."
-                    : "Sem programa de faturação ligado, a fatura fica em simulação. Escolhe o modo de pagamento. O documento não tem validade fiscal."}
+                {billingMode === null
+                  ? "A confirmar a ligação ao programa de faturação…"
+                  : billingMode === "real" && billing.demoAccount
+                    ? "A fatura é emitida na empresa de teste do programa de faturação. Não tem validade fiscal. Escolhe o modo de pagamento."
+                    : billingMode === "real"
+                      ? "A fatura é emitida no programa de faturação ligado e comunicada à AT. Confirma o total e escolhe o modo de pagamento."
+                      : billingMode === "teste"
+                        ? "Modo de teste ligado: a fatura fica como rascunho no programa de faturação, sem validade fiscal. Escolhe o modo de pagamento."
+                        : "Sem programa de faturação ligado, a fatura fica em simulação. Escolhe o modo de pagamento. O documento não tem validade fiscal."}
               </DialogDescription>
             </DialogHeader>
+            {billingMode && billingMode !== "simulacao" ? (
+              <p data-testid="faturar-empresa" className="text-sm">
+                Empresa: <strong>{billing.companyName || "não escolhida"}</strong>{billing.demoAccount ? " (conta de teste)" : ""}
+              </p>
+            ) : null}
+            {status !== "concluida" ? <p className="text-sm text-[var(--muted-text)]">Ao emitir, o processo desta obra fica fechado.</p> : null}
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950">
               Total a comunicar: {formatEUR(totals.total)} ({formatEUR(totals.base)} + IVA).
             </div>
@@ -1119,6 +1148,9 @@ export function DocumentEditor({
                 </label>
               ))}
             </fieldset>
+            {payment && billingMode && billingMode !== "simulacao" && !billing.payments[payment] ? (
+              <p className="text-sm text-amber-800">«{payment}» ainda não está associado a um método de pagamento em Definições › Integrações.</p>
+            ) : null}
             {invoiceDialog?.error ? <p data-testid="faturar-erro" role="alert" className="text-sm text-red-700">{invoiceDialog.error}</p> : null}
             <DialogFooter>
               <Button type="button" variant="outline" disabled={invoiceBusy} onClick={() => setInvoiceOpen(false)}>Cancelar</Button>
@@ -1126,17 +1158,19 @@ export function DocumentEditor({
                 type="button"
                 className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]"
                 data-testid="emitir-fatura"
-                disabled={invoiceBusy || pending || !documentId || !payment}
+                disabled={invoiceBusy || pending || !documentId || !payment || billingMode === null}
                 onClick={() => {
                   if (!documentId || !payment || invoiceDialogs.get(invoiceKey)?.busy) return;
                   const key = invoiceKey;
                   const method = payment;
-                  const needsSave = dirty;
+                  // Invoicing closes the process: save (and close) first when needed.
+                  const needsClose = status !== "concluida";
+                  const needsSave = dirty || needsClose;
                   const fail = (message: string) => writeInvoiceDialog(key, { payment: method, error: message, busy: false });
                   writeInvoiceDialog(key, { payment: method, error: null, busy: true });
                   void (async () => {
                     try {
-                      const saved = needsSave ? await flush({ silent: true, navigate: false }) : { ok: true as const, id: documentId };
+                      const saved = needsSave ? await flush({ silent: true, navigate: false, ...(needsClose ? { statusOverride: "concluida" } : {}) }) : { ok: true as const, id: documentId };
                       if (!saved.ok) {
                         fail("Não foi possível gravar a folha antes de faturar. Revê os erros e tenta outra vez.");
                         return;
@@ -1355,6 +1389,15 @@ export function DocumentEditor({
               className="h-8"
               disabled={locked || pending}
               onClick={() => {
+                const own = plate.trim() ? vehicleList.find((item) => platesMatch(item.plate, normalizePlate(plate))) : undefined;
+                if (own) {
+                  touch();
+                  setVehicleId(own.id);
+                  fillVehicle(own);
+                  if (!clientId && own.clientId) chooseClient(own.clientId);
+                  setPlateNote("Viatura encontrada nas viaturas da oficina.");
+                  return;
+                }
                 startTransition(async () => {
                   const result = await lookupPlate(plate);
                   if (!result.found || !("vehicle" in result) || !result.vehicle) {
@@ -1367,7 +1410,7 @@ export function DocumentEditor({
                   setBrand(found.brand);
                   setModel(found.model);
                   setVersion(found.version);
-                  setYear(String(found.year));
+                  setYear(yearText(found.year));
                   setFuel(found.fuel);
                   setEngine(found.engine);
                   setVin(found.vin ?? "");
@@ -1552,7 +1595,7 @@ function QuickVehicle({
                 brand: result.brand,
                 model: result.model,
                 version,
-                year: year ? Number(year) : null,
+                year: yearText(year) ? Number(yearText(year)) : null,
                 vin,
                 engine,
                 km: result.km,
@@ -1585,7 +1628,7 @@ function QuickVehicle({
                     setBrand(found.brand);
                     setModel(found.model);
                     setVersion(found.version);
-                    setYear(String(found.year));
+                    setYear(yearText(found.year));
                     setFuel(found.fuel);
                     setEngine(found.engine);
                     setVin(found.vin ?? "");
@@ -1620,4 +1663,10 @@ function QuickVehicle({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** «2016» for a real year; empty for null, NaN, "null" or anything that is not a 4-digit year. */
+function yearText(value: unknown) {
+  const text = String(value ?? "").trim();
+  return /^\d{4}$/.test(text) ? text : "";
 }

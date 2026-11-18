@@ -42,7 +42,7 @@ export function VehicleFields({
     setBrand(found.brand);
     setModel(found.model);
     setVersion(found.version);
-    setYear(String(found.year));
+    setYear(/^\d{4}$/.test(String(found.year ?? "")) ? String(found.year) : "");
     setFuel(found.fuel);
     setEngine(found.engine);
     setVin(found.vin ?? "");

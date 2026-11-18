@@ -78,7 +78,7 @@ const FIELD_LABELS: Record<string, string> = {
   language_id: "idioma", address: "morada", city: "localidade", zip_code: "código postal", country_id: "país",
   email: "e-mail", phone: "telefone", maturity_date_id: "prazo de vencimento", payment_day: "dia de pagamento",
   discount: "desconto", credit_limit: "limite de crédito", qty_copies_document: "número de cópias",
-  sales_man_id: "vendedor", date: "data", expiration_date: "data de vencimento", document_set_id: "série",
+  sales_man_id: "vendedor", salesman_id: "vendedor", delivery_method_id: "método de entrega", date: "data", expiration_date: "data de vencimento", document_set_id: "série",
   customer_id: "cliente", products: "linhas", product_id: "artigo", qty: "quantidade", payments: "pagamentos",
   payment_method_id: "método de pagamento", our_reference: "referência interna", status: "estado",
   parent_id: "categoria-mãe", short_name: "abreviatura", summary: "descrição",
@@ -279,8 +279,18 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   const lines = Array.isArray(body.lines) ? body.lines as Array<Record<string, number | string>> : [];
   if (!lines.length) return { error: "O documento não tem linhas." };
   const nif = consumerNif(customer.nif, customer.name);
-  const customerId = await ensureCustomer(ready.token, String(row.moloni_company_id), { ...customer, nif });
+  // All checks first: nothing is created in the invoicing program until every prerequisite is valid.
+  const map = (row.payment_map ?? {}) as Record<string, string>;
+  const chosenMethod = kind !== "orcamento" ? (map[String(body.payment_method ?? "")] || "") : "";
+  if (kind !== "orcamento" && !chosenMethod) {
+    const label = String(body.payment_method ?? "") || "este modo de pagamento";
+    return { error: `Falta escolher o método de pagamento para «${label}» em Definições › Integrações.` };
+  }
+  if (!lines.every((line) => Number(line.quantity ?? 0) > 0)) return { error: "Há linhas com quantidade 0. Corrige antes de faturar." };
   const taxes = await moloniList(ready.token, "taxes/getAll", { company_id: String(row.moloni_company_id) });
+  if (!taxes.length) return { error: "A empresa do programa de faturação não tem taxas de IVA." };
+  const fallbackMethod = chosenMethod || Object.values(map).find(Boolean) || "";
+  const customerId = await ensureCustomer(ready.token, String(row.moloni_company_id), { ...customer, nif }, fallbackMethod);
   const productId = await ensureProduct(admin, companyId, ready.token, row, taxes);
   const today = new Date().toISOString().slice(0, 10);
   const params = new URLSearchParams();
@@ -313,8 +323,7 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     }
   });
   if (kind !== "orcamento") {
-    const map = (row.payment_map ?? {}) as Record<string, string>;
-    const method = map[String(body.payment_method ?? "")] || Object.values(map)[0];
+    const method = chosenMethod;
     if (method) {
       params.set("payments[0][payment_method_id]", method);
       params.set("payments[0][date]", today);
@@ -614,30 +623,42 @@ function consumerNif(nif?: string, name?: string) {
   return value;
 }
 
-async function ensureCustomer(token: string, companyId: string, customer: Record<string, string>) {
+async function ensureCustomer(token: string, companyId: string, customer: Record<string, string>, paymentMethodId: string) {
   const nif = consumerNif(customer.nif, customer.name);
   const found = await moloniList(token, "customers/getByVat", { company_id: companyId, vat: nif });
   const existing = found.find((item) => item.customer_id) ?? found[0];
   if (existing?.customer_id) return String(existing.customer_id);
-  const created = await moloniPost(token, "customers/insert", new URLSearchParams({
+  // customers/insert: every *_id must exist in this company. payment_method_id and maturity_date_id are
+  // required (> 0); salesman_id and delivery_method_id accept 0 ("nenhum").
+  const methodId = paymentMethodId || String((await moloniList(token, "paymentMethods/getAll", { company_id: companyId }))[0]?.payment_method_id ?? "");
+  if (!methodId) throw new Error("A empresa do programa de faturação não tem métodos de pagamento.");
+  const maturities = await moloniList(token, "maturityDates/getAll", { company_id: companyId });
+  const maturity = maturities.find((item) => Number(item.days ?? -1) === 0) ?? maturities[0];
+  if (!maturity?.maturity_date_id) throw new Error("A empresa do programa de faturação não tem prazos de vencimento.");
+  const consumer = nif === "999999990";
+  const zip = /^\d{4}-\d{3}$/.test(String(customer.postalCode ?? "").trim()) ? String(customer.postalCode).trim() : "0000-000";
+  const params = new URLSearchParams({
     company_id: companyId,
     vat: nif,
     number: nif,
-    name: nif === "999999990" ? "Consumidor Final" : (customer.name || "Cliente"),
+    name: consumer ? "Consumidor Final" : (customer.name || "Cliente"),
     language_id: "1",
     address: customer.address || "Desconhecida",
+    zip_code: zip,
     city: customer.city || "Desconhecida",
-    zip_code: customer.postalCode || "0000-000",
     country_id: "1",
     email: customer.email || "",
     phone: customer.phone || "",
-    maturity_date_id: "1",
+    salesman_id: "0",
+    maturity_date_id: String(maturity.maturity_date_id),
     payment_day: "0",
     discount: "0",
     credit_limit: "0",
-    qty_copies_document: "1",
-    sales_man_id: "0",
-  }));
+    payment_method_id: methodId,
+    delivery_method_id: "0",
+  });
+  console.error("[prod] customers/insert", JSON.stringify({ consumer, hasNif: !consumer, maturity: maturity.maturity_date_id, method: methodId }));
+  const created = await moloniPost(token, "customers/insert", params);
   if (!created.customer_id) {
     console.error("[prod] customers/insert no customer_id", JSON.stringify(created).slice(0, 500));
     throw new Error("O programa de faturação não devolveu o cliente criado.");

@@ -47,7 +47,7 @@ export async function saveVehicle(id: string | null, formData: FormData) {
     brand: text(formData, "brand"),
     model: text(formData, "model"),
     version: text(formData, "version"),
-    year: text(formData, "year") ? Number(text(formData, "year")) : null,
+    year: /^\d{4}$/.test(text(formData, "year")) ? Number(text(formData, "year")) : null,
     vin: text(formData, "vin").toUpperCase(),
     engine: text(formData, "engine"),
     km: Number(text(formData, "km") || 0),
