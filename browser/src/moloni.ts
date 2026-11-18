@@ -105,21 +105,27 @@ export async function officialDocumentPdf(input: {
   number: string;
   kind: "fatura" | "recibo";
   documentId?: string | null;
-}): Promise<{ found: boolean; url?: string; documentId?: string; documentType?: string; error?: string }> {
+  invoiceDocumentId?: string | null;
+}): Promise<{ found: boolean; url?: string; documentId?: string; documentType?: string; error?: string; reason?: string }> {
   const db = supabase();
-  if (!db || !input.companyId) return { found: false };
+  if (!db || !input.companyId) return { found: false, reason: "no_session" };
   const { data, error } = await db.functions.invoke("moloni", {
     body: {
       action: "pdf",
       company_id: input.companyId,
       number: input.number,
       kind: input.kind,
-      document_id: input.documentId || undefined,
+      document_id: input.kind === "fatura" ? input.documentId || undefined : undefined,
+      invoice_document_id: input.kind === "recibo" ? input.invoiceDocumentId || undefined : undefined,
     },
   });
-  if (error) return { found: false, error: "A consulta do documento ainda não está publicada. Abre a vista da aplicação." };
-  const payload = (data ?? {}) as { found?: boolean; url?: string; documentId?: string; documentType?: string; error?: string };
-  if (payload.error) return { found: false, error: generic(payload.error) };
-  if (!payload.found || !payload.url) return { found: false };
+  if (error) {
+    console.info("[oficinaplan] documento", "invoke_error");
+    return { found: false, reason: "invoke_error", error: "A consulta do documento ainda não está publicada. Abre a vista da aplicação." };
+  }
+  const payload = (data ?? {}) as { found?: boolean; url?: string; documentId?: string; documentType?: string; error?: string; reason?: string; detail?: string };
+  console.info("[oficinaplan] documento", payload.reason ?? (payload.found ? "ok" : "no_match"), payload.detail ?? "");
+  if (payload.error) return { found: false, reason: payload.reason, error: generic(payload.error) };
+  if (!payload.found || !payload.url) return { found: false, reason: payload.reason ?? "no_match" };
   return payload;
 }

@@ -731,6 +731,7 @@ export function DocumentEditor({
       number: documentLookup.number,
       kind,
       documentId: kind === "fatura" ? documentLookup.documentId : null,
+      invoiceDocumentId: kind === "recibo" ? documentLookup.documentId : null,
     });
     if (result.found && result.url) {
       if (result.documentId && documentId) void rememberOfficialDocument(documentId, result.documentId, result.documentType ?? "", documentLookup.number);

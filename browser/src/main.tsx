@@ -645,6 +645,7 @@ function useOfficialDocument(order: { id: string; invoiceProvider?: string | nul
       number: lookup.number,
       kind: kind === "recibo" ? "recibo" : "fatura",
       documentId: kind === "fatura" ? lookup.documentId : null,
+      invoiceDocumentId: kind === "recibo" ? lookup.documentId : null,
     }).then((result) => {
       if (!alive) return;
       if (result.found && result.url) {
@@ -688,7 +689,8 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   const client = snap.clients.find((item) => item.id === order.clientId);
   const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
   if (!client || !vehicle) return <p className="p-6">Indique o cliente e a viatura antes de abrir o documento.</p>;
-  if (kind === "recibo" && !order.paidAt) return <p className="p-6">Este recibo só fica disponível depois do pagamento.</p>;
+  const importedOrder = ["importado", "keymaster"].includes((order.invoiceProvider ?? "").toLowerCase());
+  if (kind === "recibo" && !order.paidAt && !importedOrder) return <p className="p-6">Este recibo só fica disponível depois do pagamento.</p>;
   const number = kind === "orcamento" ? order.quoteNumber : order.invoiceNumber;
   if (!number) return <p className="p-6">Este documento ainda não foi emitido.</p>;
   const lines = snap.lines
