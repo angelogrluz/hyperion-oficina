@@ -260,7 +260,7 @@ export function DocumentEditor({
   const [dateIn, setDateIn] = useState(draft?.dateIn ?? initial.dateIn);
   const [dateOut, setDateOut] = useState(initial.dateOut);
   const [validUntil, setValidUntil] = useState(initial.validUntil);
-  const [km, setKm] = useState(draft?.km ?? initial.km);
+  const [km, setKm] = useState(draft?.km ?? (initial.km === "0" ? "" : initial.km));
   const [kmOut, setKmOut] = useState(draft?.kmOut ?? initial.kmOut ?? "");
   const [problem, setProblem] = useState(draft?.problem ?? initial.problem);
   const [notes, setNotes] = useState(draft?.notes ?? initial.notes);
@@ -399,6 +399,7 @@ export function DocumentEditor({
         return null;
       }
       return {
+        id: line.key,
         kind: line.kind,
         description: line.description.trim(),
         quantity,
@@ -442,7 +443,8 @@ export function DocumentEditor({
     setNextInspection(vehicle.nextInspection ?? "");
     setNextService(vehicle.nextService ?? "");
     setFuel(vehicle.fuel || "");
-    setKm(String(vehicle.km));
+    // Prefill km from the vehicle only when none was typed yet (never overwrite, never «0»).
+    setKm((current) => (current.trim() && current.trim() !== "0" ? current : vehicle.km ? String(vehicle.km) : ""));
   }
 
   type SaveOptions = { statusOverride?: string; silent?: boolean; navigate?: boolean; approval?: Approval; approvalAt?: string | null };
@@ -513,7 +515,17 @@ export function DocumentEditor({
     const knownVehicle = nextVehicleId
       ? vehicleList.find((item) => item.id === nextVehicleId)
       : vehicleList.find((item) => platesMatch(item.plate, normalizedPlate));
-    if (normalizedPlate || knownVehicle) {
+    // Only save the vehicle when something about it changed (each save is a full round trip).
+    const vehicleUnchanged = Boolean(knownVehicle)
+      && knownVehicle!.plate === (normalizedPlate || knownVehicle!.plate)
+      && (knownVehicle!.clientId === (clientId || knownVehicle!.clientId))
+      && knownVehicle!.brand === brand && knownVehicle!.model === model && (knownVehicle!.version ?? "") === version
+      && yearText(knownVehicle!.year) === yearText(year) && (knownVehicle!.vin ?? "") === vin && (knownVehicle!.engine ?? "") === engine
+      && (knownVehicle!.engineCode ?? "") === engineCode && (knownVehicle!.oil ?? "") === oil
+      && (knownVehicle!.nextInspection ?? "") === nextInspection && (knownVehicle!.nextService ?? "") === nextService
+      && (knownVehicle!.fuel ?? "") === fuel && kmValue <= Number(knownVehicle!.km ?? 0);
+    if (vehicleUnchanged) nextVehicleId = knownVehicle!.id;
+    else if (normalizedPlate || knownVehicle) {
       const formData = new FormData();
       formData.set("clientId", clientId || knownVehicle?.clientId || "");
       formData.set("plate", normalizedPlate || knownVehicle?.plate || "");
@@ -588,6 +600,8 @@ export function DocumentEditor({
       setSaveState("saved");
       clearSheetDraft(documentId ?? "nova");
       clearSheetDraft(savedId);
+    } else {
+      setSaveState("dirty");
     }
     if ("stock" in result && result.stock) {
       const stock = result.stock as Record<string, number>;
@@ -605,8 +619,22 @@ export function DocumentEditor({
   }
 
   const queue = useRef(Promise.resolve());
+  const persistRef = useRef(persist);
+  persistRef.current = persist;
+  // A background save that has not started yet is reused: it reads the latest state when it runs,
+  // so typing/adding lines never piles up one round trip per change.
+  const waiting = useRef<Promise<{ ok: true; id: string } | { ok: false }> | null>(null);
   function flush(options?: SaveOptions) {
-    const run = queue.current.then(() => persist(options), () => persist(options));
+    const background = options?.silent && options?.navigate === false && !options.statusOverride && !options.approval;
+    if (background && waiting.current) return waiting.current;
+    let mine: Promise<{ ok: true; id: string } | { ok: false }> | null = null;
+    const start = () => {
+      if (waiting.current === mine) waiting.current = null;
+      return persistRef.current(options);
+    };
+    const run = queue.current.then(start, start);
+    mine = run;
+    if (background) waiting.current = run;
     queue.current = run.then(() => undefined, () => undefined);
     return run;
   }
@@ -639,7 +667,7 @@ export function DocumentEditor({
     if (revision === 0) return;
     const timer = window.setTimeout(() => {
       void flushRef.current({ silent: true, navigate: false });
-    }, 500);
+    }, 1200);
     return () => window.clearTimeout(timer);
   }, [revision, documentId, locked, mode]);
 

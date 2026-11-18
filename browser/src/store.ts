@@ -776,6 +776,7 @@ export async function deleteSupplierRecord(id: string) {
 }
 
 type IncomingLine = {
+  id?: string;
   kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   description: string;
   quantity: number;
@@ -792,7 +793,8 @@ type IncomingLine = {
 function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string }, lines: IncomingLine[]) {
   lines.forEach((line, position) => {
     snap.lines.push({
-      id: uid(),
+      // Keep the editor's line key as id (stable across autosaves); fall back to a new id.
+      id: line.id && !snap.lines.some((item) => item.id === line.id) ? line.id : uid(),
       kind: line.kind,
       description: line.description,
       quantity: line.quantity,

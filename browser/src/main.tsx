@@ -302,7 +302,9 @@ function OrderScreen() {
   const catalog = editorCatalog(snap);
   return (
     <DocumentEditor
-      key={`${order.id}:${order.updatedAt}`}
+      // Remount only when the obra changes state (closed, invoiced), not after every autosave: a remount
+      // per save redrew the whole sheet and could drop what was typed while the save was running.
+      key={`${order.id}:${order.status}:${order.invoiceNumber ?? ""}:${order.paidAt ?? ""}:${order.quoteNumber ?? ""}`}
       mode="order"
       documentId={order.id}
       number={order.number}

@@ -273,6 +273,8 @@ export function FolhaView({
   const [stockKey, setStockKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [lineEditMode, setLineEditMode] = useState(false);
+  // Compact table by default on smaller screens (fits at 1280 px); «Todas as colunas» shows costs, margins and stock.
+  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1700);
   const [dropKey, setDropKey] = useState<string | null>(null);
   const dropKeyRef = useRef<string | null>(null);
   const openClientRef = useRef<() => void>(() => {});
@@ -317,7 +319,8 @@ export function FolhaView({
   function addFreeLine() {
     if (!draft.description.trim() && !draft.ref.trim()) return;
     onAdd(draft);
-    setDraft({ ...EMPTY_DRAFT });
+    // Keep the family chosen for the next line (default «Novo (auto)»).
+    setDraft({ ...EMPTY_DRAFT, kind: draft.kind });
     setSuggestField(null);
   }
 
@@ -385,9 +388,9 @@ export function FolhaView({
           data-testid="consumidor-final"
           aria-pressed={consumidorFinal}
           onClick={() => onFinalRef.current(!consumidorFinal)}
-          className={`h-7 rounded px-2 text-left text-[16px] font-semibold ${consumidorFinal ? "bg-[var(--glow)] text-white" : "border border-white/20 bg-white/10 text-white hover:bg-white/20"}`}
+          className={`h-7 rounded px-2 text-left font-semibold ${consumidorFinal ? "bg-[var(--glow)] text-[16px] text-white" : client ? "border border-white/20 bg-transparent text-[13px] text-white/80 hover:bg-white/10" : "border border-white/20 bg-white/10 text-[16px] text-white hover:bg-white/20"}`}
         >
-          {consumidorFinal ? "Consumidor final ativo" : "Consumidor final"}
+          {consumidorFinal ? "Consumidor final ativo" : client ? "Faturar como consumidor final" : "Consumidor final"}
         </button>
         {consumidorFinal ? (
           <p className="rounded border border-[var(--glow)] bg-[var(--glow)]/20 px-2 py-1 text-[16px] leading-snug">
@@ -538,6 +541,8 @@ export function FolhaView({
   const desc = round2(computed.reduce((sum, row) => sum + (row.quantity * row.unitPrice - row.amounts.base), 0));
   const iva = round2(computed.reduce((sum, row) => sum + row.amounts.vat, 0));
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
+  const beforePrice = 1 + (lineEditMode ? 1 : 0) + 2 + (wide ? 1 : 0) + 1 + (showCosts && wide ? 2 : 0) + 2 + (showCosts && wide ? 1 : 0);
+  const totalCols = 1 + (lineEditMode ? 1 : 0) + 2 + (wide ? 1 : 0) + 1 + (showCosts && wide ? 2 : 0) + 2 + (showCosts ? (wide ? 5 : 3) : 0) + (wide ? 2 : 0) + 1;
   const stockLine = lines.find((item) => item.key === stockKey && item.kind === "peca") ?? null;
 
   function leaveLineEdit() {
@@ -669,25 +674,25 @@ export function FolhaView({
               <span>IVA {formatEUR(iva)}</span>
             </div>
             <div className="overflow-x-auto">
-              <table data-testid="sheet-table" className={`w-full table-fixed border-collapse text-[16px] text-[var(--charcoal)] ${lineEditMode ? "min-w-[1476px]" : "min-w-[1444px]"}`}>
+              <table data-testid="sheet-table" className={`w-full table-fixed border-collapse text-[16px] text-[var(--charcoal)] ${wide ? (lineEditMode ? "min-w-[1476px]" : "min-w-[1444px]") : "min-w-[640px]"}`}>
                 <colgroup>
                   <col style={{ width: "36px" }} />
                   {lineEditMode ? <col style={{ width: "32px" }} /> : null}
                   <col style={{ width: "120px" }} />
                   <col />
-                  <col style={{ width: "112px" }} />
+                  {wide ? <col style={{ width: "112px" }} /> : null}
                   <col style={{ width: "128px" }} />
-                  {showCosts ? <col style={{ width: "112px" }} /> : null}
-                  {showCosts ? <col style={{ width: "72px" }} /> : null}
+                  {showCosts && wide ? <col style={{ width: "112px" }} /> : null}
+                  {showCosts && wide ? <col style={{ width: "72px" }} /> : null}
                   <col style={{ width: "60px" }} />
                   <col style={{ width: "72px" }} />
-                  {showCosts ? <col style={{ width: "68px" }} /> : null}
+                  {showCosts && wide ? <col style={{ width: "68px" }} /> : null}
                   {showCosts ? <col style={{ width: "84px" }} /> : null}
                   {showCosts ? <col style={{ width: "68px" }} /> : null}
-                  {showCosts ? <col style={{ width: "148px" }} /> : null}
+                  {showCosts && wide ? <col style={{ width: "148px" }} /> : null}
                   {showCosts ? <col style={{ width: "104px" }} /> : null}
-                  <col style={{ width: "32px" }} />
-                  <col style={{ width: "56px" }} />
+                  {wide ? <col style={{ width: "32px" }} /> : null}
+                  {wide ? <col style={{ width: "56px" }} /> : null}
                   <col style={{ width: "32px" }} />
                 </colgroup>
                 <thead className="text-[16px] text-[var(--charcoal)]">
@@ -696,19 +701,19 @@ export function FolhaView({
                     {lineEditMode ? <th className="overflow-hidden bg-[#e1e2e5] px-0.5 py-1.5" aria-label="Ordenar" /> : null}
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Família</th>
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Descrição</th>
-                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Obs. internas</th>
+                    {wide ? <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Obs. internas</th> : null}
                     <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-left font-semibold whitespace-nowrap">Ref.</th>
-                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Lucro s/desc.</th> : null}
-                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Custo</th> : null}
+                    {showCosts && wide ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Lucro s/desc.</th> : null}
+                    {showCosts && wide ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Custo</th> : null}
                     <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Qtd.</th>
                     <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">IVA %</th>
-                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Marg.</th> : null}
+                    {showCosts && wide ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Marg.</th> : null}
                     {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Base</th> : null}
                     {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Desc.%</th> : null}
-                    {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente s/IVA</th> : null}
+                    {showCosts && wide ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente s/IVA</th> : null}
                     {showCosts ? <th className="overflow-hidden bg-[#b3b8c1] px-1 py-1.5 text-right font-semibold whitespace-nowrap">PVP Cliente</th> : null}
-                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-center font-semibold whitespace-nowrap">A</th>
-                    <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Stock</th>
+                    {wide ? <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-center font-semibold whitespace-nowrap">A</th> : null}
+                    {wide ? <th className="overflow-hidden bg-[#e1e2e5] px-1 py-1.5 text-right font-semibold whitespace-nowrap">Stock</th> : null}
                     <th className="overflow-hidden bg-[#e1e2e5] px-0.5 py-1.5" aria-label="Entrada de stock" />
                   </tr>
                 </thead>
@@ -765,12 +770,12 @@ export function FolhaView({
                         </select>
                       </td>
                       <td className="border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.description}><WrapCell value={row.line.description} disabled={locked} label="Descrição" onChange={(value) => onLine(row.line.key, { description: value })} /></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td>
+                      {wide ? <td className="overflow-hidden border-b border-[#eaeaf2] px-1 py-0.5"><Cell value={row.line.note} disabled={locked} onChange={(value) => onLine(row.line.key, { note: value })} /></td> : null}
                       <td className="border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.ref}>
                         <Cell value={row.line.ref} disabled={locked} label="Referência" testId="line-ref" onChange={(value) => onLine(row.line.key, { ref: value.toUpperCase() })} />
                       </td>
-                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td> : null}
-                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5">
+                      {showCosts && wide ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.lucro)}</td> : null}
+                      {showCosts && wide ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#d7ebf8] px-0.5 py-0.5">
                         <NumberCell
                           value={row.unitCost}
                           disabled={locked}
@@ -792,7 +797,7 @@ export function FolhaView({
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right">
                         <VatSelect value={row.line.vatRate} disabled={locked} testId="line-vat" onChange={(vatRate) => onLine(row.line.key, { vatRate })} />
                       </td>
-                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">
+                      {showCosts && wide ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5 text-right tabular-nums">
                         {row.line.kind === "peca" ? (
                           <NumberCell
                             value={row.markup}
@@ -811,10 +816,10 @@ export function FolhaView({
                       {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
                         <NumberCell value={parseDecimal(row.line.discount) ?? 0} disabled={locked || !can("precos.alterar")} label="Desconto" testId="line-discount" onCommit={(discount) => onLine(row.line.key, { discount: moneyInput(discount) })} />
                       </td> : null}
-                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{lineBase(row.amounts.base)}</td> : null}
+                      {showCosts && wide ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{lineBase(row.amounts.base)}</td> : null}
                       {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td> : null}
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-5 place-items-center rounded-full bg-[#6971f9] text-[12px] text-white">●</span></td>
-                      <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td>
+                      {wide ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-5 place-items-center rounded-full bg-[#6971f9] text-[12px] text-white">●</span></td> : null}
+                      {wide ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td> : null}
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0 text-center">
                         {row.line.kind === "peca" ? (
                           <button
@@ -854,7 +859,7 @@ export function FolhaView({
                         onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, description: value })); }}
                       />
                     </td>
-                    <td />
+                    {wide ? <td /> : null}
                     <td className="px-1 py-1">
                       <Cell
                         value={draft.ref}
@@ -866,17 +871,17 @@ export function FolhaView({
                         onChange={(value) => { setHighlight(0); setDraft((current) => ({ ...current, ref: value.toUpperCase() })); }}
                       />
                     </td>
-                    {showCosts ? <td /> : null}
-                    {showCosts ? <td className="bg-[#d7ebf8]" /> : null}
+                    {showCosts && wide ? <td /> : null}
+                    {showCosts && wide ? <td className="bg-[#d7ebf8]" /> : null}
                     <td className="bg-[#f6b26b] px-0.5 py-1"><Cell value={draft.quantity} disabled={locked} align="right" narrow label="Quantidade da nova linha" onKeyDown={onDraftEnter} onChange={(value) => setDraft((current) => ({ ...current, quantity: value }))} /></td>
                     <td className="px-0.5 py-1 text-right"><VatSelect value={draft.vatRate} disabled={locked} allowDefault testId="new-line-vat" onChange={(vatRate) => setDraft((current) => ({ ...current, vatRate }))} /></td>
-                    {showCosts ? <td /> : null}
+                    {showCosts && wide ? <td /> : null}
                     {showCosts ? <td className="px-0.5 py-1"><Cell value={draft.unitPrice} disabled={locked} align="right" narrow label="Preço da nova linha" onKeyDown={onDraftEnter} onChange={(value) => setDraft((current) => ({ ...current, unitPrice: value }))} /></td> : null}
                     {showCosts ? <td /> : null}
+                    {showCosts && wide ? <td className="bg-[#e1e2e5]" /> : null}
                     {showCosts ? <td className="bg-[#e1e2e5]" /> : null}
-                    {showCosts ? <td className="bg-[#e1e2e5]" /> : null}
-                    <td />
-                    <td />
+                    {wide ? <td /> : null}
+                    {wide ? <td /> : null}
                     <td />
                   </tr>
                 </tbody>
@@ -884,13 +889,13 @@ export function FolhaView({
                   <tr className="text-[16px] font-semibold text-[var(--charcoal)]">
                     {showCosts ? (
                       <>
-                        <td className="px-1 py-1" colSpan={lineEditMode ? 12 : 11}>s/IVA {formatEUR(base)}</td>
-                        <td className="px-1 py-1 text-right">Aprovado {formatEUR(base)}</td>
-                        <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td>
+                        <td className="px-1 py-1" colSpan={beforePrice}>s/IVA {formatEUR(base)}</td>
+                        <td className="px-1 py-1 text-right" colSpan={2}>Aprovado {formatEUR(base)}</td>
+                        {wide ? <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(base)}</td> : null}
                         <td className="bg-[#e1e2e5] px-1 py-1 text-right">{formatEUR(pvp)}</td>
-                        <td colSpan={3} />
+                        <td colSpan={wide ? 3 : 1} />
                       </>
-                    ) : <td colSpan={lineEditMode ? 11 : 10} className="px-1 py-1 text-[14px] font-normal text-[var(--muted-text)]">{draftPending ? "Carrega Enter ou + para adicionar a linha escrita." : ""}</td>}
+                    ) : <td colSpan={totalCols} className="px-1 py-1 text-[14px] font-normal text-[var(--muted-text)]">{draftPending ? "Carrega Enter ou + para adicionar a linha escrita." : ""}</td>}
                   </tr>
                 </tfoot>
               </table>
@@ -913,7 +918,9 @@ export function FolhaView({
                   Concluir
                 </button>
               ) : null}
-              <button type="button" disabled title="Indisponível nesta versão" className="cursor-not-allowed text-[14px]">⤢</button>
+              <button type="button" data-testid="colunas" onClick={() => setWide((current) => !current)} className="h-8 rounded px-2 text-[15px] text-[var(--charcoal)] hover:bg-[var(--mist)] hover:text-[var(--glow)]">
+                {wide ? "Colunas compactas" : "Todas as colunas"}
+              </button>
             </div>
             {suggestField && matches.length && suggestBox
               ? createPortal(
@@ -1040,7 +1047,7 @@ export function FolhaView({
             </>
           ) : (
             <p data-testid="guardado" className="text-right text-[16px] text-[var(--steel)]">
-              {saveState === "error" ? "Não gravado" : saveState === "saved" ? "Guardado" : "A guardar…"}
+              {saveState === "error" ? "Não gravado" : saveState === "saving" ? "A guardar…" : saveState === "dirty" ? "Por guardar" : "Guardado"}
             </p>
           )}
           {allowQuote ? <Button type="button" data-testid="gerar-orcamento" variant="outline" className="h-10 border-[var(--glow)] bg-white text-[17px] text-[var(--glow)]" disabled={locked || pending} onClick={onQuote}>
