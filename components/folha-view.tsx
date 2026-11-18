@@ -273,8 +273,18 @@ export function FolhaView({
   const [stockKey, setStockKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [lineEditMode, setLineEditMode] = useState(false);
-  // Compact table by default on smaller screens (fits at 1280 px); «Todas as colunas» shows costs, margins and stock.
-  const [wide, setWide] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1700);
+  // Compact table unless the full one fits (needs a ≥ 1980 px window); it follows window resizes. «Todas as colunas» shows costs, margins and stock.
+  const [wideScreen, setWideScreen] = useState(() => typeof window !== "undefined" && window.matchMedia("(min-width: 1980px)").matches);
+  const [wideChoice, setWideChoice] = useState<boolean | null>(null);
+  useEffect(() => {
+    const query = window.matchMedia("(min-width: 1980px)");
+    const update = () => setWideScreen(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+  const wide = wideChoice ?? wideScreen;
+  const setWide = (next: (current: boolean) => boolean) => setWideChoice(next(wide));
   const [dropKey, setDropKey] = useState<string | null>(null);
   const dropKeyRef = useRef<string | null>(null);
   const openClientRef = useRef<() => void>(() => {});
@@ -676,24 +686,24 @@ export function FolhaView({
             <div className="overflow-x-auto">
               <table data-testid="sheet-table" className={`w-full table-fixed border-collapse text-[16px] text-[var(--charcoal)] ${wide ? (lineEditMode ? "min-w-[1476px]" : "min-w-[1444px]") : "min-w-[640px]"}`}>
                 <colgroup>
-                  <col style={{ width: "36px" }} />
-                  {lineEditMode ? <col style={{ width: "32px" }} /> : null}
-                  <col style={{ width: "120px" }} />
+                  <col style={{ width: wide ? "36px" : "28px" }} />
+                  {lineEditMode ? <col style={{ width: wide ? "32px" : "28px" }} /> : null}
+                  <col style={{ width: wide ? "120px" : "92px" }} />
                   <col />
                   {wide ? <col style={{ width: "112px" }} /> : null}
-                  <col style={{ width: "128px" }} />
+                  <col style={{ width: wide ? "128px" : "90px" }} />
                   {showCosts && wide ? <col style={{ width: "112px" }} /> : null}
                   {showCosts && wide ? <col style={{ width: "72px" }} /> : null}
-                  <col style={{ width: "60px" }} />
-                  <col style={{ width: "72px" }} />
+                  <col style={{ width: wide ? "60px" : "50px" }} />
+                  <col style={{ width: wide ? "72px" : "58px" }} />
                   {showCosts && wide ? <col style={{ width: "68px" }} /> : null}
-                  {showCosts ? <col style={{ width: "84px" }} /> : null}
-                  {showCosts ? <col style={{ width: "68px" }} /> : null}
+                  {showCosts ? <col style={{ width: wide ? "84px" : "74px" }} /> : null}
+                  {showCosts ? <col style={{ width: wide ? "68px" : "50px" }} /> : null}
                   {showCosts && wide ? <col style={{ width: "148px" }} /> : null}
-                  {showCosts ? <col style={{ width: "104px" }} /> : null}
+                  {showCosts ? <col style={{ width: wide ? "104px" : "90px" }} /> : null}
                   {wide ? <col style={{ width: "32px" }} /> : null}
                   {wide ? <col style={{ width: "56px" }} /> : null}
-                  <col style={{ width: "32px" }} />
+                  <col style={{ width: wide ? "32px" : "28px" }} />
                 </colgroup>
                 <thead className="text-[16px] text-[var(--charcoal)]">
                   <tr>

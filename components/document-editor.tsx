@@ -105,6 +105,36 @@ function num(value: number) {
   return String(value).replace(".", ",");
 }
 
+function sameNumber(a: unknown, b: unknown) {
+  const x = parseDecimal(String(a ?? "")) ?? 0;
+  const y = parseDecimal(String(b ?? "")) ?? 0;
+  return Math.abs(x - y) < 1e-9;
+}
+
+function draftMatchesSaved(
+  draft: Record<string, any>,
+  initial: { clientId: string; vehicleId: string; km: string; kmOut?: string; problem: string; notes: string; status: string; approval?: string; dateIn: string; lines: Line[] },
+  vehicle: Record<string, any> | undefined,
+) {
+  const text = (value: unknown) => String(value ?? "").trim();
+  if (text(draft.clientId) !== text(initial.clientId) || text(draft.vehicleId) !== text(initial.vehicleId)) return false;
+  if (!sameNumber(draft.km, initial.km) || text(draft.kmOut) !== text(initial.kmOut)) return false;
+  if (text(draft.problem) !== text(initial.problem) || text(draft.notes) !== text(initial.notes)) return false;
+  if (text(draft.status) !== text(initial.status) || text(draft.approval || "aguarda") !== text(initial.approval || "aguarda")) return false;
+  if (text(draft.dateIn) !== text(initial.dateIn)) return false;
+  for (const field of ["plate", "brand", "model", "version", "vin", "engine", "engineCode", "oil", "nextInspection", "nextService", "fuel"]) {
+    if (draft[field] != null && text(draft[field]) !== text(vehicle?.[field])) return false;
+  }
+  const lines = Array.isArray(draft.lines) ? (draft.lines as Line[]) : [];
+  if (lines.length !== initial.lines.length) return false;
+  return lines.every((line, index) => {
+    const saved = initial.lines[index];
+    return line.kind === saved.kind && text(line.description) === text(saved.description) && text(line.ref) === text(saved.ref)
+      && text(line.note) === text(saved.note) && sameNumber(line.quantity, saved.quantity) && sameNumber(line.unitPrice, saved.unitPrice)
+      && sameNumber(line.unitCost, saved.unitCost) && sameNumber(line.discount, saved.discount) && sameNumber(line.vatRate, saved.vatRate);
+  });
+}
+
 function reorderSheetLines(lines: Line[], dragKey: string, beforeKey: string | null) {
   const index = lines.findIndex((line) => line.key === dragKey);
   if (index < 0) return lines;
@@ -234,7 +264,17 @@ export function DocumentEditor({
 }) {
   const router = useRouter();
   const keepSaved = locked || (invoice?.provider ?? "").toLowerCase() === "importado";
-  const draft = useRef(keepSaved ? null : readSheetDraft(documentId ?? "nova")).current;
+  // A leftover local draft identical to what is saved is not «unsaved»: ignore (and drop) it.
+  const draft = useRef((() => {
+    const stored = keepSaved ? null : readSheetDraft(documentId ?? "nova");
+    if (!stored || !documentId) return stored;
+    const base = vehicles.find((vehicle) => vehicle.id === (stored.vehicleId || initial.vehicleId));
+    if (draftMatchesSaved(stored, initial, base)) {
+      clearSheetDraft(documentId);
+      return null;
+    }
+    return stored;
+  })()).current;
   const [clientList, setClientList] = useState(clients);
   const [articleList, setArticleList] = useState(initialArticles);
   const [supplierList, setSupplierList] = useState(suppliers);
@@ -281,6 +321,7 @@ export function DocumentEditor({
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(Boolean(draft && documentId));
   const [revision, setRevision] = useState(0);
+  const unsavedRef = useRef(Boolean(draft && documentId));
   const [saveState, setSaveState] = useState<"saved" | "saving" | "dirty" | "error">(draft && documentId ? "dirty" : "saved");
   const revisionRef = useRef(0);
   const [pending, startTransition] = useTransition();
@@ -329,6 +370,7 @@ export function DocumentEditor({
 
   function touch() {
     if (locked) return;
+    unsavedRef.current = true;
     revisionRef.current += 1;
     setRevision(revisionRef.current);
     setDirty(true);
@@ -596,6 +638,7 @@ export function DocumentEditor({
     setError(null);
     const savedId = result.id;
     if (revisionRef.current === seen) {
+      unsavedRef.current = false;
       setDirty(false);
       setSaveState("saved");
       clearSheetDraft(documentId ?? "nova");
@@ -659,6 +702,7 @@ export function DocumentEditor({
 
   useEffect(() => {
     if (mode !== "order" || locked) return;
+    if (revision === 0 && documentId) return;
     writeSheetDraft(draftWriter.current(documentId ?? "nova"));
   }, [revision, documentId, mode, locked]);
 
@@ -683,7 +727,7 @@ export function DocumentEditor({
   useEffect(() => {
     if (mode !== "order") return;
     return registerSaveFlush(async () => {
-      writeSheetDraft(draftWriter.current(documentId ?? "nova"));
+      if (unsavedRef.current || !documentId) writeSheetDraft(draftWriter.current(documentId ?? "nova"));
       if (!documentId || locked) return true;
       if (!dirty && revisionRef.current === 0) return true;
       const result = await flushRef.current({ silent: true, navigate: false });
@@ -694,7 +738,7 @@ export function DocumentEditor({
   useEffect(() => {
     if (mode !== "order") return;
     const flushNow = () => {
-      writeSheetDraft(draftWriter.current(documentId ?? "nova"));
+      if (unsavedRef.current || !documentId) writeSheetDraft(draftWriter.current(documentId ?? "nova"));
       if (documentId && !locked && (dirty || revisionRef.current > 0)) {
         void flushRef.current({ silent: true, navigate: false });
       }
