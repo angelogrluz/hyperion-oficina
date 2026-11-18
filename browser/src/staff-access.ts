@@ -1,5 +1,16 @@
 import { supabase } from "@/browser/src/cloud";
 
+export async function lookupUsername(slug: string, username: string) {
+  const db = supabase();
+  if (!db) return { error: "O servidor ainda não está configurado." };
+  const { data, error } = await db.functions.invoke("staff-access", { body: { action: "lookup", slug, username } });
+  const kind = data?.kind;
+  if (kind === "owner" || kind === "staff" || kind === "missing") return { kind };
+  if (data?.error) return { error: String(data.error) };
+  if (error) return { error: "O acesso por utilizador ainda não está publicado no servidor." };
+  return { kind: "missing" as const };
+}
+
 export async function signInWithUsername(slug: string, username: string, secret: string) {
   const db = supabase();
   if (!db) return { error: "O servidor ainda não está configurado." };

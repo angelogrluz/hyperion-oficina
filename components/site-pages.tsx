@@ -7,7 +7,7 @@ import { EntryBrand } from "@/components/entry-brand";
 import { ProductMark } from "@/components/product-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { forgotOwnerPassword, signInWithUsername } from "@/browser/src/staff-access";
+import { forgotOwnerPassword, lookupUsername, signInWithUsername } from "@/browser/src/staff-access";
 import { setActiveSlug, slugError, slugMatches, suggestSlug } from "@/lib/workshop-slug";
 
 export function Landing({ signedInSlug }: { signedInSlug?: string | null }) {
@@ -234,6 +234,7 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
   const [show, setShow] = useState(false);
   const [username, setUsername] = useState("");
   const [secret, setSecret] = useState("");
+  const [kind, setKind] = useState<"owner" | "staff" | "">("");
   useEffect(() => {
     setActiveSlug(slug);
     let gone = false;
@@ -250,10 +251,23 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
           className="grid w-full max-w-md gap-4 rounded-2xl bg-white p-6 shadow-[0_12px_40px_rgba(19,27,36,.08)] sm:p-8"
           onSubmit={(event) => {
             event.preventDefault();
-            setPending(true);
             setError("");
             setInfo("");
-            void signInWithUsername(slug, username.trim(), secret).then(async (result) => {
+            const name = username.trim();
+            if (!kind) {
+              if (!name) { setError("Indica o utilizador."); return; }
+              setPending(true);
+              void lookupUsername(slug, name).then((result) => {
+                setPending(false);
+                if ("error" in result && result.error) { setError(result.error); return; }
+                if (result.kind === "owner" || result.kind === "staff") { setKind(result.kind); setSecret(""); return; }
+                setError("Utilizador não encontrado");
+              });
+              return;
+            }
+            if (kind === "staff" && !/^\d{4}$/.test(secret)) { setError("O PIN tem de ter 4 dígitos."); return; }
+            setPending(true);
+            void signInWithUsername(slug, name, secret).then(async (result) => {
               if ("error" in result && result.error) { setPending(false); setError(result.error); return; }
               const user = "user" in result ? result.user : undefined;
               if (!user || !slugMatches(user, slug)) {
@@ -281,30 +295,53 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
             </div>
           </div>
           <p className="text-[15px] text-[var(--muted-text)]">{notice || "Entra com o utilizador desta oficina. O administrador usa a palavra-passe. A equipa usa um PIN de 4 dígitos."}</p>
-          <label className="grid gap-1 text-[15px] font-medium">Utilizador
-            <Input name="username" required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} className="h-12 border-[var(--line)] text-[17px]" />
-          </label>
-          <label className="grid gap-1 text-[15px] font-medium">PIN ou palavra-passe
-            <span className="relative">
-              <Input name="password" type={show ? "text" : "password"} required autoComplete="current-password" value={secret} onChange={(event) => setSecret(event.target.value)} className="h-12 border-[var(--line)] pr-16 text-[17px]" />
-              <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[var(--glow-deep)]" onClick={() => setShow((value) => !value)}>{show ? "Ocultar" : "Mostrar"}</button>
-            </span>
-          </label>
-          {error ? <p className="text-[15px] text-[#9c4036]" role="alert">{error}</p> : null}
+          {kind ? (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-[18px] font-semibold text-[var(--ink)]">{username.trim()}</p>
+              <button type="button" className="text-[15px] font-semibold text-[var(--glow-deep)]" onClick={() => { setKind(""); setSecret(""); setError(""); setInfo(""); }}>Alterar</button>
+            </div>
+          ) : (
+            <label className="grid gap-1 text-[15px] font-medium">Utilizador
+              <Input name="username" required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} className="h-12 border-[var(--line)] text-[17px]" />
+            </label>
+          )}
+          {kind === "owner" ? (
+            <label className="grid gap-1 text-[15px] font-medium">Palavra-passe
+              <span className="relative">
+                <Input name="password" type={show ? "text" : "password"} required autoComplete="current-password" value={secret} onChange={(event) => setSecret(event.target.value)} className="h-12 border-[var(--line)] pr-16 text-[17px]" />
+                <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[var(--glow-deep)]" onClick={() => setShow((value) => !value)}>{show ? "Ocultar" : "Mostrar"}</button>
+              </span>
+            </label>
+          ) : null}
+          {kind === "staff" ? (
+            <>
+              <label className="grid gap-1 text-[15px] font-medium">PIN
+                <Input name="password" type={show ? "text" : "password"} required inputMode="numeric" maxLength={4} autoComplete="off" value={secret} onChange={(event) => setSecret(event.target.value.replace(/\D/g, "").slice(0, 4))} className="h-12 border-[var(--line)] pr-16 text-center text-[22px] tracking-[0.3em]" />
+              </label>
+              <div data-testid="login-teclado" className="grid grid-cols-3 gap-2">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "←", "0", "C"].map((key) => (
+                  <button key={key} type="button" className="h-12 rounded-xl bg-[var(--mist)] text-[20px] font-semibold" onClick={() => setSecret((value) => key === "C" ? "" : key === "←" ? value.slice(0, -1) : (value + key).replace(/\D/g, "").slice(0, 4))}>{key}</button>
+                ))}
+              </div>
+            </>
+          ) : null}
+          {error ? <p className="text-[15px] font-semibold text-[#9c4036]" role="alert">{error}</p> : null}
           {info ? <p className="text-[15px] text-[var(--glow-deep)]">{info}</p> : null}
-          <Button type="submit" disabled={pending} className="h-12 bg-[var(--ink)] text-[17px] hover:bg-[var(--graphite)]">{pending ? "A entrar…" : "Entrar"}</Button>
-          <button
-            type="button"
-            className="justify-self-start text-[15px] font-medium text-[var(--glow-deep)]"
-            onClick={(event) => {
-              if (!username.trim()) { setError("Indica o utilizador."); return; }
-              setError("");
-              void forgotOwnerPassword(slug, username).then((result) => {
-                if ("error" in result && result.error) setError(result.error);
-                else setInfo(result.message || "Se este utilizador for o administrador, enviámos um e-mail para repor a palavra-passe.");
-              });
-            }}
-          >Esqueci-me da palavra-passe</button>
+          <Button type="submit" disabled={pending} className="h-12 bg-[var(--ink)] text-[17px] hover:bg-[var(--graphite)]">{pending ? "A aguardar…" : kind ? "Entrar" : "Continuar"}</Button>
+          {kind === "owner" ? (
+            <button
+              type="button"
+              className="justify-self-start text-[15px] font-medium text-[var(--glow-deep)]"
+              onClick={() => {
+                if (!username.trim()) { setError("Indica o utilizador."); return; }
+                setError("");
+                void forgotOwnerPassword(slug, username).then((result) => {
+                  if ("error" in result && result.error) setError(result.error);
+                  else setInfo(result.message || "Se este utilizador for o administrador, enviámos um e-mail para repor a palavra-passe.");
+                });
+              }}
+            >Esqueci-me da palavra-passe</button>
+          ) : null}
         </form>
       </section>
     </main>

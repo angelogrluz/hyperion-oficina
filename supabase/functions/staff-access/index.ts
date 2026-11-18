@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     const admin = createClient(url, service);
     const body = await req.json();
     const action = String(body.action ?? "");
+    if (action === "lookup") return json(await lookupUser(admin, body));
     if (action === "login") return json(await login(admin, url, anon, body));
     if (action === "forgot") return json(await forgot(admin, url, body));
     const caller = await callerUser(url, anon, req);
@@ -79,6 +80,21 @@ async function companyBySlug(admin: ReturnType<typeof createClient>, slug: strin
 async function ownerAccount(admin: ReturnType<typeof createClient>, companyId: string) {
   const { data } = await admin.from("memberships").select("user_id, active").eq("company_id", companyId).eq("role", "owner").order("created_at").limit(1).maybeSingle();
   return data;
+}
+
+async function lookupUser(admin: ReturnType<typeof createClient>, body: Record<string, unknown>) {
+  const company = await companyBySlug(admin, String(body.slug ?? ""));
+  if (!company || company.status === "suspended") return { error: "Esta oficina não está disponível." };
+  const username = String(body.username ?? "").trim().toLowerCase();
+  if (!username) return { kind: "missing" };
+  if (username === "admin") {
+    const owner = await ownerAccount(admin, company.id);
+    if (!owner || owner.active === false) return { kind: "missing" };
+    return { kind: "owner" };
+  }
+  const { data } = await admin.from("staff_accounts").select("active, kind").eq("company_id", company.id).eq("username", username).maybeSingle();
+  if (!data || data.kind !== "staff" || data.active === false) return { kind: "missing" };
+  return { kind: "staff" };
 }
 
 async function login(admin: ReturnType<typeof createClient>, url: string, anon: string, body: Record<string, unknown>) {
