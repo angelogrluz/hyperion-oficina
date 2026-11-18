@@ -847,7 +847,7 @@ function AgendaScreen() {
     <AgendaPage
       today={lisbonParts().iso}
       appointments={snap.appointments}
-      clients={snap.clients.map((client) => ({ id: client.id, name: client.name }))}
+      clients={snap.clients.map((client) => ({ id: client.id, name: client.name, nif: client.nif, phone: client.phone, email: client.email }))}
       vehicles={snap.vehicles.map((vehicle) => ({ id: vehicle.id, clientId: vehicle.clientId, plate: vehicle.plate, brand: vehicle.brand, model: vehicle.model }))}
     />
   );

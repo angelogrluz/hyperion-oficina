@@ -109,24 +109,24 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
   }
 
   return (
-    <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} data-theme={admin ? undefined : theme} className={admin ? "min-h-[70vh] bg-white p-3 text-[var(--charcoal)]" : "min-h-screen bg-white p-4 text-[var(--charcoal)]"} onPointerDown={touch}>
+    <div data-testid={admin ? "pagina-tecnicos" : "modo-oficina"} data-theme={admin ? undefined : theme} className={admin ? "min-h-[70vh] bg-[var(--card)] p-3 text-[var(--text)]" : "min-h-screen bg-[var(--card)] p-4 text-[var(--text)]"} onPointerDown={touch}>
       {admin ? null : (
         <div className="mb-4 flex justify-center">
-          <button type="button" data-testid="picar-ponto" className="h-16 min-w-72 rounded-2xl bg-[var(--charcoal)] px-8 text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
+          <button type="button" data-testid="picar-ponto" className="h-16 min-w-72 rounded-2xl bg-[var(--charcoal)] px-8 ring-1 ring-[var(--line)] text-[28px] font-semibold text-white" onClick={() => { setPonto(""); setPontoMsg(""); setPinFor("ponto"); }}>Picar o ponto</button>
         </div>
       )}
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="w-52">{admin ? <h1 className="text-[28px] font-semibold">Técnicos</h1> : <ProductBackButton onBeforeBack={() => { if (orderId) { setOrderId(""); setChat(false); return true; } if (techId) { setTechId(""); setChat(false); return true; } return Boolean(readSession()?.role === "mecanico"); }} />}</div>
         <div className="flex items-center gap-2">
           {admin ? null : <ThemeToggle />}
-          {tech ? <button type="button" className="h-12 rounded-xl border px-4 text-[18px]" onClick={() => { setTechId(""); setOrderId(""); setChat(false); }}>{tech.name}</button> : <h1 className="text-[28px] font-semibold">{admin ? "" : "Modo oficina"}</h1>}
+          {tech ? <button type="button" data-testid="tecnico-atual" className="h-12 rounded-xl border border-[var(--line)] bg-[var(--mist)] px-4 text-[18px] font-semibold text-[var(--text)]" onClick={() => { setTechId(""); setOrderId(""); setChat(false); }}>{tech.name}</button> : <h1 className="text-[28px] font-semibold">{admin ? "" : "Modo oficina"}</h1>}
         </div>
       </div>
       {!tech ? (
         <div className="grid gap-4 pb-4">
           <div className="flex flex-wrap gap-2">
             {users.map((user) => (
-              <button key={user.id} type="button" data-testid="tecnico-nome" className="h-12 rounded-xl bg-[var(--glow)] px-4 text-[18px] font-semibold text-white" onClick={() => identify(user.id)}>{user.name}</button>
+              <button key={user.id} type="button" data-testid="tecnico-nome" className="h-12 rounded-xl bg-[var(--glow-deep)] px-4 text-[18px] font-semibold text-white" onClick={() => identify(user.id)}>{user.name}</button>
             ))}
           </div>
           {admin ? null : (
@@ -141,7 +141,7 @@ export function OficinaMode({ orders, admin = false }: { orders: OficinaOrder[];
             <div className="grid gap-2">
               <p className="text-[16px]">Quem começa {services.find((service) => service.id === serviceId)?.name}?</p>
               {users.map((user) => (
-                <button key={user.id} type="button" className="h-12 rounded-xl bg-[var(--glow)] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setServiceId(""); }}>{user.name}</button>
+                <button key={user.id} type="button" className="h-12 rounded-xl bg-[var(--glow-deep)] text-[18px] font-semibold text-white" onClick={() => { startWork(user.id, "interno", serviceId); setServiceId(""); }}>{user.name}</button>
               ))}
             </div>
           )}
@@ -272,7 +272,7 @@ function TechnicianTable({ users, orders, services, now }: { users: Array<{ id: 
             const elapsed = open ? personMs(user.id, open.kind, open.targetId, now) : 0;
             const hours = order?.serviceHours ?? null;
             return (
-              <tr key={user.id} data-testid="linha-tecnico" className="border-t border-[#eaeaf2]">
+              <tr key={user.id} data-testid="linha-tecnico" className="border-t border-[var(--line)]">
                 <td className="px-3 py-3 font-semibold">{user.name}</td>
                 <td className="px-3 py-3">{order?.vehicle || service?.name || "Livre"}</td>
                 <td className="px-3 py-3">{order?.number ?? "—"}</td>
@@ -310,13 +310,13 @@ export function TechnicianStatus({ orders }: { orders: OficinaOrder[] }) {
       <ul className="mt-3 grid gap-3">
         {techs.map((tech) => {
           const open = openLog(tech.id);
-          if (!open) return <li key={tech.id} data-testid="tecnico-livre" className="rounded-xl bg-[#f4f6f8] px-3 py-2 text-[17px]"><span className="font-semibold">{tech.name}</span> · Livre</li>;
+          if (!open) return <li key={tech.id} data-testid="tecnico-livre" className="rounded-xl border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[17px] text-[var(--text)]"><span className="font-semibold">{tech.name}</span> · Livre</li>;
           const elapsed = formatClock(personMs(tech.id, open.kind, open.targetId, now));
           const place = open.kind === "interno"
             ? services.find((service) => service.id === open.targetId)?.name ?? "Serviço interno"
             : orders.find((item) => item.id === open.targetId);
           const label = typeof place === "string" || !place ? place || "Serviço" : `${place.clientName} · ${place.plate} · ${place.number}`;
-          return <li key={tech.id} data-testid="tecnico-ocupado" className="rounded-xl bg-[var(--mist)] px-3 py-2 text-[17px]"><span className="font-semibold">{tech.name}</span><span className="mt-1 block">{label}</span><span className="text-[22px] font-semibold tabular-nums text-[var(--glow)]">{elapsed}</span></li>;
+          return <li key={tech.id} data-testid="tecnico-ocupado" className="rounded-xl bg-[var(--mist)] px-3 py-2 text-[17px] text-[var(--text)]"><span className="font-semibold">{tech.name}</span><span className="mt-1 block">{label}</span><span className="text-[22px] font-semibold tabular-nums text-[var(--glow)]">{elapsed}</span></li>;
         })}
       </ul>
     </aside>

@@ -28,6 +28,22 @@ function NifCard() {
         </div>
         <span className={`rounded-full px-3 py-1 text-[14px] font-semibold ${configured ? "bg-[#1f9d55] text-white" : "bg-[var(--line)]"}`}>{configured ? "Chave guardada" : "Sem chave"}</span>
       </div>
+      <div data-testid="nif-instrucoes" className="rounded-xl border border-[var(--line)] bg-[var(--canvas)] px-3 py-2 text-[15px]">
+        <p className="font-semibold">Como obter a chave (grátis)</p>
+        <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+          <li>
+            Abre o{" "}
+            <a href="https://www.nif.pt/contactos/api/" target="_blank" rel="noopener noreferrer" className="font-semibold text-[var(--glow)] underline">pedido de acesso no NIF.PT</a>{" "}
+            e preenche o nome, o e-mail da oficina e uma frase a explicar o uso (por exemplo: «preencher os dados dos clientes no programa da oficina»).
+          </li>
+          <li>Vais receber um e-mail com a chave e um link de confirmação. Carrega no link para ativar a chave.</li>
+          <li>Copia a chave do e-mail, cola-a aqui em baixo e carrega em «Guardar chave».</li>
+        </ol>
+        <p className="mt-1 text-[14px] text-[var(--muted-text)]">
+          O uso gratuito dá até 1000 pesquisas por mês (100 por dia, 10 por hora, 1 por minuto). Acima disso, o NIF.PT vende créditos a 0,01 € por pesquisa.{" "}
+          <a href="https://www.nif.pt/api/" target="_blank" rel="noopener noreferrer" className="text-[var(--glow)] underline">Mais informação</a>.
+        </p>
+      </div>
       <label className="grid gap-1 text-[15px] font-medium">Chave da oficina
         <Input type="password" value={key} autoComplete="new-password" placeholder={configured ? "Escreve só se quiseres substituir" : ""} onChange={(event) => setKey(event.target.value)} className="h-11" />
       </label>

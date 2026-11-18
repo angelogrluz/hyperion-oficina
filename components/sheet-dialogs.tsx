@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { includesSearch, isValidNif, normalizeNif, parseDecimal } from "@/lib/domain";
+import { lookupNif } from "@/browser/src/lookup-api";
+import { clientWithNif } from "@/lib/client-search";
+import { includesSearch, isValidNif, normalizeNif, normalizeSearch, parseDecimal } from "@/lib/domain";
 import { readPurchaseMemory, writePurchaseMemory } from "@/lib/browser-cache";
 import { lisbonParts } from "@/lib/format";
 import type { StockLink } from "@/lib/stock-entry";
@@ -132,19 +134,43 @@ export function ClientEditDialog({
 export function NewClientDialog({
   onClose,
   onSave,
+  initial,
+  clients = [],
+  onUseExisting,
+  description = "Fica selecionado nesta folha de obra.",
 }: {
   onClose: () => void;
   onSave: (data: ClientForm) => Promise<{ ok: true } | { ok: false; error: string }>;
+  initial?: Partial<ClientForm>;
+  clients?: Array<{ id: string; name: string; nif?: string; phone?: string; email?: string }>;
+  onUseExisting?: (id: string) => void;
+  description?: string;
 }) {
-  const [name, setName] = useState("");
-  const [nif, setNif] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [city, setCity] = useState("");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [nif, setNif] = useState(initial?.nif ?? "");
+  const [phone, setPhone] = useState(initial?.phone ?? "");
+  const [email, setEmail] = useState(initial?.email ?? "");
+  const [address, setAddress] = useState(initial?.address ?? "");
+  const [postalCode, setPostalCode] = useState(initial?.postalCode ?? "");
+  const [city, setCity] = useState(initial?.city ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState("");
   const [pending, setPending] = useState(false);
+  const existing = clientWithNif(clients, nif);
+  const sameName = name.trim().length >= 3 ? clients.filter((client) => normalizeSearch(client.name) === normalizeSearch(name)).slice(0, 3) : [];
+
+  function lookup() {
+    const value = normalizeNif(nif);
+    if (value.length !== 9 || clientWithNif(clients, value)) return;
+    void lookupNif(value).then((result) => {
+      if (!result.ok) { setNote(result.error); return; }
+      if (result.name) setName((current) => current.trim() ? current : result.name);
+      if (result.address) setAddress((current) => current.trim() ? current : result.address);
+      if (result.postalCode) setPostalCode((current) => current.trim() ? current : result.postalCode);
+      if (result.city) setCity((current) => current.trim() ? current : result.city);
+      setNote(result.name ? "Dados preenchidos a partir do NIF." : "");
+    }).catch(() => undefined);
+  }
 
   async function save() {
     const data: ClientForm = {
@@ -158,11 +184,15 @@ export function NewClientDialog({
       notes: "",
     };
     if (data.name.length < 2) {
-      setError("Indique o nome.");
+      setError("Indica o nome.");
       return;
     }
     if (!isValidNif(data.nif)) {
       setError("NIF inválido.");
+      return;
+    }
+    if (existing) {
+      setError(`Já existe um cliente com este NIF: ${existing.name}.`);
       return;
     }
     if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
@@ -170,7 +200,12 @@ export function NewClientDialog({
       return;
     }
     setPending(true);
-    const result = await onSave(data);
+    let result: { ok: true } | { ok: false; error: string };
+    try {
+      result = await onSave(data);
+    } catch (failure) {
+      result = { ok: false, error: failure instanceof Error && failure.message ? failure.message : "Não foi possível criar o cliente." };
+    }
     setPending(false);
     if (!result.ok) {
       setError(result.error);
@@ -184,21 +219,47 @@ export function NewClientDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Novo cliente</DialogTitle>
-          <DialogDescription>Fica selecionado nesta folha de obra.</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs sm:col-span-2">
             Nome
-            <Input value={name} onChange={(event) => setName(event.target.value)} className="h-9" />
+            <Input data-testid="novo-cliente-nome" value={name} autoFocus={!initial?.name} onChange={(event) => setName(event.target.value)} className="h-9" />
           </label>
           <label className="grid gap-1 text-xs">
             NIF
-            <Input value={nif} onChange={(event) => setNif(event.target.value)} inputMode="numeric" className="h-9" />
+            <Input data-testid="novo-cliente-nif" value={nif} autoFocus={Boolean(initial?.name) && !initial?.nif} onChange={(event) => setNif(event.target.value)} onBlur={lookup} inputMode="numeric" className="h-9" />
           </label>
           <label className="grid gap-1 text-xs">
             Telefone
             <Input value={phone} onChange={(event) => setPhone(event.target.value)} className="h-9" />
           </label>
+          {existing ? (
+            <div data-testid="cliente-duplicado" role="alert" className="grid gap-2 rounded-lg border border-[#f5a524] bg-[#f5a524]/15 px-3 py-2 text-sm sm:col-span-2">
+              <span>Já existe um cliente com este NIF: <strong>{existing.name}</strong>.</span>
+              {onUseExisting ? (
+                <Button type="button" variant="outline" className="h-8 w-fit" onClick={() => { onUseExisting(existing.id); onClose(); }}>
+                  Usar este cliente
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          {!existing && sameName.length ? (
+            <div data-testid="cliente-mesmo-nome" className="grid gap-1 rounded-lg border border-[var(--line)] px-3 py-2 text-sm sm:col-span-2">
+              <span>Já tens {sameName.length === 1 ? "um cliente" : "clientes"} com este nome:</span>
+              {sameName.map((client) => (
+                <span key={client.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{client.name}{client.nif ? ` · NIF ${client.nif}` : ""}</span>
+                  {onUseExisting ? (
+                    <Button type="button" variant="outline" className="h-7 px-2 text-xs" onClick={() => { onUseExisting(client.id); onClose(); }}>
+                      Usar este
+                    </Button>
+                  ) : null}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {note ? <p className="text-[13px] text-[var(--muted-text)] sm:col-span-2">{note}</p> : null}
           <label className="grid gap-1 text-xs sm:col-span-2">
             E-mail
             <Input value={email} onChange={(event) => setEmail(event.target.value)} type="email" className="h-9" />
@@ -219,7 +280,7 @@ export function NewClientDialog({
         {error ? <p className="text-sm text-red-700" role="alert">{error}</p> : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="button" className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]" disabled={pending} onClick={() => void save()}>
+          <Button type="button" data-testid="novo-cliente-criar" className="bg-[var(--glow)] hover:bg-[var(--glow-deep)]" disabled={pending || Boolean(existing)} onClick={() => void save()}>
             {pending ? "A guardar…" : "Criar cliente"}
           </Button>
         </DialogFooter>

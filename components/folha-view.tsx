@@ -5,7 +5,9 @@ import { can, readCurrentUserId, readUsers, subscribeAccess } from "@/lib/user-s
 import { assignTechnician, formatClock, readLogs, subscribeOps, technicianOf, workedMs } from "@/lib/workshop-ops";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { PackagePlus, Pencil, Plus } from "lucide-react";
+import { PackagePlus, Pencil, Plus, X } from "lucide-react";
+import { ClientSearch } from "@/components/client-picker";
+import type { ClientSeed, SearchableVehicle } from "@/lib/client-search";
 import { CarSide, carColor } from "@/components/car-side";
 import { ClientEditDialog, NewClientDialog, StockEntryDialog, type ClientForm } from "@/components/sheet-dialogs";
 import { useSetSheetHeader, useSetSheetSidebar } from "@/components/sheet-sidebar";
@@ -118,6 +120,8 @@ export function FolhaView({
   onCreateSupplier,
   onCommitStock,
   onRemoveStock,
+  vehicles,
+  onClearVehicle,
 }: {
   documentId?: string;
   number?: string;
@@ -129,6 +133,8 @@ export function FolhaView({
   pending: boolean;
   client?: EditorClient;
   clients: EditorClient[];
+  vehicles?: SearchableVehicle[];
+  onClearVehicle?: () => void;
   clientId: string;
   consumidorFinal: boolean;
   onConsumidorFinal: (next: boolean) => void;
@@ -249,6 +255,7 @@ export function FolhaView({
   const [suggestBox, setSuggestBox] = useState<{ top: number; left: number; width: number } | null>(null);
   const [clientOpen, setClientOpen] = useState(false);
   const [newClientOpen, setNewClientOpen] = useState(false);
+  const [newClientSeed, setNewClientSeed] = useState<ClientSeed | null>(null);
   const [stockKey, setStockKey] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [lineEditMode, setLineEditMode] = useState(false);
@@ -347,7 +354,7 @@ export function FolhaView({
             data-testid="new-client"
             title="Novo cliente"
             aria-label="Novo cliente"
-            onClick={() => setNewClientOpen(true)}
+            onClick={() => { setNewClientSeed(null); setNewClientOpen(true); }}
             className="inline-flex h-7 items-center gap-1 rounded bg-white/10 px-2 text-[14px] font-semibold text-white hover:bg-white/20"
           >
             <Plus className="size-3" />
@@ -366,21 +373,37 @@ export function FolhaView({
           </button>
           </span>
         </div>
-        {client ? null : (
-          <select
-            aria-label="Cliente"
-            value={clientId}
-            disabled={locked}
-            onChange={(event) => onClientRef.current(event.target.value)}
-            className="h-8 w-full rounded border-0 bg-white px-2 text-[16px] text-[var(--charcoal)]"
-          >
-            <option value="">Escolher cliente…</option>
-            {clients.map((item) => (
-              <option key={item.id} value={item.id}>{item.name}</option>
-            ))}
-          </select>
+        {client ? (
+          <div className="flex items-start justify-between gap-1">
+            <p data-testid="cliente-escolhido" className="min-w-0 text-[18px] leading-tight font-semibold break-words">{client.name}</p>
+            {locked ? null : (
+              <button
+                type="button"
+                data-testid="limpar-cliente"
+                title="Limpar cliente"
+                aria-label="Limpar cliente"
+                onClick={() => onClientRef.current("")}
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded bg-white/10 px-2 text-[14px] font-semibold text-white hover:bg-white/20"
+              >
+                <X className="size-3" />
+                Limpar
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <ClientSearch
+              clients={clients}
+              vehicles={vehicles}
+              tone="dark"
+              disabled={locked}
+              placeholder="Nome, NIF, telefone…"
+              onPick={(item) => onClientRef.current(item.id)}
+              onCreate={(seed) => { setNewClientSeed(seed); setNewClientOpen(true); }}
+            />
+            <p className="text-[18px] leading-tight font-semibold">Sem cliente</p>
+          </>
         )}
-        <p className="text-[18px] leading-tight font-semibold">{client?.name || "Sem cliente"}</p>
         {showContacts ? <p>{client?.phone || "Sem telefone"}</p> : null}
         {showContacts ? <p className="break-all">{client?.email || "Sem e-mail"}</p> : null}
         {showContacts ? <p>NIF {client?.nif || "—"}</p> : null}
@@ -393,7 +416,7 @@ export function FolhaView({
       </div>,
     );
     return () => setSidebar(null);
-  }, [setSidebar, locked, clientId, clients, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.postalCode, client?.city, client?.notes, notes, showContacts]);
+  }, [setSidebar, locked, clientId, clients, vehicles, consumidorFinal, client?.id, client?.name, client?.phone, client?.email, client?.nif, client?.address, client?.postalCode, client?.city, client?.notes, notes, showContacts]);
 
   const setHeader = useSetSheetHeader();
   const headerActions = useRef({ onDateIn, setPromiseQuote, setPromiseDelivery });
@@ -883,7 +906,15 @@ export function FolhaView({
             className="mt-0.5 h-10 w-full border-0 border-b-2 border-[var(--glow)] bg-transparent text-center font-mono text-[26px] font-bold tracking-wide uppercase outline-none"
           />
         </label>
-        <button type="button" className="mt-1 h-8 w-full text-[16px] text-[var(--glow)]" disabled={locked} onClick={onLookup}>Procurar</button>
+        <div className="mt-1 flex gap-1">
+          <button type="button" className="h-8 flex-1 text-[16px] text-[var(--glow)]" disabled={locked} onClick={onLookup}>Procurar</button>
+          {onClearVehicle && !locked && (plate || brand || model || vin) ? (
+            <button type="button" data-testid="limpar-viatura" title="Limpar viatura" aria-label="Limpar viatura" className="inline-flex h-8 items-center gap-1 rounded px-2 text-[15px] text-[var(--steel)] hover:bg-[var(--mist)]" onClick={onClearVehicle}>
+              <X className="size-3.5" />
+              Limpar
+            </button>
+          ) : null}
+        </div>
         <CarSide color={carColor(plate || "x")} className="mx-auto h-12 w-36" />
         <p className="mb-1 text-center text-[16px] text-[var(--steel)]">{brand} {model}</p>
         <div className="grid grid-cols-2 gap-x-2 gap-y-1">
@@ -982,7 +1013,15 @@ export function FolhaView({
           onSave={onSaveClient}
         />
       ) : null}
-      {newClientOpen ? <NewClientDialog onClose={() => setNewClientOpen(false)} onSave={onCreateClient} /> : null}
+      {newClientOpen ? (
+        <NewClientDialog
+          initial={newClientSeed ?? undefined}
+          clients={clients}
+          onUseExisting={(id) => onClientRef.current(id)}
+          onClose={() => { setNewClientOpen(false); setNewClientSeed(null); }}
+          onSave={onCreateClient}
+        />
+      ) : null}
       {stockLine ? (
         <StockEntryDialog
           key={`${stockLine.key}:${stockLine.stockEntry?.purchaseLineId ?? "new"}`}

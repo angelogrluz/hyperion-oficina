@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ClientPicker } from "@/components/client-picker";
 import { PlateSearch } from "@/components/plate-search";
 import { controlClass, Field } from "@/components/field";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ export function VehicleFields({
   vehicle,
   clientId,
 }: {
-  clients: Array<{ id: string; name: string }>;
+  clients: Array<{ id: string; name: string; nif?: string; phone?: string; email?: string }>;
   clientId?: string;
   vehicle?: {
     clientId: string | null;
@@ -27,6 +28,7 @@ export function VehicleFields({
     fuel: string;
   };
 }) {
+  const [owner, setOwner] = useState(vehicle?.clientId ?? clientId ?? "");
   const [plate, setPlate] = useState(vehicle?.plate ?? "");
   const [brand, setBrand] = useState(vehicle?.brand ?? "");
   const [model, setModel] = useState(vehicle?.model ?? "");
@@ -49,12 +51,9 @@ export function VehicleFields({
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Field label="Cliente" className="md:col-span-2">
-        <select name="clientId" defaultValue={vehicle?.clientId ?? clientId ?? ""} className={controlClass}>
-          <option value="">Sem cliente</option>
-          {clients.map((client) => (
-            <option key={client.id} value={client.id}>{client.name}</option>
-          ))}
-        </select>
+        <input type="hidden" name="clientId" value={owner} />
+        <ClientPicker clients={clients} value={owner} onChange={setOwner} />
+        {owner ? null : <span className="text-[14px] text-[var(--muted-text)]">Sem cliente. Escreve para procurar e escolher.</span>}
       </Field>
       <div className="md:col-span-2">
         <PlateSearch plate={plate} onPlateChange={setPlate} onFound={applyLookup} />

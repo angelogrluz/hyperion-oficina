@@ -9,8 +9,10 @@ import { commitStockEntry, removeStockEntry } from "@/app/actions/purchases";
 import { ensureConsumidorFinal, saveClient, saveSupplier, saveVehicle } from "@/app/actions/records";
 import { moveSymptoms, writeStockLink, type CachedClient } from "@/lib/browser-cache";
 import { controlClass, Field, Select } from "@/components/field";
-import { NifInput } from "@/components/nif-input";
 import { FolhaView } from "@/components/folha-view";
+import { ClientPicker } from "@/components/client-picker";
+import { NewClientDialog, type ClientForm } from "@/components/sheet-dialogs";
+import type { ClientSeed } from "@/lib/client-search";
 import { LineGrid } from "@/components/line-grid";
 import { Button } from "@/components/ui/button";
 import {
@@ -237,6 +239,7 @@ export function DocumentEditor({
   const revisionRef = useRef(0);
   const [pending, startTransition] = useTransition();
   const [clientOpen, setClientOpen] = useState(false);
+  const [clientSeed, setClientSeed] = useState<ClientSeed | null>(null);
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [issued, setIssued] = useState<string | null>(invoice?.number ?? null);
@@ -717,6 +720,44 @@ export function DocumentEditor({
     ]);
   }
 
+  async function createClientRecord(data: ClientForm): Promise<{ ok: true } | { ok: false; error: string }> {
+    const formData = new FormData();
+    formData.set("name", data.name);
+    formData.set("nif", data.nif);
+    formData.set("phone", data.phone);
+    formData.set("email", data.email);
+    formData.set("address", data.address);
+    formData.set("postalCode", data.postalCode);
+    formData.set("city", data.city);
+    formData.set("notes", "");
+    const result = await saveClient(null, formData);
+    if (!result.ok) return result;
+    const created = {
+      id: result.id,
+      name: data.name.trim(),
+      nif: normalizeNif(data.nif),
+      phone: data.phone.trim(),
+      email: data.email.trim().toLowerCase(),
+      address: data.address.trim(),
+      postalCode: data.postalCode.trim(),
+      city: data.city.trim(),
+      notes: "",
+    };
+    setClientList((current) => [...current.filter((item) => item.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name, "pt")));
+    setConsumidorFinal(false);
+    if (mode !== "order" && created.id !== clientId) setVehicleId("");
+    setClientId(created.id);
+    setError(null);
+    touch();
+    return { ok: true };
+  }
+
+  function chooseClient(id: string) {
+    touch();
+    setConsumidorFinal(isConsumidorFinal(clientList.find((item) => item.id === id)));
+    setClientId(id);
+  }
+
   const selectedClient = clientList.find((item) => item.id === clientId);
 
   async function openOfficial(kind: "fatura" | "recibo") {
@@ -784,11 +825,7 @@ export function DocumentEditor({
               touch();
             });
           }}
-          onClient={(id) => {
-            touch();
-            setConsumidorFinal(isConsumidorFinal(clientList.find((item) => item.id === id)));
-            setClientId(id);
-          }}
+          onClient={chooseClient}
           error={error}
           problem={problem}
           notes={notes}
@@ -796,35 +833,15 @@ export function DocumentEditor({
           lines={lines}
           articles={articleList}
           suppliers={supplierList}
-          onCreateClient={async (data) => {
-            const formData = new FormData();
-            formData.set("name", data.name);
-            formData.set("nif", data.nif);
-            formData.set("phone", data.phone);
-            formData.set("email", data.email);
-            formData.set("address", data.address);
-            formData.set("postalCode", data.postalCode);
-            formData.set("city", data.city);
-            formData.set("notes", "");
-            const result = await saveClient(null, formData);
-            if (!result.ok) return result;
-            const created = {
-              id: result.id,
-              name: data.name.trim(),
-              nif: normalizeNif(data.nif),
-              phone: data.phone.trim(),
-              email: data.email.trim().toLowerCase(),
-              address: data.address.trim(),
-              postalCode: data.postalCode.trim(),
-              city: data.city.trim(),
-              notes: "",
-            };
-            setClientList((current) => [...current.filter((item) => item.id !== created.id), created].sort((a, b) => a.name.localeCompare(b.name, "pt")));
-            setConsumidorFinal(false);
-            setClientId(created.id);
-            setError(null);
+          onCreateClient={createClientRecord}
+          vehicles={vehicleList}
+          onClearVehicle={() => {
             touch();
-            return { ok: true };
+            setVehicleId("");
+            fillVehicle(undefined);
+            setKm("");
+            setKmOut("");
+            setPlateNote(null);
           }}
           onSaveClient={async (data) => {
             if (!clientId) return { ok: false, error: "Escolha o cliente." };
@@ -1098,27 +1115,22 @@ export function DocumentEditor({
         ) : null}
 
         <div className="grid gap-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10 md:grid-cols-2">
-          <Field label="Cliente">
-            <Select
+          <Field label="Cliente" className="md:col-span-2">
+            <ClientPicker
+              clients={clientList}
+              vehicles={vehicleList}
               value={clientId}
               disabled={locked}
-              onChange={(event) => {
-                touch();
-                setClientId(event.target.value);
+              onChange={(id) => {
+                chooseClient(id);
                 setVehicleId("");
                 fillVehicle(undefined);
               }}
-            >
-              <option value="">Escolher…</option>
-              {clientList.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name} · {client.nif}
-                </option>
-              ))}
-            </Select>
+              onCreate={(seed) => { setClientSeed(seed); setClientOpen(true); }}
+            />
           </Field>
           <div className="flex flex-wrap gap-2 md:col-span-2">
-            <Button type="button" variant="outline" className="h-9" disabled={locked} onClick={() => setClientOpen(true)}>
+            <Button type="button" variant="outline" className="h-9" disabled={locked} onClick={() => { setClientSeed(null); setClientOpen(true); }}>
               Novo cliente
             </Button>
             <Button type="button" variant="outline" className="h-9" disabled={locked || !clientId} onClick={() => setVehicleOpen(true)}>
@@ -1336,16 +1348,20 @@ export function DocumentEditor({
         </div>
       </aside>
 
-      <QuickClient
-        open={clientOpen}
-        onOpenChange={setClientOpen}
-        onCreated={(client) => {
-          setClientList((current) => [...current, client].sort((a, b) => a.name.localeCompare(b.name, "pt")));
-          setClientId(client.id);
-          setVehicleId("");
-          touch();
-        }}
-      />
+      {clientOpen ? (
+        <NewClientDialog
+          description="Fica escolhido neste orçamento."
+          initial={clientSeed ?? undefined}
+          clients={clientList}
+          onUseExisting={(id) => {
+            chooseClient(id);
+            setVehicleId("");
+            fillVehicle(undefined);
+          }}
+          onClose={() => { setClientOpen(false); setClientSeed(null); }}
+          onSave={createClientRecord}
+        />
+      ) : null}
       <QuickVehicle
         open={vehicleOpen}
         clientId={clientId}
@@ -1398,56 +1414,6 @@ export function DocumentEditor({
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function QuickClient({
-  open,
-  onOpenChange,
-  onCreated,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreated: (client: EditorClient) => void;
-}) {
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Novo cliente</DialogTitle>
-          <DialogDescription>Fica disponível de imediato nesta ordem.</DialogDescription>
-        </DialogHeader>
-        <form
-          className="grid gap-3"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const formData = new FormData(event.currentTarget);
-            startTransition(async () => {
-              const result = await saveClient(null, formData);
-              if (!result.ok) {
-                setError(result.error);
-                return;
-              }
-              onCreated({ id: result.id, name: result.name, nif: result.nif });
-              setError(null);
-              onOpenChange(false);
-            });
-          }}
-        >
-          <Field label="Nome"><Input name="name" required className="h-10" /></Field>
-          <NifInput />
-          <Field label="Código postal"><Input name="postalCode" className="h-10" /></Field>
-          <Field label="Localidade"><Input name="city" className="h-10" /></Field>
-          <Field label="Telefone"><Input name="phone" className="h-10" /></Field>
-          <Field label="E-mail"><Input name="email" type="email" className="h-10" /></Field>
-          <Field label="Morada"><Textarea name="address" /></Field>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <Button type="submit" disabled={pending} className="h-10">{pending ? "A guardar…" : "Criar cliente"}</Button>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 

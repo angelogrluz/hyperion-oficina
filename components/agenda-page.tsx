@@ -4,9 +4,13 @@ import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { convertAppointment, deleteAppointment, saveAppointment } from "@/browser/src/shims/appointments";
+import { saveClient } from "@/browser/src/shims/records";
+import { ClientPicker } from "@/components/client-picker";
+import { NewClientDialog, type ClientForm } from "@/components/sheet-dialogs";
+import type { ClientSeed } from "@/lib/client-search";
 import { readServiceTypes, subscribeServiceTypes } from "@/lib/booking-settings";
 import { lisbonISODate, lisbonTime } from "@/lib/format";
-type Person = { id: string; name: string };
+type Person = { id: string; name: string; nif?: string; phone?: string; email?: string };
 type Vehicle = { id: string; clientId: string | null; plate: string; brand: string; model: string };
 type Slot = {
   id: string;
@@ -39,6 +43,9 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
   const [view, setView] = useState<"semana" | "dia">("semana");
   const [error, setError] = useState("");
   const [clientId, setClientId] = useState("");
+  const [created, setCreated] = useState<Person[]>([]);
+  const [clientSeed, setClientSeed] = useState<ClientSeed | null>(null);
+  const people = useMemo(() => [...clients, ...created.filter((item) => !clients.some((client) => client.id === item.id))], [clients, created]);
   const [vehicleId, setVehicleId] = useState("");
   const [typeId, setTypeId] = useState(types[0]?.id ?? "");
   const [date, setDate] = useState(today);
@@ -58,6 +65,7 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
   async function create(event: FormEvent) {
     event.preventDefault();
     if (!chosen) { setError("Cria um tipo de serviço em Configurações."); return; }
+    if (!clientId) { setError("Escolhe o cliente."); return; }
     const data = new FormData();
     data.set("clientId", clientId);
     data.set("vehicleId", vehicleId);
@@ -108,7 +116,7 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
                 return (
                   <div key={`${day.iso}-${clock}`} className="min-h-12 border-t border-l border-[var(--line)] p-1">
                     {items.map((item) => {
-                      const client = clients.find((person) => person.id === item.clientId);
+                      const client = people.find((person) => person.id === item.clientId);
                       const vehicle = vehicles.find((car) => car.id === item.vehicleId);
                       return (
                         <div key={item.id} data-testid="marcacao" className="rounded-lg bg-[var(--mist)] px-2 py-1 text-[14px] text-[var(--ink)]">
@@ -139,10 +147,15 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
       <form data-testid="nova-marcacao" className="grid h-fit gap-2 rounded-xl border border-[var(--line)] bg-white p-3" onSubmit={(event) => void create(event)}>
         <h2 className="text-[20px] font-semibold">Nova marcação</h2>
         <label className="text-[15px]">Cliente
-          <select required value={clientId} onChange={(event) => { setClientId(event.target.value); setVehicleId(""); }} className="mt-1 h-11 w-full rounded-lg border px-2">
-            <option value="">Escolhe</option>
-            {clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}
-          </select>
+          <div className="mt-1">
+            <ClientPicker
+              clients={people}
+              vehicles={vehicles}
+              value={clientId}
+              onChange={(id) => { setClientId(id); setVehicleId(""); }}
+              onCreate={(seed) => setClientSeed(seed)}
+            />
+          </div>
         </label>
         <label className="text-[15px]">Viatura
           <select required value={vehicleId} onChange={(event) => setVehicleId(event.target.value)} className="mt-1 h-11 w-full rounded-lg border px-2">
@@ -166,6 +179,25 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
         <p className="text-[14px] text-[var(--muted-text)]">A duração vem do tipo de serviço. A vaga tem de caber entre 9:00–13:00 ou 14:30–18:00, de segunda a sexta.</p>
         {error ? <p className="text-[15px] text-[#d64545]">{error}</p> : null}
         <button className="h-11 rounded-xl bg-[var(--glow)] font-semibold text-white">Marcar</button>
+        {clientSeed ? (
+          <NewClientDialog
+            description="Fica escolhido nesta marcação. Depois junta a viatura em Viaturas."
+            initial={clientSeed}
+            clients={people}
+            onUseExisting={(id) => { setClientId(id); setVehicleId(""); }}
+            onClose={() => setClientSeed(null)}
+            onSave={async (data: ClientForm) => {
+              const form = new FormData();
+              for (const [key, value] of Object.entries(data)) form.set(key, value);
+              const result = await saveClient(null, form);
+              if (!result.ok) return result;
+              setCreated((current) => [...current, { id: result.id, name: result.name, nif: result.nif, phone: data.phone, email: data.email }]);
+              setClientId(result.id);
+              setVehicleId("");
+              return { ok: true };
+            }}
+          />
+        ) : null}
       </form>
     </div>
   );
