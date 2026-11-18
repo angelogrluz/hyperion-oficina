@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { lookupNif } from "@/browser/src/lookup-api";
 
-export function NifInput({ defaultValue = "", required = true }: { defaultValue?: string; required?: boolean }) {
+export function NifInput({ defaultValue = "", required = false }: { defaultValue?: string; required?: boolean }) {
   const [value, setValue] = useState(defaultValue);
   const [note, setNote] = useState("");
   return (

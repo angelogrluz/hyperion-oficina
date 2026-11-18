@@ -67,7 +67,7 @@ export type EditorVehicle = {
   brand: string;
   model: string;
   version: string;
-  year: number;
+  year: number | null;
   vin: string;
   engine: string;
   engineCode?: string;
@@ -200,7 +200,7 @@ export function DocumentEditor({
   const [oil, setOil] = useState(draft?.oil ?? startingVehicle?.oil ?? "");
   const [nextInspection, setNextInspection] = useState(draft?.nextInspection ?? startingVehicle?.nextInspection ?? "");
   const [nextService, setNextService] = useState(draft?.nextService ?? startingVehicle?.nextService ?? "");
-  const [fuel, setFuel] = useState(draft?.fuel ?? (startingVehicle?.fuel || "Gasolina"));
+  const [fuel, setFuel] = useState(draft?.fuel ?? (startingVehicle?.fuel || ""));
   const [plateNote, setPlateNote] = useState<string | null>(null);
   const [dateIn, setDateIn] = useState(draft?.dateIn ?? initial.dateIn);
   const [dateOut, setDateOut] = useState(initial.dateOut);
@@ -353,21 +353,21 @@ export function DocumentEditor({
       setOil("");
       setNextInspection("");
       setNextService("");
-      setFuel("Gasolina");
+      setFuel("");
       return;
     }
     setPlate(vehicle.plate);
     setBrand(vehicle.brand);
     setModel(vehicle.model);
     setVersion(vehicle.version);
-    setYear(String(vehicle.year));
+    setYear(vehicle.year ? String(vehicle.year) : "");
     setVin(vehicle.vin);
     setEngine(vehicle.engine);
     setEngineCode(vehicle.engineCode ?? "");
     setOil(vehicle.oil ?? "");
     setNextInspection(vehicle.nextInspection ?? "");
     setNextService(vehicle.nextService ?? "");
-    setFuel(vehicle.fuel || "Gasolina");
+    setFuel(vehicle.fuel || "");
     setKm(String(vehicle.km));
   }
 
@@ -446,7 +446,7 @@ export function DocumentEditor({
       formData.set("brand", brand);
       formData.set("model", model);
       formData.set("version", version);
-      formData.set("year", year || String(new Date().getFullYear()));
+      formData.set("year", year);
       formData.set("vin", vin);
       formData.set("engine", engine);
       formData.set("engineCode", engineCode);
@@ -454,7 +454,7 @@ export function DocumentEditor({
       formData.set("nextInspection", nextInspection);
       formData.set("nextService", nextService);
       formData.set("km", String(kmValue));
-      formData.set("fuel", fuel || "Gasolina");
+      formData.set("fuel", fuel);
       const savedVehicle = await saveVehicle(knownVehicle?.id ?? null, formData);
       if (!savedVehicle.ok) {
         setError(savedVehicle.error);
@@ -471,7 +471,7 @@ export function DocumentEditor({
           brand: savedVehicle.brand,
           model: savedVehicle.model,
           version,
-          year: Number(year) || new Date().getFullYear(),
+          year: year ? Number(year) : null,
           vin,
           engine,
           engineCode,
@@ -479,7 +479,7 @@ export function DocumentEditor({
           nextInspection,
           nextService,
           km: savedVehicle.km,
-          fuel: fuel || "Gasolina",
+          fuel,
         };
         return current.some((item) => item.id === next.id)
           ? current.map((item) => (item.id === next.id ? next : item))
@@ -1250,6 +1250,7 @@ export function DocumentEditor({
             <Field label="Ano"><Input value={year} disabled={locked} inputMode="numeric" onChange={(event) => { touch(); setYear(event.target.value); }} className="h-8" /></Field>
             <Field label="Combustível">
               <Select value={fuel} disabled={locked} onChange={(event) => { touch(); setFuel(event.target.value); }}>
+                <option value="">—</option>
                 {FUELS.map((item) => <option key={item}>{item}</option>)}
               </Select>
             </Field>
@@ -1433,7 +1434,7 @@ function QuickVehicle({
   const [year, setYear] = useState("");
   const [vin, setVin] = useState("");
   const [engine, setEngine] = useState("");
-  const [fuel, setFuel] = useState("Gasolina");
+  const [fuel, setFuel] = useState("");
   const [note, setNote] = useState<string | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1461,7 +1462,7 @@ function QuickVehicle({
                 brand: result.brand,
                 model: result.model,
                 version,
-                year: Number(year) || new Date().getFullYear(),
+                year: year ? Number(year) : null,
                 vin,
                 engine,
                 km: result.km,
@@ -1511,12 +1512,13 @@ function QuickVehicle({
           <Field label="Marca"><Input name="brand" required value={brand} onChange={(event) => setBrand(event.target.value)} className="h-10" /></Field>
           <Field label="Modelo"><Input name="model" required value={model} onChange={(event) => setModel(event.target.value)} className="h-10" /></Field>
           <Field label="Versão"><Input name="version" value={version} onChange={(event) => setVersion(event.target.value)} className="h-10" /></Field>
-          <Field label="Ano"><Input name="year" required value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" className="h-10" /></Field>
+          <Field label="Ano"><Input name="year" value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" className="h-10" /></Field>
           <Field label="Motor"><Input name="engine" value={engine} onChange={(event) => setEngine(event.target.value)} className="h-10" /></Field>
           <Field label="VIN"><Input name="vin" value={vin} onChange={(event) => setVin(event.target.value.toUpperCase())} className="h-10 font-mono uppercase" /></Field>
           <Field label="Km"><Input name="km" defaultValue="0" inputMode="numeric" className="h-10" /></Field>
           <Field label="Combustível">
             <select name="fuel" className={controlClass} value={fuel} onChange={(event) => setFuel(event.target.value)}>
+              <option value="">—</option>
               {FUELS.map((item) => (
                 <option key={item}>{item}</option>
               ))}

@@ -395,16 +395,46 @@ async function pushSettingsOnly() {
   if (error) console.error(error.message);
 }
 
+let stateRevision = 0;
+let revisionKnown = false;
+
+export class RevisionConflict extends Error {
+  constructor() {
+    super("revision desatualizada");
+    this.name = "RevisionConflict";
+  }
+}
+
+export function currentStateRevision() {
+  return stateRevision;
+}
+
 export async function saveCompanyState(payload: Record<string, unknown>) {
   const db = supabase();
-  if (!db || !current) return;
+  if (!db || !current) return stateRevision;
   const { settings, ...rest } = payload;
-  const body = { ...rest, settings: settings ?? collectSettings() };
-  const { error } = await db.rpc("save_company_state", { payload: body as never });
-  if (error) throw new Error(error.message);
+  const body = { ...rest, settings: settings ?? collectSettings(), ...(revisionKnown ? { baseRevision: stateRevision } : {}) };
+  const { data, error } = await db.rpc("save_company_state", { payload: body as never });
+  if (error) {
+    if (error.message.toLowerCase().includes("revision desatualizada")) throw new RevisionConflict();
+    throw new Error(error.message);
+  }
+  const next = typeof data === "number" ? data : typeof data === "string" && /^\d+$/.test(data) ? Number(data) : null;
+  if (next != null) {
+    stateRevision = next;
+    revisionKnown = true;
+  }
+  return stateRevision;
 }
 
 type Row = Record<string, unknown>;
+
+function rawProvider(value: unknown) {
+  const text = String(value ?? "");
+  if (!text || text === "null") return null;
+  if (text.toLowerCase() === "keymaster") return "keymaster";
+  return billingLabel(text) || null;
+}
 
 function num(value: unknown, fallback = 0) {
   const parsed = Number(value);
@@ -431,6 +461,11 @@ export async function loadCompanyState() {
   ]);
   const failed = [clients, vehicles, articles, suppliers, orders, quotes, lines, purchases, purchaseLines, appointments, invoiceLogs, settings].find((result) => result.error);
   if (failed?.error) throw new Error(failed.error.message);
+  const revision = await db.from("companies").select("state_revision").eq("id", cid).maybeSingle();
+  if (!revision.error && revision.data && "state_revision" in revision.data) {
+    stateRevision = Number(revision.data.state_revision) || 0;
+    revisionKnown = true;
+  }
   if (settings.data) applyRemoteSettings(settings.data as Row);
   await ensureOwnerStaff(current);
   return {
@@ -441,7 +476,7 @@ export async function loadCompanyState() {
     })),
     vehicles: ((vehicles.data ?? []) as Row[]).map((row) => ({
       id: String(row.id), clientId: (row.client_id as string | null) ?? null, plate: String(row.plate ?? ""), brand: String(row.brand ?? ""), model: String(row.model ?? ""),
-      version: String(row.version ?? ""), year: num(row.year, new Date().getFullYear()), vin: String(row.vin ?? ""), engine: String(row.engine ?? ""),
+      version: String(row.version ?? ""), year: row.year == null || row.year === "" ? null : num(row.year), vin: String(row.vin ?? ""), engine: String(row.engine ?? ""),
       engineCode: String(row.engine_code ?? ""), oil: String(row.oil ?? ""), nextInspection: String(row.next_inspection ?? ""), nextService: String(row.next_service ?? ""),
       km: num(row.km), fuel: String(row.fuel ?? ""), createdAt: String(row.created_at), updatedAt: String(row.updated_at),
     })),
@@ -459,7 +494,7 @@ export async function loadCompanyState() {
       id: String(row.id), number: String(row.number ?? ""), clientId: (row.client_id as string | null) ?? null, vehicleId: (row.vehicle_id as string | null) ?? null,
       dateIn: String(row.date_in), dateOut: (row.date_out as string | null) ?? null, km: num(row.km), kmOut: row.km_out == null ? null : num(row.km_out),
       problem: String(row.problem ?? ""), status: String(row.status ?? "aberta"), approval: String(row.approval ?? "aguarda"), approvalAt: (row.approval_at as string | null) ?? null,
-      notes: String(row.notes ?? ""), invoiceNumber: (row.invoice_number as string | null) ?? null, invoiceProvider: billingLabel((row.invoice_provider as string | null) ?? null) || null,
+      notes: String(row.notes ?? ""), invoiceNumber: (row.invoice_number as string | null) ?? null, invoiceProvider: rawProvider(row.invoice_provider),
       invoiceIssuedAt: (row.invoice_issued_at as string | null) ?? null, invoiceSimulated: Boolean(row.invoice_simulated), invoiceUrl: (row.invoice_url as string | null) ?? null,
       paymentMethod: (row.payment_method as string | null) ?? null, paidAt: (row.paid_at as string | null) ?? null, quoteNumber: (row.quote_number as string | null) ?? null,
       quoteUrl: (row.quote_url as string | null) ?? null, quoteId: (row.quote_id as string | null) ?? null, createdAt: String(row.created_at), updatedAt: String(row.updated_at),

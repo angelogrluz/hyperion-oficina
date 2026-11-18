@@ -36,6 +36,7 @@ export function billingLabel(value: string | null | undefined) {
   if (text.includes("simula")) return "Simulação (sem validade fiscal)";
   if (text.includes("rascunho") || text.includes("teste")) return "Rascunho de teste";
   if (text.includes("moloni")) return "Fatura certificada";
+  if (text === "keymaster" || text === "importado") return "Importado";
   return value;
 }
 

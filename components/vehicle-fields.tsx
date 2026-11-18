@@ -32,7 +32,7 @@ export function VehicleFields({
   const [model, setModel] = useState(vehicle?.model ?? "");
   const [version, setVersion] = useState(vehicle?.version ?? "");
   const [year, setYear] = useState(vehicle?.year ? String(vehicle.year) : "");
-  const [fuel, setFuel] = useState(vehicle?.fuel ?? "Gasolina");
+  const [fuel, setFuel] = useState(vehicle?.fuel ?? "");
   const [engine, setEngine] = useState(vehicle?.engine ?? "");
   const [vin, setVin] = useState(vehicle?.vin ?? "");
 
@@ -49,8 +49,8 @@ export function VehicleFields({
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Field label="Cliente" className="md:col-span-2">
-        <select name="clientId" required defaultValue={vehicle?.clientId ?? clientId ?? ""} className={controlClass}>
-          <option value="">Escolher…</option>
+        <select name="clientId" defaultValue={vehicle?.clientId ?? clientId ?? ""} className={controlClass}>
+          <option value="">Sem cliente</option>
           {clients.map((client) => (
             <option key={client.id} value={client.id}>{client.name}</option>
           ))}
@@ -69,10 +69,11 @@ export function VehicleFields({
         <Input name="version" value={version} onChange={(event) => setVersion(event.target.value)} className="h-10 bg-background" />
       </Field>
       <Field label="Ano">
-        <Input name="year" required value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" className="h-10 bg-background" />
+        <Input name="year" value={year} onChange={(event) => setYear(event.target.value)} inputMode="numeric" className="h-10 bg-background" />
       </Field>
       <Field label="Combustível">
         <select name="fuel" value={fuel} onChange={(event) => setFuel(event.target.value)} className={controlClass}>
+          <option value="">—</option>
           {FUELS.map((item) => <option key={item}>{item}</option>)}
         </select>
       </Field>

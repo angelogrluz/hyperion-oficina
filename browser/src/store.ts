@@ -28,7 +28,8 @@ import { dateOnly, lisbonParts, zonedDateTime } from "@/lib/format";
 import type { StockArticle, StockEntryInput, StockLink } from "@/lib/stock-entry";
 import { buildInvoiceDraft } from "@/lib/invoice/draft";
 import { mockMoloniAdapter } from "@/lib/invoice/mock-moloni";
-import { assignDocumentNumber, cloudActive, cloudConfigured, loadCompanyState, saveCompanyState } from "./cloud";
+import { assignDocumentNumber, cloudActive, cloudConfigured, loadCompanyState, RevisionConflict, saveCompanyState } from "./cloud";
+import { mergeById } from "@/lib/snapshot-merge";
 
 export type Client = {
   id: string;
@@ -50,7 +51,7 @@ export type Vehicle = {
   brand: string;
   model: string;
   version: string;
-  year: number;
+  year: number | null;
   vin: string;
   engine: string;
   engineCode?: string;
@@ -242,6 +243,7 @@ const uid = () => crypto.randomUUID();
 let database: IDBPDatabase | null = null;
 let chain: Promise<unknown> = Promise.resolve();
 let cloudMemory: Snapshot | null = null;
+let baseSnapshot: Snapshot | null = null;
 const listeners = new Set<() => void>();
 
 export function subscribeSnapshot(listener: () => void) {
@@ -315,6 +317,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     const loaded = await loadCompanyState();
     if (!loaded) throw new Error("Sem sessão na nuvem.");
     cloudMemory = { workshop: workshopFromSettings(), ...loaded };
+    baseSnapshot = structuredClone(cloudMemory);
     return cloudMemory;
   }
   const db = await databaseHandle();
@@ -332,6 +335,39 @@ export async function readDeviceSnapshot(): Promise<Snapshot | null> {
 
 export function forgetCloudMemory() {
   cloudMemory = null;
+  baseSnapshot = null;
+}
+
+async function persistCloud(draft: Snapshot) {
+  let current = draft;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await saveCompanyState(snapshotPayload(current));
+      baseSnapshot = structuredClone(current);
+      return current;
+    } catch (error) {
+      if (!(error instanceof RevisionConflict) || attempt === 2) throw error;
+      const loaded = await loadCompanyState();
+      if (!loaded) throw error;
+      const remote = { workshop: workshopFromSettings(), ...loaded };
+      current = {
+        ...remote,
+        clients: mergeById(baseSnapshot?.clients, current.clients, remote.clients),
+        vehicles: mergeById(baseSnapshot?.vehicles, current.vehicles, remote.vehicles),
+        articles: mergeById(baseSnapshot?.articles, current.articles, remote.articles),
+        suppliers: mergeById(baseSnapshot?.suppliers, current.suppliers, remote.suppliers),
+        orders: mergeById(baseSnapshot?.orders, current.orders, remote.orders),
+        quotes: mergeById(baseSnapshot?.quotes, current.quotes, remote.quotes),
+        lines: mergeById(baseSnapshot?.lines, current.lines, remote.lines),
+        purchases: mergeById(baseSnapshot?.purchases, current.purchases, remote.purchases),
+        purchaseLines: mergeById(baseSnapshot?.purchaseLines, current.purchaseLines, remote.purchaseLines),
+        appointments: mergeById(baseSnapshot?.appointments, current.appointments, remote.appointments),
+        invoiceLogs: mergeById(baseSnapshot?.invoiceLogs, current.invoiceLogs, remote.invoiceLogs),
+      };
+      baseSnapshot = structuredClone(remote);
+    }
+  }
+  return current;
 }
 
 export async function resetDemo() {
@@ -343,35 +379,53 @@ export async function resetDemo() {
   return seeded;
 }
 
+function snapshotPayload(snap: Snapshot) {
+  return {
+    clients: snap.clients,
+    vehicles: snap.vehicles,
+    articles: snap.articles,
+    suppliers: snap.suppliers,
+    orders: snap.orders,
+    quotes: snap.quotes,
+    lines: snap.lines,
+    purchases: snap.purchases,
+    purchaseLines: snap.purchaseLines,
+    appointments: snap.appointments,
+    invoiceLogs: snap.invoiceLogs.map((log) => ({
+      ...log,
+      requestJson: log.requestJson || "{}",
+      responseJson: log.responseJson || "{}",
+    })),
+  };
+}
+
 function update(mutate: (snap: Snapshot) => void | Promise<void>) {
   const run = chain.then(async () => {
-    const snap = await readSnapshot();
+    const snap = structuredClone(await readSnapshot());
     await mutate(snap);
-    if (cloudActive()) {
-      cloudMemory = snap;
-      await saveCompanyState({
-        clients: snap.clients,
-        vehicles: snap.vehicles,
-        articles: snap.articles,
-        suppliers: snap.suppliers,
-        orders: snap.orders,
-        quotes: snap.quotes,
-        lines: snap.lines,
-        purchases: snap.purchases,
-        purchaseLines: snap.purchaseLines,
-        appointments: snap.appointments,
-        invoiceLogs: snap.invoiceLogs.map((log) => ({
-          ...log,
-          requestJson: log.requestJson || "{}",
-          responseJson: log.responseJson || "{}",
-        })),
-      });
-    } else {
+    if (cloudActive()) cloudMemory = await persistCloud(snap);
+    else {
       const db = await databaseHandle();
       await db.put("kv", snap, "snapshot");
     }
     notifySnapshot();
-    return snap;
+    return cloudActive() ? cloudMemory : snap;
+  });
+  chain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+export async function replaceSnapshot(next: Snapshot) {
+  const run = chain.then(async () => {
+    if (cloudActive()) cloudMemory = await persistCloud(next);
+    else {
+      const db = await databaseHandle();
+      await db.put("kv", next, "snapshot");
+    }
+    notifySnapshot();
   });
   chain = run.then(
     () => undefined,
@@ -412,14 +466,36 @@ function nextDocumentSequence(snap: Snapshot, year: number, prefix: "FT" | "ORC"
   );
 }
 
+export function normalizePersonName(value: string) {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+export function normalizePhone(value: string) {
+  return value.replace(/\D/g, "");
+}
+
+export function clientConflict(clients: Client[], data: { name: string; nif: string; phone: string }, ignoreId = "") {
+  const nif = normalizeNif(data.nif);
+  if (nif && nif !== CONSUMIDOR_FINAL.nif) {
+    if (!isValidNif(nif)) return "NIF inválido.";
+    if (clients.some((client) => client.id !== ignoreId && normalizeNif(client.nif) === nif)) return "Já existe um cliente com este NIF.";
+  }
+  if (!nif) {
+    const name = normalizePersonName(data.name);
+    const phone = normalizePhone(data.phone);
+    if (clients.some((client) => client.id !== ignoreId && !normalizeNif(client.nif) && normalizePersonName(client.name) === name && normalizePhone(client.phone) === phone)) {
+      return "Já existe um cliente com este nome e telefone.";
+    }
+  }
+  return "";
+}
+
 export async function saveClientRecord(id: string | null, data: Omit<Client, "id" | "createdAt" | "updatedAt">) {
-  if (data.name.trim().length < 2) return { ok: false as const, error: "Indique o nome." };
-  if (!isValidNif(data.nif)) return { ok: false as const, error: "NIF inválido." };
+  if (data.name.trim().length < 1) return { ok: false as const, error: "Indique o nome." };
   let saved: Client | null = null;
   await update((snap) => {
-    if (snap.clients.some((client) => client.nif === data.nif && client.id !== id)) {
-      throw new Error("Já existe um cliente com este NIF.");
-    }
+    const conflict = clientConflict(snap.clients, data, id ?? "");
+    if (conflict) throw new Error(conflict);
     if (id) {
       const current = snap.clients.find((client) => client.id === id);
       if (!current) throw new Error("Cliente não encontrado.");

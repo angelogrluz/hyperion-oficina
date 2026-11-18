@@ -423,7 +423,7 @@ function Vehicles() {
             <tr key={vehicle.id} className="border-t border-[var(--line)]">
               <Td className="font-mono">{vehicle.plate}</Td>
               <Td>{vehicle.brand} {vehicle.model}</Td>
-              <Td>{snap.clients.find((client) => client.id === vehicle.clientId)?.name}</Td>
+              <Td>{snap.clients.find((client) => client.id === vehicle.clientId)?.name || "Sem cliente"}</Td>
             </tr>
           ))}
         </tbody>
@@ -625,7 +625,8 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   doc.sheetNumber = order.number;
   doc.relatedNumber = kind === "fatura" ? order.quoteNumber || "—" : "—";
   doc.number = number;
-  doc.statusLabel = order.invoiceSimulated ? "Simulação (sem validade fiscal)" : order.invoiceProvider?.includes("rascunho") ? "Rascunho de teste" : "Fatura certificada";
+  const origin = (order.invoiceProvider ?? "").toLowerCase();
+  doc.statusLabel = order.invoiceSimulated ? "Simulação (sem validade fiscal)" : origin.includes("rascunho") ? "Rascunho de teste" : origin === "keymaster" || origin === "importado" ? "Importado" : "Fatura certificada";
   doc.paymentMethod = kind === "fatura" ? order.paymentMethod ?? null : null;
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
