@@ -158,13 +158,32 @@ function parseWhen(value: string) {
   return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString();
 }
 
-function linkClient(clients: Client[], nifValue: string, name: string) {
+function ensureConsumidor(clients: Client[], plan?: Preview) {
+  const wanted = normalizePersonName(CONSUMIDOR_FINAL.name);
+  const found = clients.find((client) => normalizeNif(client.nif) === CONSUMIDOR_FINAL.nif && normalizePersonName(client.name) === wanted);
+  if (found) return found.id;
+  if (!plan) return null;
+  const now = stamp();
+  const created: Client = { id: crypto.randomUUID(), name: CONSUMIDOR_FINAL.name, nif: CONSUMIDOR_FINAL.nif, phone: "", email: "", address: "", postalCode: "", city: "", notes: "", createdAt: now, updatedAt: now };
+  clients.push(created);
+  plan.clients.push(created);
+  return created.id;
+}
+
+function linkClient(clients: Client[], nifValue: string, name: string, plan?: Preview) {
   const nif = normalizeNif(nifValue);
-  if (nif && nif !== CONSUMIDOR_FINAL.nif) {
+  const wanted = normalizePersonName(name);
+  if (nif === CONSUMIDOR_FINAL.nif) {
+    if (wanted) {
+      const named = clients.filter((client) => normalizeNif(client.nif) === nif && normalizePersonName(client.name) === wanted);
+      if (named.length > 0) return named[0].id;
+    }
+    return ensureConsumidor(clients, plan);
+  }
+  if (nif) {
     const found = clients.filter((client) => normalizeNif(client.nif) === nif);
     if (found.length === 1) return found[0].id;
   }
-  const wanted = normalizePersonName(name);
   if (!wanted) return null;
   const named = clients.filter((client) => normalizePersonName(client.name) === wanted);
   return named.length === 1 ? named[0].id : null;
@@ -205,7 +224,8 @@ function planClients(plan: Preview, snap: Snapshot, rows: Record<string, string>
 }
 
 function planSuppliers(plan: Preview, snap: Snapshot, rows: Record<string, string>[]) {
-  const nifs = new Set(snap.suppliers.map((item) => normalizeNif(item.nif)).filter(Boolean));
+  const nifs = new Set(snap.suppliers.map((item) => normalizeNif(item.nif)).filter((nif) => nif && nif !== CONSUMIDOR_FINAL.nif));
+  const names = new Set(snap.suppliers.filter((item) => !normalizeNif(item.nif)).map((item) => normalizePersonName(item.name)));
   rows.forEach((row, index) => {
     const line = index + 2;
     const name = cell(row, "Nome", "nome");
@@ -213,7 +233,9 @@ function planSuppliers(plan: Preview, snap: Snapshot, rows: Record<string, strin
     if (!name) { plan.errors.push(`Linha ${line}: falta o nome.`); return; }
     if (nif && nif !== CONSUMIDOR_FINAL.nif && !isValidNif(nif)) { plan.errors.push(`Linha ${line}: NIF inválido.`); return; }
     if (nif && nif !== CONSUMIDOR_FINAL.nif && nifs.has(nif)) { plan.duplicates += 1; return; }
+    if (!nif && names.has(normalizePersonName(name))) { plan.duplicates += 1; return; }
     if (nif && nif !== CONSUMIDOR_FINAL.nif) nifs.add(nif);
+    if (!nif) names.add(normalizePersonName(name));
     const now = stamp();
     plan.suppliers.push({ id: crypto.randomUUID(), name, nif, phone: cell(row, "Telefone", "telefone"), email: cell(row, "E-mail", "Email", "email"), address: cell(row, "Morada", "morada"), notes: cell(row, "Notas", "notas"), createdAt: now, updatedAt: now });
     plan.fresh += 1;
@@ -285,6 +307,7 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
     lineRows = (await readTable(linesFile)).rows;
   }
   const snap = await readSnapshot();
+  const clients = [...snap.clients];
   const plan = emptyPlan("historico");
   const known = new Set(snap.orders.map((order) => (order.invoiceNumber ?? "").trim().toLowerCase()).filter(Boolean));
   const numbers = new Set(snap.orders.map((order) => order.number));
@@ -300,7 +323,7 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
     known.add(key);
     const plate = normalizePlate(cell(row, "Matrícula", "Matricula"));
     const vehicle = plate ? snap.vehicles.find((item) => platesMatch(item.plate, plate)) : undefined;
-    const clientId = linkClient(snap.clients, cell(row, "NIF cliente"), cell(row, "Cliente", "cliente"));
+    const clientId = linkClient(clients, cell(row, "NIF cliente"), cell(row, "Cliente", "cliente"), plan);
     let number = cell(row, "Nº obra", "N° obra", "No obra", "Numero obra") || documento;
     if (numbers.has(number)) number = `${number}-${documento}`;
     numbers.add(number);
@@ -310,7 +333,7 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
     plan.orders.push({
       id, number, clientId, vehicleId: vehicle?.id ?? null, dateIn: when, dateOut: when, km,
       problem: cell(row, "Tipo", "tipo"), status: "faturada", approval: "aprovado", notes: cell(row, "Observações", "Observacoes"),
-      invoiceNumber: documento, invoiceProvider: "keymaster", invoiceIssuedAt: when, invoiceSimulated: false, quoteId: null,
+      invoiceNumber: documento, invoiceProvider: "importado", invoiceIssuedAt: when, invoiceSimulated: false, quoteId: null,
       createdAt: when, updatedAt: when,
     });
     if (vehicle && km > vehicle.km) plan.kmUpdates.push({ vehicleId: vehicle.id, km });
@@ -338,7 +361,8 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
     const quantity = money(cell(row, "Quantidade")) || 1;
     const unit = money(cell(row, "Preço unitário", "Preco unitario"));
     const discount = money(cell(row, "Desconto %", "Desconto"));
-    const vatRate = money(cell(row, "IVA %", "IVA")) || 23;
+    const vatText = Object.keys(row).some((key) => key.trim().toLowerCase() === "iva %") ? cell(row, "IVA %") : cell(row, "IVA");
+    const vatRate = vatText === "" ? 23 : money(vatText);
     plan.lines.push(historyLine(orderId, plan.lines.filter((item) => item.orderId === orderId).length, cell(row, "Referência", "Referencia"), cell(row, "Descrição", "Descricao") || "Linha", quantity, unit, discount, vatRate));
   });
   return plan;

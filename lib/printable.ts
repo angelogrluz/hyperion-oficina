@@ -137,7 +137,7 @@ export function orderToPrintable(order: {
     invoice: order.invoiceNumber
       ? {
           number: order.invoiceNumber,
-          provider: order.invoiceProvider?.toLowerCase() === "keymaster" ? "Importado" : (order.invoiceProvider ?? "Simulação"),
+          provider: order.invoiceProvider?.toLowerCase() === "keymaster" || order.invoiceProvider?.toLowerCase() === "importado" ? "Importado" : (order.invoiceProvider ?? "Simulação"),
           simulated: order.invoiceSimulated,
         }
       : null,

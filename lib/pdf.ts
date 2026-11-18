@@ -110,12 +110,16 @@ function render(doc: PDFKit.PDFDocument, printable: PrintableDocument, workshop:
       left + 12,
       y + 8,
     );
-    doc.font("body").fontSize(8).text(
-      `${printable.invoice.provider}. Este documento não tem validade fiscal e não foi comunicado à Autoridade Tributária.`,
-      left + 12,
-      y + 22,
-      { width: width - 24 },
-    );
+    const origin = (printable.invoice.provider || "").toLowerCase();
+    const imported = origin === "importado" || origin === "keymaster";
+    const note = imported
+      ? "Importado"
+      : printable.invoice.simulated
+        ? "Este documento não tem validade fiscal e não foi comunicado à Autoridade Tributária."
+        : "";
+    if (note) {
+      doc.font("body").fontSize(8).text(note, left + 12, y + 22, { width: width - 24 });
+    }
     y += 54;
   }
 

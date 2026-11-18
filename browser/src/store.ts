@@ -476,7 +476,14 @@ export function normalizePhone(value: string) {
 
 export function clientConflict(clients: Client[], data: { name: string; nif: string; phone: string }, ignoreId = "") {
   const nif = normalizeNif(data.nif);
-  if (nif && nif !== CONSUMIDOR_FINAL.nif) {
+  if (nif === CONSUMIDOR_FINAL.nif) {
+    const name = normalizePersonName(data.name);
+    if (clients.some((client) => client.id !== ignoreId && normalizeNif(client.nif) === nif && normalizePersonName(client.name) === name)) {
+      return "Já existe um cliente com este nome.";
+    }
+    return "";
+  }
+  if (nif) {
     if (!isValidNif(nif)) return "NIF inválido.";
     if (clients.some((client) => client.id !== ignoreId && normalizeNif(client.nif) === nif)) return "Já existe um cliente com este NIF.";
   }

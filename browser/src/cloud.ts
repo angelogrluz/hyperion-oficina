@@ -432,7 +432,7 @@ type Row = Record<string, unknown>;
 function rawProvider(value: unknown) {
   const text = String(value ?? "");
   if (!text || text === "null") return null;
-  if (text.toLowerCase() === "keymaster") return "keymaster";
+  if (text.toLowerCase() === "keymaster" || text.toLowerCase() === "importado") return "importado";
   return billingLabel(text) || null;
 }
 

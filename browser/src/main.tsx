@@ -301,7 +301,7 @@ function OrderScreen() {
       vehicles={catalog.vehicles}
       articles={catalog.articles}
       suppliers={catalog.suppliers}
-      invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: order.invoiceProvider ?? "Simulação" } : null}
+      invoice={order.invoiceNumber ? { number: order.invoiceNumber, provider: (order.invoiceProvider ?? "").toLowerCase() === "importado" || (order.invoiceProvider ?? "").toLowerCase() === "keymaster" ? "Importado" : (order.invoiceProvider ?? "Simulação") } : null}
       paid={Boolean(order.paidAt)}
       quoteNumber={order.quoteNumber ?? null}
       quoteUrl={order.quoteUrl ?? null}
