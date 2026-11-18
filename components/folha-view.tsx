@@ -40,6 +40,8 @@ const TABS = ["Folha de obra", "Consumíveis", "Checklist de Verificação", "No
 export function FolhaView({
   documentId,
   number,
+  statusLabel,
+  imported,
   userName,
   printHref,
   locked,
@@ -117,6 +119,8 @@ export function FolhaView({
 }: {
   documentId?: string;
   number?: string;
+  statusLabel?: string;
+  imported?: boolean;
   userName: string;
   printHref?: string;
   locked: boolean;
@@ -402,6 +406,8 @@ export function FolhaView({
             <p className="text-[13px] tracking-wide text-[var(--steel)] uppercase">Folha de Obra</p>
             <div className="flex items-center gap-1.5">
               <p className="truncate text-[17px] font-semibold">{number ?? "Nova"}</p>
+              {statusLabel ? <span className="rounded bg-[#1f4b3a] px-1.5 py-0.5 text-[12px] font-semibold text-white">{statusLabel}</span> : null}
+              {imported ? <span className="rounded border border-[var(--glow)] px-1.5 py-0.5 text-[12px] font-semibold text-[var(--glow)]">Importado</span> : null}
               {approval ? <ApprovalBadge approval={approval} at={approvalAt} /> : null}
             </div>
           </div>
@@ -425,7 +431,7 @@ export function FolhaView({
       </div>,
     );
     return () => setHeader(null);
-  }, [setHeader, number, dateIn, promiseQuote, promiseDelivery, userName, locked, approval, approvalAt]);
+  }, [setHeader, number, statusLabel, imported, dateIn, promiseQuote, promiseDelivery, userName, locked, approval, approvalAt]);
 
   const computed = lines.map((line) => {
     const quantity = parseDecimal(line.quantity) ?? 0;
@@ -846,7 +852,7 @@ export function FolhaView({
             </select>
           </label>
           <input type="range" disabled value={40} title="Indisponível nesta versão" className="h-1 w-40 cursor-not-allowed accent-[var(--glow)]" />
-          <span className="text-[var(--charcoal)]">Aprovado</span>
+          <span className="text-[var(--charcoal)]">{statusLabel || "Aprovado"}</span>
           <span className="ml-auto truncate text-[var(--steel)]">Versão de teste no browser. Faturação simulada, sem validade fiscal.</span>
         </div>
       </div>

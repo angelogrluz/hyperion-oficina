@@ -9,7 +9,7 @@
     "start": "next start -p 43123 -H 0.0.0.0",
     "prestart": "node scripts/ensure-env.mjs && prisma migrate deploy && tsx prisma/seed.ts",
     "lint": "eslint",
-    "test": "node --import tsx --test lib/domain.test.ts lib/plates/mock.test.ts",
+    "test": "node --import tsx --test lib/domain.test.ts lib/history-sheet.test.ts lib/plates/mock.test.ts",
     "build:pages": "vite build --config browser/vite.config.ts && node scripts/pack-pages.mjs",
     "setup": "node scripts/ensure-env.mjs && prisma generate && prisma migrate deploy && tsx prisma/seed.ts",
     "db:reset": "node scripts/ensure-env.mjs && rm -f data/hyperion.db data/hyperion.db-journal && prisma migrate deploy && tsx prisma/seed.ts",

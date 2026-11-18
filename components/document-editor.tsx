@@ -35,7 +35,7 @@ import { readEcolubRate, subscribeEcolubRate } from "@/lib/ecolub-settings";
 import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
-import { FUELS, QUOTE_STATUSES } from "@/lib/labels";
+import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/labels";
 
 export type EditorArticle = {
   id: string;
@@ -179,7 +179,8 @@ export function DocumentEditor({
   };
 }) {
   const router = useRouter();
-  const draft = useRef(readSheetDraft(documentId ?? "nova")).current;
+  const keepSaved = locked || (invoice?.provider ?? "").toLowerCase() === "importado";
+  const draft = useRef(keepSaved ? null : readSheetDraft(documentId ?? "nova")).current;
   const [clientList, setClientList] = useState(clients);
   const [articleList, setArticleList] = useState(initialArticles);
   const [supplierList, setSupplierList] = useState(suppliers);
@@ -552,9 +553,13 @@ export function DocumentEditor({
   }
 
   useEffect(() => {
-    if (mode !== "order") return;
+    if (locked && documentId) clearSheetDraft(documentId);
+  }, [locked, documentId]);
+
+  useEffect(() => {
+    if (mode !== "order" || locked) return;
     writeSheetDraft(draftWriter.current(documentId ?? "nova"));
-  }, [revision, documentId, mode]);
+  }, [revision, documentId, mode, locked]);
 
   useEffect(() => {
     if (mode !== "order" || !documentId || locked) return;
@@ -716,6 +721,8 @@ export function DocumentEditor({
         <FolhaView
           documentId={documentId}
           number={number}
+          statusLabel={orderStatusLabel(status)}
+          imported={(invoice?.provider ?? "").toLowerCase() === "importado"}
           userName={userName}
           printHref={printHref}
           locked={locked}
@@ -1024,7 +1031,7 @@ export function DocumentEditor({
     );
   }
 
-  const statuses = QUOTE_STATUSES.filter((item) => item.value !== "convertido" || status === "convertido");
+  const statuses = mode === "order" ? ORDER_STATUSES : QUOTE_STATUSES.filter((item) => item.value !== "convertido" || status === "convertido");
 
   const gridLines = lines.map((line) => ({
     key: line.key,

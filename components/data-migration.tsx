@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { isValidNif, isValidPlate, lineAmounts, normalizeNif, normalizePlate, platesMatch } from "@/lib/domain";
+import { cell, historyLineInputs, money, rowsOf, wholeKm } from "@/lib/history-sheet";
 import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
 import {
   clientConflict,
@@ -32,6 +33,7 @@ const ROWS: Array<{ id: Kind; label: string; href: string }> = [
 
 type Preview = {
   kind: Kind;
+  replace: boolean;
   errors: string[];
   duplicates: number;
   fresh: number;
@@ -44,7 +46,7 @@ type Preview = {
   kmUpdates: Array<{ vehicleId: string; km: number }>;
 };
 
-const emptyPlan = (kind: Kind): Preview => ({ kind, errors: [], duplicates: 0, fresh: 0, clients: [], vehicles: [], suppliers: [], articles: [], orders: [], lines: [], kmUpdates: [] });
+const emptyPlan = (kind: Kind, replace = false): Preview => ({ kind, replace, errors: [], duplicates: 0, fresh: 0, clients: [], vehicles: [], suppliers: [], articles: [], orders: [], lines: [], kmUpdates: [] });
 
 export function DataMigration() {
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -75,7 +77,9 @@ export function DataMigration() {
                       <label className="text-[14px]">Linhas
                         <input type="file" accept=".xlsx,.xls,.csv,text/csv" className="mt-1 block text-[14px]" onChange={(event) => setLinesFile(event.target.files?.[0] ?? null)} />
                       </label>
-                      <button type="button" className="h-10 rounded-lg bg-[var(--ink)] px-3 font-semibold text-white" onClick={() => { if (docsFile) void prepareHistory(docsFile, linesFile).then(setPreview); }}>Importar</button>
+                      <button type="button" className="h-10 rounded-lg bg-[var(--ink)] px-3 font-semibold text-white" onClick={() => { if (docsFile) void prepareHistory(docsFile, linesFile, false).then(setPreview); }}>Importar</button>
+                      <button type="button" className="h-10 rounded-lg border px-3" onClick={() => { if (docsFile) void prepareHistory(docsFile, linesFile, true).then(setPreview); }}>Reimportar linhas do histórico</button>
+                      <p className="basis-full text-[13px] text-[var(--muted-text)]">Reimportar lê o mesmo ficheiro e substitui as linhas das obras já importadas, pelo número do documento. Acerta o estado, os km e os totais. Não mexe no stock.</p>
                     </>
                   ) : (
                     <label className="inline-flex h-10 cursor-pointer items-center rounded-lg bg-[var(--ink)] px-3 font-semibold text-white">Importar
@@ -95,7 +99,7 @@ export function DataMigration() {
       {preview ? (
         <div className="rounded-xl border border-[var(--line)] p-3">
           <p className="font-semibold">Pré-visualização</p>
-          <p className="text-[15px]">{preview.fresh} novos · {preview.duplicates} duplicados ignorados · {preview.errors.length} com erro</p>
+          <p className="text-[15px]">{preview.replace ? `${preview.fresh} obras a atualizar · ${preview.duplicates} sem correspondência` : `${preview.fresh} novos · ${preview.duplicates} duplicados ignorados`} · {preview.errors.length} com erro</p>
           {preview.errors.slice(0, 8).map((error) => <p key={error} className="text-[14px] text-[#9c4036]">{error}</p>)}
           <div className="mt-2 flex gap-2">
             <button type="button" className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white" disabled={Boolean(progress)} onClick={() => {
@@ -121,31 +125,8 @@ export function DataMigration() {
 
 async function readTable(file: File) {
   const XLSX = await import("xlsx");
-  const book = XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const book = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
   return { XLSX, book, rows: rowsOf(XLSX, book, 0) };
-}
-
-function rowsOf(XLSX: typeof import("xlsx"), book: import("xlsx").WorkBook, index: number) {
-  const name = book.SheetNames[index];
-  if (!name) return [] as Record<string, string>[];
-  return XLSX.utils.sheet_to_json<Record<string, string>>(book.Sheets[name], { defval: "", raw: false });
-}
-
-function cell(row: Record<string, string>, ...names: string[]) {
-  const entries = Object.entries(row);
-  for (const name of names) {
-    const found = entries.find(([key]) => key.trim().toLowerCase() === name.toLowerCase());
-    if (found) return String(found[1] ?? "").trim();
-  }
-  return "";
-}
-
-function money(value: string) {
-  const text = value.trim().replace(/\s/g, "");
-  if (!text) return 0;
-  if (text.includes(",") && text.includes(".")) return Number(text.replace(/\./g, "").replace(",", ".")) || 0;
-  if (text.includes(",")) return Number(text.replace(",", ".")) || 0;
-  return Number(text) || 0;
 }
 
 function parseWhen(value: string) {
@@ -293,7 +274,7 @@ function planArticles(plan: Preview, snap: Snapshot, rows: Record<string, string
   });
 }
 
-async function prepareHistory(docsFile: File, linesFile: File | null): Promise<Preview> {
+async function prepareHistory(docsFile: File, linesFile: File | null, replace: boolean): Promise<Preview> {
   const loaded = await readTable(docsFile);
   let documents = loaded.rows;
   let lineRows: Record<string, string>[] = [];
@@ -308,7 +289,7 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
   }
   const snap = await readSnapshot();
   const clients = [...snap.clients];
-  const plan = emptyPlan("historico");
+  const plan = emptyPlan("historico", replace);
   const known = new Set(snap.orders.map((order) => (order.invoiceNumber ?? "").trim().toLowerCase()).filter(Boolean));
   const numbers = new Set(snap.orders.map((order) => order.number));
   const accepted = new Map<string, string>();
@@ -319,18 +300,24 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
     if (!documento) { plan.errors.push(`Documento linha ${line}: falta o número.`); return; }
     if (!when) { plan.errors.push(`Documento ${documento}: data inválida.`); return; }
     const key = documento.toLowerCase();
-    if (known.has(key)) { plan.duplicates += 1; return; }
-    known.add(key);
+    const existing = snap.orders.find((order) => (order.invoiceNumber ?? "").trim().toLowerCase() === key && ["importado", "keymaster"].includes((order.invoiceProvider ?? "").toLowerCase()));
+    if (replace) {
+      if (!existing) { plan.duplicates += 1; return; }
+    } else if (known.has(key)) { plan.duplicates += 1; return; }
+    if (!replace) known.add(key);
     const plate = normalizePlate(cell(row, "Matrícula", "Matricula"));
     const vehicle = plate ? snap.vehicles.find((item) => platesMatch(item.plate, plate)) : undefined;
-    const clientId = linkClient(clients, cell(row, "NIF cliente"), cell(row, "Cliente", "cliente"), plan);
+    const clientId = linkClient(clients, cell(row, "NIF cliente"), cell(row, "Cliente", "cliente"), replace ? undefined : plan);
     let number = cell(row, "Nº obra", "N° obra", "No obra", "Numero obra") || documento;
-    if (numbers.has(number)) number = `${number}-${documento}`;
-    numbers.add(number);
-    const km = Number(cell(row, "Km", "km")) || 0;
-    const id = crypto.randomUUID();
+    if (!replace && numbers.has(number)) number = `${number}-${documento}`;
+    if (!replace) numbers.add(number);
+    const kmRaw = cell(row, "Km", "km");
+    const km = kmRaw.trim() === "" ? (existing?.km ?? 0) : wholeKm(kmRaw);
+    const id = existing && replace ? existing.id : crypto.randomUUID();
     accepted.set(key, id);
-    plan.orders.push({
+    if (replace) {
+      plan.orders.push({ id, km } as Order);
+    } else plan.orders.push({
       id, number, clientId, vehicleId: vehicle?.id ?? null, dateIn: when, dateOut: when, km,
       problem: cell(row, "Tipo", "tipo"), status: "faturada", approval: "aprovado", notes: cell(row, "Observações", "Observacoes"),
       invoiceNumber: documento, invoiceProvider: "importado", invoiceIssuedAt: when, invoiceSimulated: false, quoteId: null,
@@ -347,23 +334,18 @@ async function prepareHistory(docsFile: File, linesFile: File | null): Promise<P
     }
   });
   const withLines = new Set<string>();
-  lineRows.forEach((row, index) => {
-    const documento = cell(row, "Documento", "documento").toLowerCase();
+  historyLineInputs(lineRows).forEach((line, index) => {
+    const documento = line.document.toLowerCase();
     const orderId = accepted.get(documento);
     if (!orderId) {
-      if (documento && !known.has(documento)) plan.errors.push(`Linha ${index + 2}: documento ${cell(row, "Documento")} não está na folha de documentos.`);
+      if (documento && !known.has(documento)) plan.errors.push(`Linha ${index + 2}: documento ${line.document} não está na folha de documentos.`);
       return;
     }
     if (!withLines.has(orderId)) {
       plan.lines = plan.lines.filter((item) => item.orderId !== orderId);
       withLines.add(orderId);
     }
-    const quantity = money(cell(row, "Quantidade")) || 1;
-    const unit = money(cell(row, "Preço unitário", "Preco unitario"));
-    const discount = money(cell(row, "Desconto %", "Desconto"));
-    const vatText = Object.keys(row).some((key) => key.trim().toLowerCase() === "iva %") ? cell(row, "IVA %") : cell(row, "IVA");
-    const vatRate = vatText === "" ? 23 : money(vatText);
-    plan.lines.push(historyLine(orderId, plan.lines.filter((item) => item.orderId === orderId).length, cell(row, "Referência", "Referencia"), cell(row, "Descrição", "Descricao") || "Linha", quantity, unit, discount, vatRate));
+    plan.lines.push(historyLine(orderId, plan.lines.filter((item) => item.orderId === orderId).length, line.ref, line.description, line.quantity, line.unitPrice, line.discountPercent, line.vatRate));
   });
   return plan;
 }
@@ -380,7 +362,18 @@ async function commit(preview: Preview, onProgress: (text: string) => void) {
   snap.vehicles.push(...preview.vehicles);
   snap.suppliers.push(...preview.suppliers);
   snap.articles.push(...preview.articles);
-  snap.orders.push(...preview.orders);
+  if (preview.replace) {
+    for (const patch of preview.orders) {
+      const order = snap.orders.find((item) => item.id === patch.id);
+      const provider = (order?.invoiceProvider ?? "").toLowerCase();
+      if (!order || (provider !== "importado" && provider !== "keymaster")) continue;
+      order.status = "faturada";
+      order.km = patch.km;
+      order.invoiceProvider = "importado";
+      order.updatedAt = new Date().toISOString();
+      snap.lines = snap.lines.filter((line) => line.orderId !== order.id);
+    }
+  } else snap.orders.push(...preview.orders);
   snap.lines.push(...preview.lines);
   for (const update of preview.kmUpdates) {
     const vehicle = snap.vehicles.find((item) => item.id === update.vehicleId);
@@ -392,7 +385,7 @@ async function commit(preview: Preview, onProgress: (text: string) => void) {
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? `${error.message} Nada foi gravado.` : "A sincronização falhou. Nada foi gravado." };
   }
-  return { ok: true as const, message: `Gravados ${preview.fresh}.` };
+  return { ok: true as const, message: preview.replace ? `Linhas reimportadas em ${preview.fresh} obras.` : `Gravados ${preview.fresh}.` };
 }
 
 async function exportKind(kind: Kind) {

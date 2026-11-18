@@ -361,7 +361,7 @@ function Clients() {
   if (!snap) return null;
   return (
     <div>
-      <PageHeader title="Listagem de Clientes" description="Selecione um cliente na tabela." action={<a className="inline-flex h-10 items-center rounded-lg bg-[var(--glow)] px-4 text-sm text-white" href={`${import.meta.env.BASE_URL}clientes/novo`}>Novo cliente</a>} />
+      <PageHeader title="Listagem de Clientes" description={`${snap.clients.length} ${snap.clients.length === 1 ? "cliente" : "clientes"}. Selecione um cliente na tabela.`} action={<a className="inline-flex h-10 items-center rounded-lg bg-[var(--glow)] px-4 text-sm text-white" href={`${import.meta.env.BASE_URL}clientes/novo`}>Novo cliente</a>} />
       <TableShell>
         <thead><tr><Th>Nome</Th><Th>NIF</Th><Th>Telefone</Th><Th>E-mail</Th></tr></thead>
         <tbody>
@@ -415,7 +415,7 @@ function Vehicles() {
   if (!snap) return null;
   return (
     <div>
-      <PageHeader title="Listagem de Viaturas" action={<a className="text-sm font-medium text-[var(--glow)]" href={`${import.meta.env.BASE_URL}viaturas/nova`}>Nova viatura</a>} />
+      <PageHeader title="Listagem de Viaturas" description={`${snap.vehicles.length} ${snap.vehicles.length === 1 ? "viatura" : "viaturas"}.`} action={<a className="text-sm font-medium text-[var(--glow)]" href={`${import.meta.env.BASE_URL}viaturas/nova`}>Nova viatura</a>} />
       <TableShell>
         <thead><tr><Th>Viatura</Th><Th>Modelo</Th><Th>Cliente</Th></tr></thead>
         <tbody>
