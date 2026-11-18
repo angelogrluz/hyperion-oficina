@@ -16,6 +16,7 @@ export type MoloniStatus = {
   payments?: Record<string, string>;
   issueAs?: "fatura" | "fatura_recibo";
   testMode?: boolean;
+  hasSecret?: boolean;
   companies?: Array<{ id: string; name: string }>;
   series?: Array<{ id: string; name: string }>;
   taxes?: Array<{ id: string; name: string; value: number }>;

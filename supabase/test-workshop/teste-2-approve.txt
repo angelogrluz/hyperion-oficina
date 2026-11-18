@@ -1,0 +1,39 @@
+-- teste-2: aprova a «Oficina Teste» (slug teste) depois do registo. Idempotente. Não toca na Hyperion.
+do $$
+declare cid uuid; owner_id uuid;
+begin
+  select id into cid from public.companies where slug = 'teste';
+  if cid is null then raise exception 'A oficina «teste» ainda não existe (faz o registo primeiro)'; end if;
+  if (select name from public.companies where id = cid) ilike '%hyperion%' then raise exception 'Isto não é a oficina de testes'; end if;
+
+  update public.companies
+  set name = 'Oficina Teste',
+      status = 'active',
+      approved_at = coalesce(approved_at, now()),
+      notes = 'Oficina de testes do Angelo (dados copiados, sem valor real)'
+  where id = cid;
+
+  -- Se o e-mail de confirmação não chegar, confirma a conta do dono aqui.
+  select m.user_id into owner_id from public.memberships m where m.company_id = cid and m.role = 'owner' order by m.created_at limit 1;
+  update auth.users set email_confirmed_at = coalesce(email_confirmed_at, now()) where id = owner_id;
+
+  -- Utilizador «admin» = dono (igual às outras oficinas).
+  insert into public.staff_accounts (company_id, username, user_id, kind, active)
+  values (cid, 'admin', owner_id, 'owner', true)
+  on conflict (company_id, username) do nothing;
+
+  -- Nome comercial visível no login e nos documentos.
+  insert into public.company_settings (company_id, company)
+  values (cid, jsonb_build_object('tradeName', 'Oficina Teste', 'legalName', 'Oficina Teste (testes)'))
+  on conflict (company_id) do update
+  set company = public.company_settings.company || jsonb_build_object('tradeName', 'Oficina Teste')
+  where coalesce(public.company_settings.company->>'tradeName', '') = '';
+
+  -- Obras de teste começam em OR-<ano>-9001, para nunca coincidirem com as da Hyperion
+  -- (a referência da obra é usada para encontrar documentos já emitidos na conta de faturação de demonstração).
+  insert into public.document_counters (company_id, series, year, last_value)
+  values (cid, 'OR', extract(year from (now() at time zone 'Europe/Lisbon'))::int, 9000)
+  on conflict (company_id, series, year) do update set last_value = greatest(public.document_counters.last_value, 9000);
+end $$;
+
+select id, name, slug, status, approved_at from public.companies where slug = 'teste';

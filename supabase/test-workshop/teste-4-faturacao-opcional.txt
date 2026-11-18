@@ -1,0 +1,22 @@
+-- teste-4 (OPCIONAL, alternativa a escrever tudo em Integrações):
+-- copia, dentro da base, a configuração da conta de faturação da Hyperion (Developer ID, segredo, e-mail,
+-- empresa «Empresa Demonstração», séries, IVA, pagamentos) para a «Oficina Teste», SEM tokens.
+-- Os tokens não são copiados de propósito: se as duas oficinas partilhassem o mesmo refresh token,
+-- a renovação numa podia invalidar a outra e desligar a Hyperion.
+-- Depois disto, em Integrações da Oficina Teste só falta escrever a palavra-passe (o segredo fica guardado no servidor).
+-- Requer a função de faturação desta versão (aceita o segredo em branco quando já está guardado).
+-- Idempotente. Só copia se a Hyperion estiver ligada à «Empresa Demonstração».
+insert into public.moloni_connections (company_id, developer_id, client_secret, username, moloni_company_id, moloni_company_name,
+  series_fatura, series_fatura_recibo, series_orcamento, tax_id, payment_map, issue_as, test_mode, product_id, updated_at)
+select t.id, h.developer_id, h.client_secret, h.username, h.moloni_company_id, h.moloni_company_name,
+  h.series_fatura, h.series_fatura_recibo, h.series_orcamento, h.tax_id, h.payment_map, h.issue_as, h.test_mode, h.product_id, now()
+from public.moloni_connections h
+join public.companies hc on hc.id = h.company_id and hc.name ilike '%hyperion%'
+cross join public.companies t
+where t.slug = 'teste'
+  and h.moloni_company_name ilike '%demonstra%'
+on conflict (company_id) do nothing;
+
+select c.slug, m.moloni_company_name, m.username, (m.refresh_token is not null) as ligado
+from public.moloni_connections m join public.companies c on c.id = m.company_id
+where c.slug in ('teste') ;

@@ -1,0 +1,4 @@
+-- teste-1 (só leitura): o endereço «teste» está livre? E o e-mail ainda não tem conta?
+select id, name, slug, status from public.companies where slug in ('teste') or name ilike '%teste%';
+select id, email, email_confirmed_at, created_at from auth.users where lower(email) = 'hyperioncarlab+teste@gmail.com';
+-- Esperado: 0 linhas nas duas antes do registo.

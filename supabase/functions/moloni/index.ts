@@ -168,13 +168,16 @@ function statusFrom(row: Record<string, unknown> | null) {
     payments: row.payment_map ?? {},
     issueAs: row.issue_as,
     testMode: row.test_mode !== false,
+    hasSecret: Boolean(row.client_secret),
   };
 }
 
 async function connect(admin: Admin, companyId: string, body: Record<string, unknown>) {
-  const developerId = String(body.developer_id ?? "").trim();
-  const clientSecret = String(body.client_secret ?? "").trim();
-  const username = String(body.username ?? "").trim();
+  // The secret never goes back to the browser; when it is already stored for this workshop it may be left blank.
+  const stored = await rowOf(admin, companyId);
+  const developerId = String(body.developer_id ?? "").trim() || String(stored?.developer_id ?? "");
+  const clientSecret = String(body.client_secret ?? "").trim() || String(stored?.client_secret ?? "");
+  const username = String(body.username ?? "").trim() || String(stored?.username ?? "");
   const password = String(body.password ?? "");
   if (!developerId || !clientSecret || !username || !password) return { error: "Preenche o Developer ID, o segredo, o e-mail e a palavra-passe." };
   const token = await passwordGrant(developerId, clientSecret, username, password);

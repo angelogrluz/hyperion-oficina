@@ -97,7 +97,7 @@ export function IntegrationsPanel() {
               <Input value={developerId} onChange={(event) => setDeveloperId(event.target.value)} required className="h-11" autoComplete="off" />
             </label>
             <label className="grid gap-1 text-[15px] font-medium">Client Secret
-              <Input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required className="h-11" autoComplete="new-password" />
+              <Input type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} required={!status.hasSecret} placeholder={status.hasSecret ? "Guardado no servidor" : undefined} className="h-11" autoComplete="new-password" />
             </label>
             <label className="grid gap-1 text-[15px] font-medium">E-mail
               <Input type="email" value={username} onChange={(event) => setUsername(event.target.value)} required className="h-11" autoComplete="off" />
