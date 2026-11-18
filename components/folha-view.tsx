@@ -959,7 +959,7 @@ export function FolhaView({
           {billingNote ? <span data-testid="estado-faturacao" className="ml-auto truncate text-[var(--steel)]">{billingNote}</span> : null}
         </div>
       </div>
-      <aside className="sticky top-2 flex max-h-[calc(100dvh-8.5rem)] flex-col gap-2">
+      <aside className="sticky top-2 flex max-h-[calc(100dvh-12rem)] flex-col gap-2 pb-1">
         <div className="shrink-0 rounded border border-[var(--glow)] bg-white p-2 text-[16px] text-[var(--charcoal)]">
           <label className="grid gap-1">
             Técnico
@@ -970,7 +970,7 @@ export function FolhaView({
           </label>
           <p data-testid="tempo-trabalhado" className="mt-2 text-[22px] font-semibold">Tempo trabalhado: {formatClock(workedMs(documentId || "", clockNow))}</p>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto rounded border border-[#eaeaf2] bg-white p-2 text-[16px] text-[var(--charcoal)]">
+        <div className="min-h-[7rem] flex-1 overflow-y-auto rounded border border-[#eaeaf2] bg-white p-2 text-[16px] text-[var(--charcoal)]">
         <label className="block text-center">
           <span className="text-[14px] tracking-wide text-[var(--steel)] uppercase">Matrícula</span>
           <input
@@ -1025,7 +1025,7 @@ export function FolhaView({
           <p className="mt-0.5">{dateIn || "—"} · {formatEUR(pvp)}</p>
         </div>
         </div>
-        <div className="no-print grid w-full shrink-0 gap-1.5 rounded border border-[#eaeaf2] bg-white p-2">
+        <div data-testid="acoes-obra" className="no-print grid max-h-[60%] min-h-0 w-full shrink-0 gap-1.5 overflow-y-auto rounded border border-[#eaeaf2] bg-white p-2">
           {isNew ? (
             <>
               <Button type="button" data-testid="gravar-obra" className="h-10 bg-[var(--glow)] text-[17px] hover:bg-[var(--glow-deep)]" disabled={locked || pending} onClick={() => withDraft((props) => props.onSave())}>
@@ -1046,7 +1046,7 @@ export function FolhaView({
               Abrir orçamento
             </Link>
           ) : null}
-          <div className="grid gap-1">
+          <div className="grid grid-cols-3 gap-1">
             {([
               ["aguarda", "Aguarda aprovação", "border-[#f5a524] bg-[#f5a524] text-[var(--ink)]", "border-[#f5a524] bg-white text-[#8a5a00]"],
               ["aprovado", "Aprovado", "border-[#1f9d55] bg-[#1f9d55] text-white", "border-[#1f9d55] bg-white text-[#1f9d55]"],
@@ -1059,7 +1059,7 @@ export function FolhaView({
                 aria-pressed={approval === value}
                 disabled={locked || pending || !onApproval || !allowApprove}
                 onClick={() => onApproval?.(value)}
-                className={`h-10 rounded-lg border text-[16px] font-semibold disabled:opacity-50 ${approval === value ? filled : outlined}`}
+                className={`min-h-10 rounded-lg border px-1 text-[14px] leading-tight font-semibold disabled:opacity-50 ${approval === value ? filled : outlined}`}
               >
                 {label}
               </button>

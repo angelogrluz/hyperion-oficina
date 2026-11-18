@@ -48,7 +48,11 @@ Deno.serve(async (req) => {
       return json({ connected: false, status: "desligado" });
     }
     if (action === "issue") return json(await issue(admin, companyId, body));
-    if (action === "pdf") return json(await lookupPdf(admin, companyId, body));
+    if (action === "pdf") {
+      const found = await lookupPdf(admin, companyId, body);
+      // as=pdf: return the official PDF itself (bytes), never the program's public download page.
+      return json(body.as === "pdf" ? await deliverPdf(admin, companyId, found as Record<string, unknown>, String(body.number ?? "")) : found);
+    }
     return json({ error: "Ação desconhecida." });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -250,16 +254,26 @@ const CATALOG_LABELS: Record<string, string> = {
 async function save(admin: Admin, companyId: string, body: Record<string, unknown>) {
   const row = await rowOf(admin, companyId);
   if (!row) return { error: "Liga a conta antes de escolher a empresa." };
-  const payments = body.payments && typeof body.payments === "object" ? body.payments : {};
+  const nextCompany = String(body.moloni_company_id ?? row.moloni_company_id ?? "");
+  const sameCompany = nextCompany === String(row.moloni_company_id ?? "");
+  // Fields not sent keep their value while the company stays the same (series, IVA and payments belong to it).
+  const keep = (key: string, column: string) => body[key] !== undefined ? String(body[key] ?? "") : sameCompany ? String(row[column] ?? "") : "";
+  const payments = body.payments && typeof body.payments === "object" ? body.payments : sameCompany ? (row.payment_map ?? {}) : {};
+  // Never blank the company name: it is what marks a demo/test company (its numbers get a «Teste» prefix).
+  let companyName = String(body.moloni_company_name ?? "").trim() || (sameCompany ? String(row.moloni_company_name ?? "") : "");
+  if (!companyName && nextCompany) {
+    const ready = await requireToken(admin, companyId);
+    companyName = "error" in ready ? "" : await companyNameOf(ready.token, nextCompany);
+  }
   await admin.from("moloni_connections").update({
-    moloni_company_id: String(body.moloni_company_id ?? row.moloni_company_id ?? ""),
-    moloni_company_name: String(body.moloni_company_name ?? row.moloni_company_name ?? ""),
-    series_fatura: String(body.series_fatura ?? ""),
-    series_fatura_recibo: String(body.series_fatura_recibo ?? ""),
-    series_orcamento: String(body.series_orcamento ?? ""),
-    tax_id: String(body.tax_id ?? ""),
+    moloni_company_id: nextCompany,
+    moloni_company_name: companyName,
+    series_fatura: keep("series_fatura", "series_fatura"),
+    series_fatura_recibo: keep("series_fatura_recibo", "series_fatura_recibo"),
+    series_orcamento: keep("series_orcamento", "series_orcamento"),
+    tax_id: keep("tax_id", "tax_id"),
     payment_map: payments,
-    issue_as: body.issue_as === "fatura_recibo" ? "fatura_recibo" : "fatura",
+    issue_as: body.issue_as === undefined && sameCompany ? (row.issue_as === "fatura_recibo" ? "fatura_recibo" : "fatura") : body.issue_as === "fatura_recibo" ? "fatura_recibo" : "fatura",
     test_mode: body.test_mode !== false,
     product_id: null,
     updated_at: new Date().toISOString(),
@@ -272,6 +286,14 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   if ("error" in ready) return ready;
   const row = ready.data;
   if (!row.moloni_company_id || !row.tax_id) return { error: "Escolhe a empresa, o IVA e as séries em Integrações." };
+  if (!String(row.moloni_company_name ?? "").trim()) {
+    // Name missing (older save): read it from the program so a demo company is still recognised.
+    const name = await companyNameOf(ready.token, String(row.moloni_company_id));
+    if (name) {
+      row.moloni_company_name = name;
+      await admin.from("moloni_connections").update({ moloni_company_name: name }).eq("company_id", companyId);
+    }
+  }
   const kind = String(body.kind ?? "fatura");
   const documentSet = kind === "orcamento" ? row.series_orcamento : row.issue_as === "fatura_recibo" ? row.series_fatura_recibo : row.series_fatura;
   if (!documentSet) return { error: "Falta a série deste documento em Integrações." };
@@ -291,7 +313,8 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   if (!taxes.length) return { error: "A empresa do programa de faturação não tem taxas de IVA." };
   const fallbackMethod = chosenMethod || Object.values(map).find(Boolean) || "";
   const customerId = await ensureCustomer(ready.token, String(row.moloni_company_id), { ...customer, nif }, fallbackMethod);
-  const productId = await ensureProduct(admin, companyId, ready.token, row, taxes);
+  // One catalogue article per line reference (MO, COMP.A.C, …) so the PDF shows the line's own reference.
+  const products = new LineProducts(ready.token, String(row.moloni_company_id), taxes, row);
   const today = new Date().toISOString().slice(0, 10);
   const params = new URLSearchParams();
   params.set("company_id", String(row.moloni_company_id));
@@ -303,16 +326,23 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   const testMode = row.test_mode !== false;
   const demoAccount = isDemoCompany(row);
   params.set("status", testMode ? "0" : "1");
+  const lineProductIds: string[] = [];
+  for (const line of lines) lineProductIds.push(await products.idFor(String(line.ref ?? ""), String(line.kind ?? ""), String(line.description ?? "")));
+  const sentPrices: number[] = [];
   lines.forEach((line, index) => {
     const rate = Number(line.vatRate ?? 23);
     // 0 % lines must not fall back to the default (23 %) tax; they go out with an exemption reason only.
     const tax = taxes.find((item) => Number(item.value) === rate) ?? (rate === 0 ? undefined : taxes.find((item) => String(item.tax_id) === String(row.tax_id)));
-    params.set(`products[${index}][product_id]`, productId);
-    params.set(`products[${index}][name]`, String(line.description ?? "Serviço"));
-    params.set(`products[${index}][summary]`, String(line.description ?? ""));
+    // Unit price WITHOUT IVA (the tax is added by the program); full precision so totals match to the cent.
+    const net = Math.round(Number(line.unitPrice ?? 0) * 100000) / 100000;
+    sentPrices.push(net);
+    const discount = Math.min(100, Math.max(0, Number(line.discountPercent ?? 0) || 0));
+    params.set(`products[${index}][product_id]`, lineProductIds[index]);
+    params.set(`products[${index}][name]`, String(line.description ?? "").trim() || "Serviço");
+    params.set(`products[${index}][summary]`, "");
     params.set(`products[${index}][qty]`, String(line.quantity ?? 1));
-    params.set(`products[${index}][price]`, String(line.unitPrice ?? 0));
-    params.set(`products[${index}][discount]`, "0");
+    params.set(`products[${index}][price]`, String(net));
+    params.set(`products[${index}][discount]`, String(discount));
     params.set(`products[${index}][order]`, String(index));
     if (rate === 0 || !tax) params.set(`products[${index}][exemption_reason]`, "M99");
     if (tax) {
@@ -322,6 +352,11 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
       params.set(`products[${index}][taxes][0][cumulative]`, "0");
     }
   });
+  console.error("[prod] issue lines", JSON.stringify({ count: lines.length, netPrices: sentPrices, rates: lines.map((line) => Number(line.vatRate ?? 23)) }));
+  if (kind !== "orcamento" && body.payment_method) {
+    // An FT does not print its payment; the chosen method goes in the document notes so it shows on the PDF.
+    params.set("notes", `Modo de pagamento: ${String(body.payment_method)}`);
+  }
   if (kind !== "orcamento") {
     const method = chosenMethod;
     if (method) {
@@ -366,15 +401,11 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   // imported history, so they are stored with a «Teste» prefix and can never collide with it.
   const number = `${demoAccount ? "Teste " : ""}${formatNumber(info, documentId)}`;
   console.log("[issue] done", JSON.stringify({ reference, documentId, number, reused, isDraft, testMode, demoAccount }));
-  let pdf: string | null = null;
-  if (!isDraft) {
-    const link = await moloniPost(ready.token, "documents/getPDFLink", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
-    pdf = typeof link.url === "string" ? link.url : null;
-  }
+  // No public link is stored: «Abrir fatura» asks for the PDF by external id (action pdf, as=pdf).
   return {
     documentNumber: number,
     externalId: documentId,
-    url: pdf,
+    url: null,
     providerId: "moloni",
     providerLabel: demoAccount ? "Conta de teste" : testMode ? "Rascunho de teste" : "Fatura certificada",
     simulated: false,
@@ -384,6 +415,13 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     draft: isDraft,
     reused,
   };
+}
+
+async function companyNameOf(token: string, moloniCompanyId: string) {
+  if (!token || !moloniCompanyId) return "";
+  const companies = await moloniList(token, "companies/getAll", {}).catch(() => [] as Array<Record<string, any>>);
+  const hit = companies.find((item) => String(item.company_id ?? "") === moloniCompanyId);
+  return String(hit?.name ?? "").trim();
 }
 
 function isDemoCompany(row: Record<string, unknown>) {
@@ -446,6 +484,72 @@ function parseDocumentNumber(value: string) {
   const series = parts.length > 1 ? parts.slice(0, -1).join("/") : text;
   const year = (series.match(/(\d{4})/) ?? [])[1] ?? "";
   return { type: "", series, number, year };
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function toBase64(bytes: Uint8Array) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+async function fetchPdfOnce(url: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(url, { redirect: "follow", signal: controller.signal });
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const type = response.headers.get("content-type") ?? "";
+    const isPdf = bytes.length > 4 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46; // %PDF
+    if (isPdf) return { pdf: bytes, html: "" };
+    return { pdf: null, html: /html|text/i.test(type) ? new TextDecoder().decode(bytes).slice(0, 200_000) : "" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// The link from documents/getPDFLink is a landing page with a download button. The PDF itself is the
+// getDownload URL built from its hash (h), the document id (d) and the account e-mail (e), or the
+// download link found on that page. A document that was just closed may need a few seconds.
+async function downloadPdf(link: string, documentId: string, email: string) {
+  const base = new URL(link);
+  const hash = base.searchParams.get("h") ?? "";
+  const direct = new URL("/downloads/index.php", base.origin);
+  direct.search = new URLSearchParams({ action: "getDownload", h: hash, d: documentId, e: email, i: "1", t: "n" }).toString();
+  const candidates = [direct.toString(), link];
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (const candidate of candidates) {
+      const got = await fetchPdfOnce(candidate).catch((error) => {
+        console.error("[prod] pdf fetch failed", error instanceof Error ? error.message : String(error));
+        return { pdf: null, html: "" };
+      });
+      if (got.pdf) return got.pdf;
+      const found = got.html.match(/(?:href|src|action)=["']([^"']*getDownload[^"']*)["']/i)?.[1]?.replace(/&amp;/g, "&");
+      if (found) {
+        const next = new URL(found, candidate).toString();
+        if (!candidates.includes(next)) candidates.push(next);
+      }
+    }
+    await sleep(1500 * (attempt + 1));
+  }
+  return null;
+}
+
+async function deliverPdf(admin: Admin, companyId: string, found: Record<string, unknown>, number: string) {
+  const { url, ...rest } = found;
+  if (!found.found || typeof url !== "string" || !url || !found.documentId) return { ...rest, found: false };
+  const row = await rowOf(admin, companyId);
+  const email = String(row?.username ?? "");
+  const bytes = await downloadPdf(url, String(found.documentId), email);
+  if (!bytes) {
+    console.error("[prod] pdf not ready", String(found.documentId));
+    return { ...rest, found: false, reason: "pending", error: "O PDF da fatura ainda está a ser preparado. Tenta outra vez daqui a alguns segundos." };
+  }
+  const safe = (number || `documento-${found.documentId}`).replace(/[^\w.-]+/g, "_");
+  return { ...rest, found: true, pdf: toBase64(bytes), filename: `${safe}.pdf`, size: bytes.length };
 }
 
 async function pdfLink(token: string, companyId: string, documentId: string) {
@@ -623,11 +727,41 @@ function consumerNif(nif?: string, name?: string) {
   return value;
 }
 
+function nameCode(name: string) {
+  // Stable short customer code for a named client without NIF (customers need a unique number).
+  let hash = 0;
+  const text = name.trim().toUpperCase().replace(/\s+/g, " ");
+  for (let index = 0; index < text.length; index += 1) hash = (Math.imul(hash, 31) + text.charCodeAt(index)) >>> 0;
+  return `CF${hash.toString(36).toUpperCase()}`;
+}
+
 async function ensureCustomer(token: string, companyId: string, customer: Record<string, string>, paymentMethodId: string) {
   const nif = consumerNif(customer.nif, customer.name);
+  const realName = String(customer.name ?? "").trim();
+  // A client without NIF keeps their name on the document: their own customer record with NIF 999999990.
+  const namedConsumer = nif === "999999990" && Boolean(realName) && !/consumidor final/i.test(realName);
+  if (namedConsumer) {
+    const code = nameCode(realName);
+    const byNumber = await moloniList(token, "customers/getByNumber", { company_id: companyId, number: code }).catch(() => [] as Array<Record<string, any>>);
+    const mine = byNumber.find((item) => item.customer_id && String(item.vat ?? "").replace(/\D/g, "") === "999999990");
+    if (mine?.customer_id) return String(mine.customer_id);
+    try {
+      return await insertCustomer(token, companyId, customer, paymentMethodId, { vat: "999999990", number: code, name: realName });
+    } catch (error) {
+      console.error("[prod] named consumer insert failed, using Consumidor Final", error instanceof Error ? error.message : String(error));
+    }
+  }
   const found = await moloniList(token, "customers/getByVat", { company_id: companyId, vat: nif });
-  const existing = found.find((item) => item.customer_id) ?? found[0];
+  const existing = nif === "999999990"
+    ? found.find((item) => item.customer_id && /consumidor final/i.test(String(item.name ?? ""))) ?? found.find((item) => item.customer_id && String(item.number ?? "") === "999999990")
+    : found.find((item) => item.customer_id) ?? found[0];
   if (existing?.customer_id) return String(existing.customer_id);
+  const consumer = nif === "999999990";
+  return insertCustomer(token, companyId, customer, paymentMethodId, { vat: nif, number: nif, name: consumer ? "Consumidor Final" : (realName || "Cliente") });
+}
+
+async function insertCustomer(token: string, companyId: string, customer: Record<string, string>, paymentMethodId: string, who: { vat: string; number: string; name: string }) {
+  const nif = who.vat;
   // customers/insert: every *_id must exist in this company. payment_method_id and maturity_date_id are
   // required (> 0); salesman_id and delivery_method_id accept 0 ("nenhum").
   const methodId = paymentMethodId || String((await moloniList(token, "paymentMethods/getAll", { company_id: companyId }))[0]?.payment_method_id ?? "");
@@ -640,8 +774,8 @@ async function ensureCustomer(token: string, companyId: string, customer: Record
   const params = new URLSearchParams({
     company_id: companyId,
     vat: nif,
-    number: nif,
-    name: consumer ? "Consumidor Final" : (customer.name || "Cliente"),
+    number: who.number,
+    name: who.name,
     language_id: "1",
     address: customer.address || "Desconhecida",
     zip_code: zip,
@@ -664,6 +798,76 @@ async function ensureCustomer(token: string, companyId: string, customer: Record
     throw new Error("O programa de faturação não devolveu o cliente criado.");
   }
   return String(created.customer_id);
+}
+
+function lineReference(ref: string, kind: string) {
+  const clean = ref.trim().toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9._\/-]/g, "").slice(0, 30);
+  if (clean) return clean;
+  return kind === "peca" ? "PECA" : "MO";
+}
+
+class LineProducts {
+  private cache = new Map<string, string>();
+  private category = "";
+  private unit = "";
+  constructor(private token: string, private companyId: string, private taxes: Array<Record<string, any>>, private row: Record<string, unknown>) {}
+
+  async idFor(ref: string, kind: string, description: string) {
+    const reference = lineReference(ref, kind);
+    const known = this.cache.get(reference);
+    if (known) return known;
+    const found = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference, exact: "1" }).catch(() => [] as Array<Record<string, any>>);
+    const hit = found.find((item) => String(item.reference ?? "").toUpperCase() === reference && item.product_id) ?? found.find((item) => item.product_id);
+    if (hit?.product_id) {
+      this.cache.set(reference, String(hit.product_id));
+      return String(hit.product_id);
+    }
+    if (!this.category) this.category = await ensureCategory(this.token, this.companyId);
+    if (!this.unit) this.unit = await ensureUnit(this.token, this.companyId);
+    const service = kind !== "peca";
+    const tax = this.taxes.find((item) => String(item.tax_id) === String(this.row.tax_id) && Number(item.value) > 0)
+      ?? this.taxes.find((item) => Number(item.value) === 23)
+      ?? this.taxes.find((item) => Number(item.value) > 0);
+    const params = new URLSearchParams({
+      company_id: this.companyId,
+      category_id: this.category,
+      type: service ? "2" : "1",
+      name: (description.trim() || (service ? "Mão de obra" : "Peça")).slice(0, 100),
+      summary: "",
+      reference,
+      ean: "",
+      price: "0",
+      unit_id: this.unit,
+      has_stock: "0",
+      stock: "0",
+      at_product_category: service ? "S" : "M",
+    });
+    if (tax) {
+      params.set("taxes[0][tax_id]", String(tax.tax_id));
+      params.set("taxes[0][value]", String(tax.value ?? 23));
+      params.set("taxes[0][order]", "0");
+      params.set("taxes[0][cumulative]", "0");
+      params.set("exemption_reason", "");
+    } else {
+      params.set("exemption_reason", "M99");
+    }
+    let created: Record<string, any>;
+    try {
+      created = await moloniPost(this.token, "products/insert", params);
+    } catch (error) {
+      const again = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference }).catch(() => []);
+      const retry = again.find((item) => item.product_id);
+      if (!retry?.product_id) throw error;
+      created = retry;
+    }
+    if (!created.product_id) {
+      console.error("[prod] line product insert no product_id", reference, JSON.stringify(created).slice(0, 300));
+      throw new Error("O programa de faturação não devolveu o artigo criado.");
+    }
+    console.error("[prod] line product created", reference, service ? "servico" : "peca");
+    this.cache.set(reference, String(created.product_id));
+    return String(created.product_id);
+  }
 }
 
 async function ensureProduct(admin: Admin, companyId: string, token: string, row: Record<string, unknown>, taxes: Array<Record<string, any>>) {

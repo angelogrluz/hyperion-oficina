@@ -42,7 +42,7 @@ import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval
 import { resolveLineIdentity } from "@/lib/line-ref";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { currentUser } from "@/lib/user-settings";
-import { officialDocumentPdf } from "@/browser/src/moloni";
+import { officialDocumentPdf, openDocumentUrl } from "@/browser/src/moloni";
 import { rememberOfficialDocument } from "@/browser/src/store";
 import { readSession } from "./shims/auth";
 import { bootCloud, cloudConfigured, readCloudUser, signOut, subscribeCloud } from "./cloud";
@@ -655,7 +655,7 @@ function useOfficialDocument(order: { id: string; invoiceProvider?: string | nul
       if (result.found && result.url) {
         if (result.documentId) void rememberOfficialDocument(order.id, result.documentId, result.documentType ?? "", lookup.number);
         setUrl(result.url);
-        window.open(result.url, "_blank", "noopener");
+        openDocumentUrl(result.url);
         setPhase("opened");
       } else setPhase("preview");
     });
@@ -683,7 +683,7 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
       <main className="grid min-h-screen place-items-center bg-[var(--paper)] px-6 text-center">
         <div>
           <p className="text-[20px] font-semibold">O documento oficial abriu noutro separador.</p>
-          <button type="button" className="mt-4 h-11 rounded-lg bg-[var(--glow)] px-4 font-semibold text-white" onClick={() => { if (official.url) window.open(official.url, "_blank", "noopener"); }}>Abrir outra vez</button>
+          <button type="button" className="mt-4 h-11 rounded-lg bg-[var(--glow)] px-4 font-semibold text-white" onClick={() => { if (official.url) openDocumentUrl(official.url); }}>Abrir outra vez</button>
           <p className="mt-4"><Link href={`/ordens/${id}`} className="text-[var(--glow)]">Voltar à folha</Link></p>
         </div>
       </main>

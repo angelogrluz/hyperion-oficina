@@ -39,7 +39,7 @@ import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
 import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/labels";
 import { workshopPath } from "@/lib/workshop-slug";
-import { officialDocumentPdf } from "@/browser/src/moloni";
+import { officialDocumentPdf, pdfTab } from "@/browser/src/moloni";
 import { readCloudUser } from "@/browser/src/cloud";
 import { billingSummary, refreshBillingState, useBillingState } from "@/browser/src/billing-status";
 import { rememberOfficialDocument } from "@/browser/src/store";
@@ -832,18 +832,21 @@ export function DocumentEditor({
       window.open(documentLookup.httpsUrl, "_blank", "noopener");
       return;
     }
+    const tab = pdfTab();
+    const loading = toast.loading("A obter o PDF oficial…");
     const result = await officialDocumentPdf({
       companyId: documentLookup.companyId,
       number: documentLookup.number,
       kind,
       documentId: kind === "fatura" ? documentLookup.documentId : null,
       invoiceDocumentId: kind === "recibo" ? documentLookup.documentId : null,
-    });
+    }).finally(() => toast.dismiss(loading));
     if (result.found && result.url) {
       if (result.documentId && documentId) void rememberOfficialDocument(documentId, result.documentId, result.documentType ?? "", documentLookup.number);
-      window.open(result.url, "_blank", "noopener");
+      tab.show(result.url);
       return;
     }
+    tab.close();
     if (result.error) toast.error(result.error);
     preview();
   }
@@ -1095,7 +1098,7 @@ export function DocumentEditor({
           quoteNumber={quoteNumber}
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
-          invoiceHref={documentId ? (/^https?:\/\//i.test(invoiceUrl ?? "") ? invoiceUrl ?? undefined : workshopPath(`/ordens/${documentId}/fatura`)) : undefined}
+          invoiceHref={documentId ? (/^https?:\/\//i.test(invoiceUrl ?? "") && ["importado", "keymaster"].includes((invoice?.provider ?? "").toLowerCase()) ? invoiceUrl ?? undefined : workshopPath(`/ordens/${documentId}/fatura`)) : undefined}
           onOpenInvoice={documentLookup ? () => { void openOfficial("fatura"); } : undefined}
           onOpenReceipt={documentLookup ? () => { void openOfficial("recibo"); } : undefined}
           paid={paid}
@@ -1127,6 +1130,15 @@ export function DocumentEditor({
             {billingMode && billingMode !== "simulacao" ? (
               <p data-testid="faturar-empresa" className="text-sm">
                 Empresa: <strong>{billing.companyName || "não escolhida"}</strong>{billing.demoAccount ? " (conta de teste)" : ""}
+              </p>
+            ) : null}
+            {selectedClient ? (
+              <p data-testid="faturar-cliente" className="text-sm">
+                Cliente: <strong>{selectedClient.name}</strong>
+                {(() => {
+                  const nif = normalizeNif(selectedClient.nif ?? "");
+                  return nif && nif !== "999999990" ? ` · NIF ${nif}` : " — sem NIF (Consumidor final)";
+                })()}
               </p>
             ) : null}
             {status !== "concluida" ? <p className="text-sm text-[var(--muted-text)]">Ao emitir, o processo desta obra fica fechado.</p> : null}
@@ -1175,13 +1187,30 @@ export function DocumentEditor({
                         fail("Não foi possível gravar a folha antes de faturar. Revê os erros e tenta outra vez.");
                         return;
                       }
-                      const result = await issueInvoice(saved.id, method);
+                      const toastId = `fatura-${saved.id}`;
+                      const shown = (value: string) => value.replace(/^teste\s+/i, "");
+                      let announced = false;
+                      const onIssued = (event: Event) => {
+                        const detail = (event as CustomEvent<{ orderId: string; number: string }>).detail;
+                        if (!detail || detail.orderId !== saved.id) return;
+                        announced = true;
+                        writeInvoiceDialog(key, null);
+                        toast.loading(`Fatura ${shown(detail.number)} emitida. A gravar na obra…`, { id: toastId });
+                      };
+                      window.addEventListener("oficinaplan:invoice-issued", onIssued);
+                      let result: Awaited<ReturnType<typeof issueInvoice>>;
+                      try {
+                        result = await issueInvoice(saved.id, method);
+                      } finally {
+                        window.removeEventListener("oficinaplan:invoice-issued", onIssued);
+                      }
                       if (!result.ok) {
-                        fail(result.error);
+                        if (announced) toast.error(`${result.error} A fatura já existe: volta a carregar em Faturar para a associar sem emitir outra.`, { id: toastId, duration: 20000 });
+                        else fail(result.error);
                         return;
                       }
                       writeInvoiceDialog(key, null);
-                      toast.success(`Fatura ${result.documentNumber}`);
+                      toast.success(`Fatura ${shown(result.documentNumber)}`, { id: toastId });
                       const warning = "warning" in result ? (result as { warning?: string | null }).warning : null;
                       if (warning) toast.warning(warning, { duration: 15000 });
                     } catch (failure) {

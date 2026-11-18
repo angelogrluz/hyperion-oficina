@@ -54,8 +54,19 @@ async function call(body: Record<string, unknown>): Promise<MoloniStatus> {
   return payload;
 }
 
+const statusCache = new Map<string, { at: number; value: MoloniStatus }>();
+
 export function moloniStatus(companyId: string) {
-  return call({ action: "status", company_id: companyId });
+  return call({ action: "status", company_id: companyId }).then((value) => {
+    statusCache.set(companyId, { at: Date.now(), value: value as MoloniStatus });
+    return value;
+  });
+}
+
+/** Recent status (≤ 2 min) without another round trip; used right before issuing. */
+function recentStatus(companyId: string) {
+  const hit = statusCache.get(companyId);
+  return hit && Date.now() - hit.at < 120_000 && hit.value.connected ? Promise.resolve(hit.value) : moloniStatus(companyId);
 }
 
 export function moloniConnect(companyId: string, input: { developerId: string; clientSecret: string; username: string; password: string }) {
@@ -93,7 +104,7 @@ export async function issueCloudDocument(input: {
 }): Promise<MoloniIssued | null> {
   const db = supabase();
   if (!db || !input.companyId) return null;
-  const status = await moloniStatus(input.companyId);
+  const status = await recentStatus(input.companyId);
   if (status.error && !status.connected) return null;
   if (!status.connected) return null;
   const { data, error } = await db.functions.invoke("moloni", {
@@ -127,11 +138,63 @@ export async function officialDocumentPdf(input: {
   documentId?: string | null;
   invoiceDocumentId?: string | null;
 }): Promise<{ found: boolean; url?: string; documentId?: string; documentType?: string; error?: string; reason?: string }> {
+  // The function returns the official PDF bytes; a just-issued document may need a few seconds.
+  for (let attempt = 0; ; attempt += 1) {
+    const result = await fetchOfficialPdf(input);
+    if (result.reason !== "pending" || attempt >= 2) return result;
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+}
+
+function pdfObjectUrl(base64: string) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+  window.setTimeout(() => URL.revokeObjectURL(url), 30 * 60_000);
+  return url;
+}
+
+/** Opens a tab right away (inside the click, so it is not blocked) and points it at the PDF when ready. */
+export function pdfTab() {
+  const tab = typeof window === "undefined" ? null : window.open("", "_blank");
+  if (tab) {
+    try {
+      tab.document.title = "A abrir o documento…";
+      tab.document.body.innerHTML = '<p style="font:16px system-ui,sans-serif;padding:24px;color:#333">A abrir o documento…</p>';
+    } catch {
+      /* cross-origin about:blank is not expected; ignore */
+    }
+  }
+  return {
+    show(url: string) {
+      if (tab && !tab.closed) tab.location.href = url;
+      else openDocumentUrl(url);
+    },
+    close() {
+      if (tab && !tab.closed) tab.close();
+    },
+  };
+}
+
+export function openDocumentUrl(url: string) {
+  // blob: URLs are our own PDF copy (same origin); external links open isolated.
+  return url.startsWith("blob:") ? window.open(url, "_blank") : window.open(url, "_blank", "noopener");
+}
+
+async function fetchOfficialPdf(input: {
+  companyId: string;
+  number: string;
+  kind: "fatura" | "recibo";
+  documentId?: string | null;
+  invoiceDocumentId?: string | null;
+}): Promise<{ found: boolean; url?: string; documentId?: string; documentType?: string; error?: string; reason?: string }> {
   const db = supabase();
   if (!db || !input.companyId) return { found: false, reason: "no_session" };
   const { data, error } = await db.functions.invoke("moloni", {
     body: {
       action: "pdf",
+      as: "pdf",
       company_id: input.companyId,
       number: input.number,
       kind: input.kind,
@@ -143,9 +206,9 @@ export async function officialDocumentPdf(input: {
     console.info("[oficinaplan] documento", "invoke_error");
     return { found: false, reason: "invoke_error", error: "A consulta do documento ainda não está publicada. Abre a vista da aplicação." };
   }
-  const payload = (data ?? {}) as { found?: boolean; url?: string; documentId?: string; documentType?: string; error?: string; reason?: string; detail?: string };
+  const payload = (data ?? {}) as { found?: boolean; pdf?: string; documentId?: string; documentType?: string; error?: string; reason?: string; detail?: string };
   console.info("[oficinaplan] documento", payload.reason ?? (payload.found ? "ok" : "no_match"), payload.detail ?? "");
   if (payload.error) return { found: false, reason: payload.reason, error: generic(payload.error) };
-  if (!payload.found || !payload.url) return { found: false, reason: payload.reason ?? "no_match" };
-  return payload;
+  if (!payload.found || !payload.pdf) return { found: false, reason: payload.reason ?? "no_match" };
+  return { found: true, url: pdfObjectUrl(payload.pdf), documentId: payload.documentId, documentType: payload.documentType };
 }

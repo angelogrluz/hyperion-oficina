@@ -1054,8 +1054,9 @@ function orderBundle(snap: Snapshot, orderId: string) {
 }
 
 function moloniPayload(bundle: NonNullable<ReturnType<typeof orderBundle>>, sequence: number, year: number) {
+  const discountOf = (line: { discountPercent?: number }) => Math.min(100, Math.max(0, Number(line.discountPercent ?? 0) || 0));
   const totals = bundle.lines.reduce(
-    (sum, line) => sum + line.quantity * line.unitPrice * (1 + line.vatRate / 100),
+    (sum, line) => sum + line.quantity * line.unitPrice * (1 - discountOf(line) / 100) * (1 + line.vatRate / 100),
     0,
   );
   return {
@@ -1072,12 +1073,16 @@ function moloniPayload(bundle: NonNullable<ReturnType<typeof orderBundle>>, sequ
       email: bundle.client.email,
       phone: bundle.client.phone,
     },
+    // unitPrice is WITHOUT IVA; ref/kind give each line its own article (reference) on the official PDF.
     lines: bundle.lines.map((line) => ({
       description: line.description,
       quantity: line.quantity,
       unitPrice: line.unitPrice,
+      discountPercent: discountOf(line),
       vatRate: line.vatRate,
-      total: line.quantity * line.unitPrice,
+      ref: line.ref || line.article?.ref || "",
+      kind: line.kind,
+      total: line.quantity * line.unitPrice * (1 - discountOf(line) / 100),
     })),
     total: totals,
   };
@@ -1171,6 +1176,10 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
     }
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "O programa de faturação recusou a fatura." };
+  }
+  // The number exists now: let the dialog close while the obra is saved.
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("oficinaplan:invoice-issued", { detail: { orderId, number: issued.documentNumber } }));
   }
   const url = issued.url ?? `/ordens/${orderId}/fatura`;
   let warning: string | null = null;

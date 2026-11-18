@@ -18,6 +18,9 @@ export type MoloniLine = {
   unitPrice: number;
   vatRate: number;
   total: number;
+  discountPercent?: number;
+  ref?: string;
+  kind?: string;
 };
 
 type IssueBase = {
