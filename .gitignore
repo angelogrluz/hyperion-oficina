@@ -50,3 +50,4 @@ next-env.d.ts
 /browser/pages-pack
 
 /lib/generated/prisma
+supabase/test-workshop/
