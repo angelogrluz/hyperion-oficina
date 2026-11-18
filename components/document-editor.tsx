@@ -706,11 +706,20 @@ export function DocumentEditor({
     setLines((current) => {
       const known = articleList.find((item) => item.ref === ECOLUB_REF);
       const price = String(ecolubRate).replace(".", ",");
-      const pool = current.filter((line) => line.ref.toUpperCase() === ECOLUB_REF);
+      // Only the automatic eco-tax lines (note «eco:<oil line>») are managed here. An ECOLUB line the user
+      // typed (or edited) is a normal line and must never disappear; when there is one, it replaces the
+      // automatic ones so the tax is not charged twice.
+      const isAuto = (line: Line) => line.ref.toUpperCase() === ECOLUB_REF && line.note.startsWith("eco:");
+      const manual = current.some((line) => line.ref.toUpperCase() === ECOLUB_REF && !line.note.startsWith("eco:"));
+      if (manual) {
+        const kept = current.filter((line) => !isAuto(line));
+        return kept.length === current.length ? current : kept;
+      }
+      const pool = current.filter(isAuto);
       const used = new Set<string>();
       const next: Line[] = [];
       for (const line of current) {
-        if (line.ref.toUpperCase() === ECOLUB_REF) continue;
+        if (isAuto(line)) continue;
         next.push(line);
         if (!lineIsOil(line)) continue;
         const claimed = pool.find((item) => item.note === `eco:${line.key}` && !used.has(item.key))
