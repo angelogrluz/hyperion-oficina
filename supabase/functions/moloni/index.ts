@@ -260,17 +260,12 @@ function compact(value: string) {
 }
 
 function numberMatches(row: Record<string, unknown>, parsed: { type: string; series: string; number: string; year: string }) {
+  // Strict: same document set (series) AND same number. Never accept a document from another series.
   const raw = String(row.number ?? "").trim();
   const setName = String(row.document_set_name ?? "").trim();
-  const exact = new Set([
-    parsed.number,
-    `${parsed.series}/${parsed.number}`.toLowerCase(),
-    `${parsed.type}${parsed.year}/${parsed.number}`.toLowerCase(),
-  ]);
-  const candidates = [raw.toLowerCase(), `${setName}/${raw}`.toLowerCase()];
-  if (candidates.some((item) => exact.has(item))) return true;
-  const tail = new RegExp(`(^|/)${parsed.number}$`);
-  return tail.test(raw) || tail.test(`${setName}/${raw}`);
+  if (!raw || !setName) return false;
+  if (raw !== parsed.number) return false;
+  return compact(setName) === compact(parsed.series);
 }
 
 function linkedTo(row: Record<string, unknown>, documentId: string) {
@@ -364,12 +359,16 @@ async function lookupPdf(admin: Admin, companyId: string, body: Record<string, u
   console.log("[pdf] start", JSON.stringify({ kind: body.kind ?? "fatura", number: body.number ?? "", hasDocumentId: Boolean(body.document_id), hasInvoiceId: Boolean(body.invoice_document_id), testMode, hasCompany: Boolean(moloniCompanyId) }));
   if (!moloniCompanyId) return { found: false, reason: "no_company", error: "Escolhe a empresa em Integrações." };
   const knownId = String(body.document_id ?? "").trim();
-  if (knownId && String(body.kind ?? "fatura") !== "recibo") {
-    const url = await pdfLink(ready.token, moloniCompanyId, knownId).catch(() => "");
-    console.log("[pdf] cached", knownId, Boolean(url));
-    return url ? { found: true, reason: "ok", documentId: knownId, url } : { found: false, reason: "no_pdf" };
-  }
   const parsed = parseDocumentNumber(String(body.number ?? ""));
+  if (knownId && String(body.kind ?? "fatura") !== "recibo") {
+    const one = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: moloniCompanyId, document_id: knownId })).catch(() => ({}));
+    if (one.document_id && parsed.number && numberMatches(one, parsed)) {
+      const url = await pdfLink(ready.token, moloniCompanyId, knownId).catch(() => "");
+      console.log("[pdf] cached", knownId, Boolean(url));
+      return url ? { found: true, reason: "ok", documentId: knownId, url } : { found: false, reason: "no_pdf" };
+    }
+    console.log("[pdf] cached-mismatch", knownId, String(one.document_set_name ?? ""), String(one.number ?? ""));
+  }
   console.log("[pdf] parsed", JSON.stringify(parsed));
   if (!parsed.number) return { found: false, reason: "no_number" };
   const sets = await moloniList(ready.token, "documentSets/getAll", { company_id: moloniCompanyId }).catch((error) => {
@@ -383,7 +382,7 @@ async function lookupPdf(admin: Admin, companyId: string, body: Record<string, u
   if (wantReceipt && invoiceDocumentId) {
     const info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: moloniCompanyId, document_id: invoiceDocumentId })).catch(() => ({}));
     console.log("[pdf] cached-invoice", invoiceDocumentId, "keys", Object.keys(info).slice(0, 20).join(","));
-    if (info.document_id) {
+    if (info.document_id && numberMatches(info, parsed)) {
       const receipt = parsed.type === "FR" ? info : await findLinkedReceipt(ready.token, moloniCompanyId, info, parsed.year);
       if (receipt?.document_id) {
         const url = await pdfLink(ready.token, moloniCompanyId, String(receipt.document_id)).catch(() => "");
