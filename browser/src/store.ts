@@ -30,6 +30,7 @@ import { buildInvoiceDraft } from "@/lib/invoice/draft";
 import { mockMoloniAdapter } from "@/lib/invoice/mock-moloni";
 import { assignDocumentNumber, cloudActive, cloudConfigured, loadCompanyState, RevisionConflict, saveCompanyState } from "./cloud";
 import { mergeById } from "@/lib/snapshot-merge";
+import { nextObraNumber } from "@/lib/obra-number";
 
 export type Client = {
   id: string;
@@ -493,6 +494,7 @@ export async function rememberOfficialDocument(orderId: string, documentId: stri
 
 function nextNumber(snap: Snapshot, kind: "OR" | "ORC") {
   const year = lisbonParts().year;
+  if (kind === "OR") return nextObraNumber(snap.orders.map((order) => order.number), year);
   const prefix = `${kind}-${year}-`;
   const rows = kind === "OR" ? snap.orders : snap.quotes;
   const max = rows.reduce((highest, row) => {
