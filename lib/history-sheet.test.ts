@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import { lineAmounts } from "@/lib/domain";
-import { historyLineInputs, rowsOf, wholeKm } from "@/lib/history-sheet";
+import { historyLineInputs, isNormalVat, readHistoryWorkbook, rowsOf, wholeKm } from "@/lib/history-sheet";
 
 const LINES = [
   ["FT2026/204", "LAVA-VIDROS", "Lavagem de vidros", 1, 0, 0, 23, 0],
@@ -48,4 +48,43 @@ test("history lines stay one-to-one, including zero prices and dotted refs", () 
   assert.equal(Math.round(total * 100) / 100, 184.29);
   assert.equal(wholeKm("102 283"), 102283);
   assert.equal(wholeKm("102.283"), 102283);
+});
+
+test("a workbook uses the Linhas sheet even when Documentos is first", () => {
+  const book = XLSX.utils.book_new();
+  const documents = XLSX.utils.aoa_to_sheet([
+    ["Documento", "Tipo", "Data", "Nº obra", "Matrícula", "NIF cliente", "Cliente", "Km", "Total s/IVA", "IVA", "Total", "Observações"],
+    ["FT2026/204", "Fatura", "2026-03-01", "2026/296", "AA-00-AA", "999999990", "Consumidor final", 102283, 149.83, 34.46, 184.29, "Km na observação"],
+  ]);
+  const lines = XLSX.utils.aoa_to_sheet([
+    ["Documento", "Referência", "Descrição", "Quantidade", "Preço unitário", "Desconto %", "IVA %", "Total"],
+    ...LINES,
+  ]);
+  XLSX.utils.book_append_sheet(book, documents, "Documentos");
+  XLSX.utils.book_append_sheet(book, lines, "Linhas");
+
+  const picked = readHistoryWorkbook(XLSX, book);
+  assert.equal(picked.documents.length, 1);
+  assert.equal(picked.lines.length, 9);
+  assert.equal(wholeKm(picked.documents[0].Km), 102283);
+  const parsed = historyLineInputs(picked.lines);
+  assert.equal(parsed.length, 9);
+  assert.ok(parsed.every((line) => line.vatRate === 23));
+  assert.equal(parsed.filter((line) => line.unitPrice === 0).length, 2);
+  assert.equal(parsed.find((line) => line.ref === "F.AR")?.unitPrice, 15.92);
+  const total = parsed.reduce((sum, line) => sum + lineAmounts({
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    unitCost: 0,
+    discountPercent: line.discountPercent,
+    vatRate: line.vatRate ?? 0,
+  }).total, 0);
+  assert.equal(Math.round(total * 100) / 100, 184.29);
+  const asLines = historyLineInputs(picked.documents);
+  assert.equal(asLines[0]?.vatRate, null);
+  assert.equal(isNormalVat(34.46), false);
+  assert.equal(isNormalVat(0), true);
+  assert.equal(isNormalVat(6), true);
+  assert.equal(isNormalVat(13), true);
+  assert.equal(isNormalVat(23), true);
 });

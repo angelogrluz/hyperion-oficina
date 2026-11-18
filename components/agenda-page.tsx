@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { convertAppointment, deleteAppointment, saveAppointment } from "@/browser/src/shims/appointments";
 import { readServiceTypes, subscribeServiceTypes } from "@/lib/booking-settings";
@@ -114,7 +115,7 @@ export function AgendaPage({ appointments, clients, vehicles, today }: { appoint
                           <p className="font-semibold">{item.title}</p>
                           <p>{client?.name} · {vehicle ? `${vehicle.plate}` : "sem viatura"}</p>
                           <div className="mt-1 flex gap-2">
-                            {item.orderId ? <a className="underline" href={`${import.meta.env.BASE_URL}ordens/${item.orderId}`}>Abrir obra</a> : <button type="button" className="underline" onClick={() => void openOrder(item.id)}>Passar a obra</button>}
+                            {item.orderId ? <Link className="underline" href={`/ordens/${item.orderId}`}>Abrir obra</Link> : <button type="button" className="underline" onClick={() => void openOrder(item.id)}>Passar a obra</button>}
                             <button type="button" className="text-[#d64545]" onClick={() => void deleteAppointment(item.id).then(() => router.refresh())}>Apagar</button>
                           </div>
                         </div>

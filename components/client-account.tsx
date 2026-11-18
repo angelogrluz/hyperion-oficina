@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { lineAmounts, round2 } from "@/lib/domain";
 import { formatEUR, formatMediumDate } from "@/lib/format";
+import { workshopPath } from "@/lib/workshop-slug";
 
 type Invoice = {
   id: string;
@@ -64,12 +65,12 @@ export function ClientAccount({ client, invoices }: { client: { id: string; name
                   <td className="px-3 py-2 text-right tabular-nums">{invoice.paid ? formatEUR(0) : formatEUR(invoice.total)}</td>
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-2 text-[14px]">
-                      <a className="rounded border border-[var(--glow)] px-2 py-1 text-[var(--glow)]" href={`${import.meta.env.BASE_URL}ordens/${invoice.id}/fatura?imprimir=1`}>Imprimir fatura</a>
+                      <a className="rounded border border-[var(--glow)] px-2 py-1 text-[var(--glow)]" href={workshopPath(`/ordens/${invoice.id}/fatura?imprimir=1`)}>Imprimir fatura</a>
                       <a className="rounded border px-2 py-1" href={`mailto:${client.email}?subject=${encodeURIComponent(`Fatura ${invoice.number}`)}&body=${text}`}>E-mail</a>
                       <a className="rounded border px-2 py-1" href={`https://wa.me/${phone}?text=${text}`}>WhatsApp</a>
                       {invoice.paid ? (
                         <>
-                          <a className="rounded border border-[var(--glow)] px-2 py-1 text-[var(--glow)]" href={`${import.meta.env.BASE_URL}ordens/${invoice.id}/recibo?imprimir=1`}>Imprimir recibo</a>
+                          <a className="rounded border border-[var(--glow)] px-2 py-1 text-[var(--glow)]" href={workshopPath(`/ordens/${invoice.id}/recibo?imprimir=1`)}>Imprimir recibo</a>
                           <a className="rounded border px-2 py-1" href={`mailto:${client.email}?subject=${encodeURIComponent(`Recibo ${invoice.number}`)}&body=${receipt}`}>E-mail recibo</a>
                           <a className="rounded border px-2 py-1" href={`https://wa.me/${phone}?text=${receipt}`}>WhatsApp recibo</a>
                         </>

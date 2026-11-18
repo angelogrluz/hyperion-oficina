@@ -82,7 +82,7 @@ function AppMenu({ pathname, totals, extra, onNavigate }: { pathname: string; to
           </div>
         ) : null}
         <MenuLink href="/agenda" label="Agenda" active={active("/agenda")} onNavigate={onNavigate} />
-        {allow("obras.ver") ? <MenuLink href="/" label="Obras / Serviços" active={pathname.startsWith("/ordens")} onNavigate={onNavigate} /> : null}
+        {allow("obras.ver") ? <MenuLink href="/ordens" label="Obras / Serviços" active={pathname === "/ordens" || pathname.startsWith("/ordens/")} onNavigate={onNavigate} /> : null}
         {allow("clientes.ver") ? <MenuLink href="/clientes" label="Clientes e Viaturas" active={active("/clientes") || active("/viaturas")} onNavigate={onNavigate} /> : null}
         {allow("artigos.ver") ? <MenuLink href="/artigos" label="Stock e Peças" active={active("/artigos") || active("/movimentos")} onNavigate={onNavigate} /> : null}
         {allow("compras") ? <MenuLink href="/compras" label="Fornecedores e Compras" active={active("/compras")} onNavigate={onNavigate} /> : null}

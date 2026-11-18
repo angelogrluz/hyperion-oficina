@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { isValidNif, isValidPlate, lineAmounts, normalizeNif, normalizePlate, platesMatch } from "@/lib/domain";
-import { cell, historyLineInputs, money, rowsOf, wholeKm } from "@/lib/history-sheet";
+import { isValidNif, isValidPlate, lineAmounts, normalizeNif, normalizePlate, platesMatch, round2 } from "@/lib/domain";
+import { formatEUR } from "@/lib/format";
+import { cell, historyLineInputs, isNormalVat, looksLikeLines, money, readHistoryWorkbook, rowsOf, wholeKm } from "@/lib/history-sheet";
 import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
 import {
   clientConflict,
@@ -44,9 +45,12 @@ type Preview = {
   orders: Order[];
   lines: DocLine[];
   kmUpdates: Array<{ vehicleId: string; km: number }>;
+  lineCount: number;
+  lineTotal: number;
+  blocked: boolean;
 };
 
-const emptyPlan = (kind: Kind, replace = false): Preview => ({ kind, replace, errors: [], duplicates: 0, fresh: 0, clients: [], vehicles: [], suppliers: [], articles: [], orders: [], lines: [], kmUpdates: [] });
+const emptyPlan = (kind: Kind, replace = false): Preview => ({ kind, replace, errors: [], duplicates: 0, fresh: 0, clients: [], vehicles: [], suppliers: [], articles: [], orders: [], lines: [], kmUpdates: [], lineCount: 0, lineTotal: 0, blocked: false });
 
 export function DataMigration() {
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -77,9 +81,9 @@ export function DataMigration() {
                       <label className="text-[14px]">Linhas
                         <input type="file" accept=".xlsx,.xls,.csv,text/csv" className="mt-1 block text-[14px]" onChange={(event) => setLinesFile(event.target.files?.[0] ?? null)} />
                       </label>
-                      <button type="button" className="h-10 rounded-lg bg-[var(--ink)] px-3 font-semibold text-white" onClick={() => { if (docsFile) void prepareHistory(docsFile, linesFile, false).then(setPreview); }}>Importar</button>
-                      <button type="button" className="h-10 rounded-lg border px-3" onClick={() => { if (docsFile) void prepareHistory(docsFile, linesFile, true).then(setPreview); }}>Reimportar linhas do histórico</button>
-                      <p className="basis-full text-[13px] text-[var(--muted-text)]">Reimportar lê o mesmo ficheiro e substitui as linhas das obras já importadas, pelo número do documento. Acerta o estado, os km e os totais. Não mexe no stock.</p>
+                      <button type="button" className="h-10 rounded-lg bg-[var(--ink)] px-3 font-semibold text-white" onClick={() => { setFailure(""); void prepareHistory(docsFile, linesFile, false).then(setPreview); }}>Importar</button>
+                      <button type="button" className="h-10 rounded-lg border px-3" onClick={() => { setFailure(""); void prepareHistory(docsFile, linesFile, true).then(setPreview); }}>Reimportar linhas do histórico</button>
+                      <p className="basis-full text-[13px] text-[var(--muted-text)]">O ficheiro pode ficar só numa das colunas. A reimportação lê a folha «Linhas» e os km da folha «Documentos», e substitui as linhas das obras já importadas. Não mexe no stock.</p>
                     </>
                   ) : (
                     <label className="inline-flex h-10 cursor-pointer items-center rounded-lg bg-[var(--ink)] px-3 font-semibold text-white">Importar
@@ -99,10 +103,11 @@ export function DataMigration() {
       {preview ? (
         <div className="rounded-xl border border-[var(--line)] p-3">
           <p className="font-semibold">Pré-visualização</p>
-          <p className="text-[15px]">{preview.replace ? `${preview.fresh} obras a atualizar · ${preview.duplicates} sem correspondência` : `${preview.fresh} novos · ${preview.duplicates} duplicados ignorados`} · {preview.errors.length} com erro</p>
-          {preview.errors.slice(0, 8).map((error) => <p key={error} className="text-[14px] text-[#9c4036]">{error}</p>)}
+          <p className="text-[15px]">{preview.replace ? `${preview.fresh} obras a atualizar · ${preview.lineCount} linhas · ${formatEUR(preview.lineTotal)} c/IVA · ${preview.duplicates} sem correspondência` : `${preview.fresh} novos · ${preview.lineCount} linhas · ${formatEUR(preview.lineTotal)} c/IVA · ${preview.duplicates} duplicados ignorados`} · {preview.errors.length} com erro</p>
+          {preview.errors.slice(0, 12).map((error) => <p key={error} className="text-[14px] text-[#9c4036]">{error}</p>)}
+          {preview.errors.length > 12 ? <p className="text-[14px] text-[#9c4036]">e mais {preview.errors.length - 12}.</p> : null}
           <div className="mt-2 flex gap-2">
-            <button type="button" className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white" disabled={Boolean(progress)} onClick={() => {
+            <button type="button" className="h-10 rounded-lg bg-[var(--glow)] px-3 font-semibold text-white disabled:opacity-50" disabled={Boolean(progress) || preview.blocked} onClick={() => {
               setFailure("");
               setNotice("");
               void commit(preview, setProgress).then((result) => {
@@ -274,22 +279,37 @@ function planArticles(plan: Preview, snap: Snapshot, rows: Record<string, string
   });
 }
 
-async function prepareHistory(docsFile: File, linesFile: File | null, replace: boolean): Promise<Preview> {
-  const loaded = await readTable(docsFile);
-  let documents = loaded.rows;
-  let lineRows: Record<string, string>[] = [];
-  const names = loaded.book.SheetNames;
-  const lineSheet = names.findIndex((name) => /linha/i.test(name));
-  const docSheet = names.findIndex((name) => /document|fatura|obra/i.test(name));
-  if (names.length > 1 && !linesFile) {
-    documents = rowsOf(loaded.XLSX, loaded.book, docSheet >= 0 ? docSheet : 0);
-    lineRows = rowsOf(loaded.XLSX, loaded.book, lineSheet >= 0 ? lineSheet : 1);
-  } else if (linesFile) {
-    lineRows = (await readTable(linesFile)).rows;
+async function loadHistorySheets(docsFile: File | null, linesFile: File | null) {
+  const files = [docsFile, linesFile].filter((file): file is File => Boolean(file));
+  const unique = files.filter((file, index) => files.findIndex((item) => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified) === index);
+  if (!unique.length) return { documents: [] as Record<string, string>[], lines: [] as Record<string, string>[], errors: ["Escolhe o ficheiro do histórico, na coluna Documentos ou na coluna Linhas."] };
+  const XLSX = await import("xlsx");
+  let documents: Record<string, string>[] = [];
+  let lines: Record<string, string>[] = [];
+  for (const file of unique) {
+    const book = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+    const picked = readHistoryWorkbook(XLSX, book);
+    if (!documents.length && picked.documents.length) documents = picked.documents;
+    if (!lines.length && picked.lines.length) lines = picked.lines;
   }
+  const errors: string[] = [];
+  if (!documents.length) errors.push("Falta a folha «Documentos».");
+  if (!lines.length || !looksLikeLines(lines)) errors.push("Falta a folha «Linhas». A reimportação não usa a folha de documentos como linhas.");
+  return { documents, lines: looksLikeLines(lines) ? lines : [], errors };
+}
+
+async function prepareHistory(docsFile: File | null, linesFile: File | null, replace: boolean): Promise<Preview> {
+  const loaded = await loadHistorySheets(docsFile, linesFile);
+  const documents = loaded.documents;
+  const lineRows = loaded.lines;
   const snap = await readSnapshot();
   const clients = [...snap.clients];
   const plan = emptyPlan("historico", replace);
+  plan.errors.push(...loaded.errors);
+  if (loaded.errors.length) {
+    plan.blocked = true;
+    return plan;
+  }
   const known = new Set(snap.orders.map((order) => (order.invoiceNumber ?? "").trim().toLowerCase()).filter(Boolean));
   const numbers = new Set(snap.orders.map((order) => order.number));
   const accepted = new Map<string, string>();
@@ -329,7 +349,7 @@ async function prepareHistory(docsFile: File, linesFile: File | null, replace: b
     const total = money(cell(row, "Total"));
     let base = money(cell(row, "Total s/IVA", "Total s/ IVA"));
     if (!base && total) base = vat ? total - vat : total;
-    if (base > 0) {
+    if (!lineRows.length && !replace && base > 0) {
       plan.lines.push(historyLine(id, 0, "", cell(row, "Tipo", "tipo") || "Serviço", 1, base, 0, base ? Math.round((vat / base) * 100) : 23));
     }
   });
@@ -341,12 +361,22 @@ async function prepareHistory(docsFile: File, linesFile: File | null, replace: b
       if (documento && !known.has(documento)) plan.errors.push(`Linha ${index + 2}: documento ${line.document} não está na folha de documentos.`);
       return;
     }
+    if (line.vatRate == null || !isNormalVat(line.vatRate)) {
+      plan.errors.push(`Documento ${line.document}, ${line.ref || line.description}: IVA % ${line.vatRate ?? "em falta"} não é 0, 6, 13 ou 23.`);
+      return;
+    }
     if (!withLines.has(orderId)) {
       plan.lines = plan.lines.filter((item) => item.orderId !== orderId);
       withLines.add(orderId);
     }
     plan.lines.push(historyLine(orderId, plan.lines.filter((item) => item.orderId === orderId).length, line.ref, line.description, line.quantity, line.unitPrice, line.discountPercent, line.vatRate));
   });
+  for (const [key, orderId] of accepted) {
+    if (!plan.lines.some((item) => item.orderId === orderId)) plan.errors.push(`Documento ${key}: ficaria sem linhas.`);
+  }
+  plan.lineCount = plan.lines.length;
+  plan.lineTotal = round2(plan.lines.reduce((sum, line) => sum + lineAmounts({ quantity: line.quantity, unitPrice: line.unitPrice, unitCost: line.unitCost, discountPercent: line.discountPercent ?? 0, vatRate: line.vatRate }).total, 0));
+  plan.blocked = plan.errors.length > 0;
   return plan;
 }
 
@@ -355,6 +385,7 @@ function historyLine(orderId: string, position: number, ref: string, description
 }
 
 async function commit(preview: Preview, onProgress: (text: string) => void) {
+  if (preview.blocked || preview.errors.length > 0) return { ok: false as const, error: preview.errors[0] ?? "Nada foi gravado." };
   onProgress(`A preparar ${preview.fresh} registos…`);
   await new Promise((resolve) => setTimeout(resolve, 0));
   const snap = structuredClone(await readSnapshot());

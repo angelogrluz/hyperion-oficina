@@ -20,7 +20,7 @@ export function AccountHold({ status, platformAdmin = false }: { status: Company
           </h2>
           {pending ? <p className="mt-4 text-[16px] text-[var(--muted-text)]">Se precisares de ajuda, escreve para geral@oficinaplan.com.</p> : null}
           {platformAdmin ? (
-            <a href={`${base}/administracao`} className="mt-6 inline-flex h-12 items-center justify-center rounded-xl border border-[var(--ink)] px-5 text-[16px] font-semibold text-[var(--ink)]">
+            <a href={`${base}/admin`} className="mt-6 inline-flex h-12 items-center justify-center rounded-xl border border-[var(--ink)] px-5 text-[16px] font-semibold text-[var(--ink)]">
               Administração OficinaPlan
             </a>
           ) : null}

@@ -36,6 +36,7 @@ import type { StockLink } from "@/lib/stock-entry";
 import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
 import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/labels";
+import { workshopPath } from "@/lib/workshop-slug";
 
 export type EditorArticle = {
   id: string;
@@ -958,7 +959,7 @@ export function DocumentEditor({
           quoteNumber={quoteNumber}
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
-          invoiceHref={documentId ? (invoiceUrl || `/ordens/${documentId}/fatura`) : undefined}
+          invoiceHref={documentId ? workshopPath(invoiceUrl?.startsWith("/") ? invoiceUrl : `/ordens/${documentId}/fatura`) : undefined}
           paid={paid}
           onMarkPaid={() => {
             if (!documentId) return;
@@ -1059,7 +1060,7 @@ export function DocumentEditor({
             {orderHref ? (
               <>
                 {" "}
-                <a className="font-medium underline" href={orderHref}>
+                <a className="font-medium underline" href={orderHref.startsWith("/") ? workshopPath(orderHref) : orderHref}>
                   Abrir a ordem
                 </a>
               </>

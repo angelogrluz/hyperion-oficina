@@ -56,16 +56,30 @@ export function slugMatches(user: { slug?: string | null; companyName?: string |
   return suggestSlug(name) === wanted;
 }
 
+const WORKSHOP_ROUTES = new Set([
+  "ordens", "clientes", "viaturas", "artigos", "compras", "movimentos",
+  "modo-oficina", "oficina", "tecnicos", "pontos", "definicoes", "faturas",
+  "recibos", "orcamentos", "agenda", "resultados", "entrar", "registar", "admin",
+]);
+
+function slugFromLocation() {
+  if (typeof window === "undefined") return "";
+  const first = window.location.pathname.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
+  if (!first || WORKSHOP_ROUTES.has(first) || (RESERVED_SLUGS as readonly string[]).includes(first)) return "";
+  return first;
+}
+
 export function workshopPath(href: string) {
   if (!href.startsWith("/") || href.startsWith("//")) return href;
   const cut = href.search(/[?#]/);
   const path = cut === -1 ? href : href.slice(0, cut);
   const tail = cut === -1 ? "" : href.slice(cut);
   if (PUBLIC_PATHS.has(path) || path.startsWith("/admin/") || path.startsWith("/entrar")) return href;
-  if (!activeSlug) return href;
-  if (path === `/${activeSlug}` || path.startsWith(`/${activeSlug}/`)) return href;
-  if (path === "/") return `/${activeSlug}${tail}`;
-  return `/${activeSlug}${path}${tail}`;
+  const slug = activeSlug || slugFromLocation();
+  if (!slug) return href;
+  if (path === `/${slug}` || path.startsWith(`/${slug}/`)) return href;
+  if (path === "/") return `/${slug}${tail}`;
+  return `/${slug}${path}${tail}`;
 }
 
 export function stripWorkshopPrefix(pathname: string) {

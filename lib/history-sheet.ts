@@ -76,6 +76,45 @@ export function money(value: string) {
   return Number(text) || 0;
 }
 
+const NORMAL_VAT = [0, 6, 13, 23];
+
+export function isNormalVat(value: number) {
+  return NORMAL_VAT.some((rate) => Math.abs(rate - value) < 0.001);
+}
+
+export function looksLikeLines(rows: Record<string, string>[]) {
+  const keys = Object.keys(rows[0] ?? {}).map((key) => key.trim().toLowerCase());
+  return keys.includes("iva %") || keys.includes("referência") || keys.includes("referencia") || keys.includes("quantidade");
+}
+
+export function looksLikeDocuments(rows: Record<string, string>[]) {
+  const keys = Object.keys(rows[0] ?? {}).map((key) => key.trim().toLowerCase());
+  return keys.includes("matrícula") || keys.includes("matricula") || keys.includes("total s/iva") || keys.includes("nº obra") || keys.includes("km");
+}
+
+function sheetIndex(names: string[], kind: "documentos" | "linhas") {
+  const exact = kind === "linhas" ? /^linhas$/i : /^documentos$/i;
+  const loose = kind === "linhas" ? /linha/i : /document/i;
+  const named = names.findIndex((name) => exact.test(name.trim()));
+  if (named >= 0) return named;
+  return names.findIndex((name) => loose.test(name.trim()));
+}
+
+export function readHistoryWorkbook(XLSX: typeof import("xlsx"), book: XLSX.WorkBook) {
+  let documents: Record<string, string>[] = [];
+  let lines: Record<string, string>[] = [];
+  const docIndex = sheetIndex(book.SheetNames, "documentos");
+  const lineIndex = sheetIndex(book.SheetNames, "linhas");
+  if (docIndex >= 0) documents = rowsOf(XLSX, book, docIndex);
+  if (lineIndex >= 0 && lineIndex !== docIndex) lines = rowsOf(XLSX, book, lineIndex);
+  for (let index = 0; index < book.SheetNames.length; index += 1) {
+    const rows = index === docIndex || index === lineIndex ? (index === docIndex ? documents : lines) : rowsOf(XLSX, book, index);
+    if (!documents.length && looksLikeDocuments(rows) && !looksLikeLines(rows)) documents = rows;
+    if (!lines.length && looksLikeLines(rows) && !looksLikeDocuments(rows)) lines = rows;
+  }
+  return { documents, lines };
+}
+
 export type HistoryLineInput = {
   document: string;
   ref: string;
@@ -83,7 +122,7 @@ export type HistoryLineInput = {
   quantity: number;
   unitPrice: number;
   discountPercent: number;
-  vatRate: number;
+  vatRate: number | null;
 };
 
 export function historyLineInputs(rows: Record<string, string>[]): HistoryLineInput[] {
@@ -98,7 +137,8 @@ export function historyLineInputs(rows: Record<string, string>[]): HistoryLineIn
     const quantityText = cell(row, "Quantidade");
     const unitText = cell(row, "Preço unitário", "Preco unitario");
     const discountText = cell(row, "Desconto %", "Desconto");
-    const vatText = Object.keys(row).some((key) => key.trim().toLowerCase() === "iva %") ? cell(row, "IVA %") : cell(row, "IVA");
+    const hasVatPercent = Object.keys(row).some((key) => key.trim().toLowerCase() === "iva %");
+    const vatText = hasVatPercent ? cell(row, "IVA %") : "";
     lines.push({
       document,
       ref,
@@ -106,7 +146,7 @@ export function historyLineInputs(rows: Record<string, string>[]): HistoryLineIn
       quantity: quantityText === "" ? 0 : money(quantityText),
       unitPrice: unitText === "" ? 0 : money(unitText),
       discountPercent: discountText === "" ? 0 : money(discountText),
-      vatRate: vatText === "" ? 23 : money(vatText),
+      vatRate: !hasVatPercent ? null : vatText === "" ? 23 : money(vatText),
     });
   }
   return lines;

@@ -12,7 +12,7 @@ import { AccountHold } from "@/components/account-hold";
 import { EntryBrand } from "@/components/entry-brand";
 import { PlatformAdmin } from "@/components/platform-admin";
 import { BrandedLogin, Landing, PlatformScreen, RegisterPage, SlugFinder, useSignedInSlug } from "@/components/site-pages";
-import { getActiveSlug, OFFICE_ROLES, setActiveSlug, slugMatches } from "@/lib/workshop-slug";
+import { getActiveSlug, OFFICE_ROLES, setActiveSlug, slugMatches, workshopPath } from "@/lib/workshop-slug";
 import { PageHeader } from "@/components/page-header";
 import { PurchaseGrid } from "@/components/purchase-grid";
 import { StockMovements } from "@/components/stock-movements";
@@ -33,6 +33,8 @@ import { PontosPage } from "@/components/pontos-page";
 import { FolhaPrint } from "@/components/folha-print";
 import { FolhaServicos } from "@/components/folha-servicos";
 import { PrintButton } from "@/components/print-button";
+import { OrderListTable } from "@/components/order-list-table";
+import { orderStatusLabel } from "@/lib/labels";
 import { lineAmounts, salePrice, sumTotals } from "@/lib/domain";
 import { orderToPrintable } from "@/lib/printable";
 import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } from "@/lib/format";
@@ -289,7 +291,7 @@ function OrderScreen() {
   const catalog = editorCatalog(snap);
   return (
     <DocumentEditor
-      key={order.id}
+      key={`${order.id}:${order.updatedAt}`}
       mode="order"
       documentId={order.id}
       number={order.number}
@@ -356,18 +358,47 @@ function NewOrder() {
   );
 }
 
+function Orders() {
+  const snap = useSnap();
+  if (!snap) return null;
+  const rows = [...snap.orders]
+    .sort((a, b) => b.dateIn.localeCompare(a.dateIn))
+    .map((order) => {
+      const client = snap.clients.find((item) => item.id === order.clientId);
+      const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
+      const lines = snap.lines.filter((line) => line.orderId === order.id);
+      return {
+        id: order.id,
+        href: `/ordens/${order.id}`,
+        number: order.number,
+        date: formatMediumDate(new Date(order.dateIn)),
+        plate: vehicle?.plate ?? "",
+        vehicle: vehicle ? `${vehicle.brand} ${vehicle.model}`.trim() : "",
+        client: client?.name ?? "Sem cliente",
+        status: orderStatusLabel(order.status),
+        total: orderTotal(lines),
+      };
+    });
+  return (
+    <div>
+      <PageHeader title="Obras / Serviços" description={`${snap.orders.length} ${snap.orders.length === 1 ? "obra" : "obras"}.`} action={<Link href="/ordens/nova" className="inline-flex h-10 items-center rounded-lg bg-[var(--glow)] px-4 text-sm text-white">Nova ordem</Link>} />
+      <OrderListTable rows={rows} />
+    </div>
+  );
+}
+
 function Clients() {
   const snap = useSnap();
   if (!snap) return null;
   return (
     <div>
-      <PageHeader title="Listagem de Clientes" description={`${snap.clients.length} ${snap.clients.length === 1 ? "cliente" : "clientes"}. Selecione um cliente na tabela.`} action={<a className="inline-flex h-10 items-center rounded-lg bg-[var(--glow)] px-4 text-sm text-white" href={`${import.meta.env.BASE_URL}clientes/novo`}>Novo cliente</a>} />
+      <PageHeader title="Listagem de Clientes" description={`${snap.clients.length} ${snap.clients.length === 1 ? "cliente" : "clientes"}. Selecione um cliente na tabela.`} action={<Link href="/clientes/novo" className="inline-flex h-10 items-center rounded-lg bg-[var(--glow)] px-4 text-sm text-white">Novo cliente</Link>} />
       <TableShell>
         <thead><tr><Th>Nome</Th><Th>NIF</Th><Th>Telefone</Th><Th>E-mail</Th></tr></thead>
         <tbody>
           {snap.clients.map((client) => (
             <tr key={client.id} className="border-t border-[var(--line)]">
-              <Td><a className="font-medium text-[var(--glow)]" href={`${import.meta.env.BASE_URL}clientes/${client.id}`}>{client.name}</a></Td>
+              <Td><Link className="font-medium text-[var(--glow)]" href={`/clientes/${client.id}`}>{client.name}</Link></Td>
               <Td>{client.nif}</Td>
               <Td>{client.phone}</Td>
               <Td>{client.email}</Td>
@@ -415,7 +446,7 @@ function Vehicles() {
   if (!snap) return null;
   return (
     <div>
-      <PageHeader title="Listagem de Viaturas" description={`${snap.vehicles.length} ${snap.vehicles.length === 1 ? "viatura" : "viaturas"}.`} action={<a className="text-sm font-medium text-[var(--glow)]" href={`${import.meta.env.BASE_URL}viaturas/nova`}>Nova viatura</a>} />
+      <PageHeader title="Listagem de Viaturas" description={`${snap.vehicles.length} ${snap.vehicles.length === 1 ? "viatura" : "viaturas"}.`} action={<Link href="/viaturas/nova" className="text-sm font-medium text-[var(--glow)]">Nova viatura</Link>} />
       <TableShell>
         <thead><tr><Th>Viatura</Th><Th>Modelo</Th><Th>Cliente</Th></tr></thead>
         <tbody>
@@ -631,7 +662,7 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3">
-        <a href={`${import.meta.env.BASE_URL}ordens/${order.id}`} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</a>
+        <Link href={`/ordens/${order.id}`} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</Link>
         <PrintButton />
       </div>
       {order.invoiceSimulated ? <p className="no-print mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -662,7 +693,7 @@ function SheetPrint() {
   return (
     <FolhaPrint
       autoPrint
-      backHref={`${import.meta.env.BASE_URL}ordens/${order.id}`}
+      backHref={workshopPath(`/ordens/${order.id}`)}
       documentId={order.id}
       number={order.number}
       dateLabel={formatMediumDate(new Date(order.dateIn))}
@@ -712,7 +743,7 @@ function SheetServices() {
   return (
     <FolhaServicos
       autoPrint
-      backHref={`${import.meta.env.BASE_URL}ordens/${order.id}`}
+      backHref={workshopPath(`/ordens/${order.id}`)}
       documentId={order.id}
       number={order.number}
       enteredAt={order.createdAt || order.dateIn}
@@ -854,6 +885,7 @@ function WorkshopRoutes({ location }: { location?: Location }) {
   return (
     <Routes location={location}>
       <Route path="/" element={<Frame><Home /></Frame>} />
+      <Route path="/ordens" element={<Frame><Orders /></Frame>} />
       <Route path="/ordens/nova" element={<Frame><NewOrder /></Frame>} />
       <Route path="/ordens/:id/imprimir" element={<Gate><SheetPrint /></Gate>} />
       <Route path="/ordens/:id/servicos" element={<Gate><SheetServices /></Gate>} />
