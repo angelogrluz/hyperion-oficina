@@ -903,7 +903,7 @@ function SlugApp({ slug }: { slug: string }) {
     );
   }
   if (tablet) {
-    if (!mine) return <BrandedLogin slug={slug} notice="Entra com a conta de administrador ou gestor para abrir o tablet. A equipa depois usa o PIN." />;
+    if (!mine) return <BrandedLogin slug={slug} />;
     return <OficinaScreen />;
   }
   if (mine && holdFor(cloudUser)) return <AccountHold status={holdFor(cloudUser) ?? "pending"} platformAdmin={Boolean(cloudUser?.platformAdmin)} />;

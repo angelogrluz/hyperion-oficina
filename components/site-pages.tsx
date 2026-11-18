@@ -147,7 +147,6 @@ export function SlugFinder() {
           }}
         >
           <h1 className="text-[26px] font-semibold text-[var(--ink)]">Usa o link da tua oficina</h1>
-          <p className="mt-2 text-[15px] text-[var(--muted-text)]">Cada oficina entra em oficinaplan.com/nome-da-oficina. Escreve o endereço que te deram.</p>
           <label className="mt-5 grid gap-1 text-[15px] font-medium text-[var(--ink)]">Endereço
             <Input value={slug} onChange={(event) => setSlug(event.target.value.toLowerCase())} className="h-12 border-[var(--line)] text-[17px]" placeholder="a-minha-oficina" autoCapitalize="none" />
           </label>
@@ -226,7 +225,7 @@ export function RegisterPage() {
   );
 }
 
-export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }) {
+export function BrandedLogin({ slug }: { slug: string }) {
   const [pub, setPub] = useState<{ name: string; logo: string | null } | null>(null);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
@@ -294,7 +293,6 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
               <p className="text-[14px] text-[var(--muted-text)]">oficinaplan.com/{slug}</p>
             </div>
           </div>
-          <p className="text-[15px] text-[var(--muted-text)]">{notice || "Entra com o utilizador desta oficina. O administrador usa a palavra-passe. A equipa usa um PIN de 4 dígitos."}</p>
           {kind ? (
             <div className="flex items-center justify-between gap-3">
               <p className="text-[18px] font-semibold text-[var(--ink)]">{username.trim()}</p>
