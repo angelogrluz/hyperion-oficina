@@ -35,6 +35,7 @@ Deno.serve(async (req) => {
       return json({ error: "Sem permissão nesta oficina." });
     }
     const action = String(body.action ?? "status");
+    console.error("[prod] action", action, companyId.slice(0, 8));
     if (["connect", "save", "disconnect"].includes(action) && !ADMIN.has(membership.role)) {
       return json({ error: "Só o administrador pode ligar a faturação." });
     }
@@ -50,7 +51,9 @@ Deno.serve(async (req) => {
     if (action === "pdf") return json(await lookupPdf(admin, companyId, body));
     return json({ error: "Ação desconhecida." });
   } catch (error) {
-    return json({ error: publicError(error instanceof Error ? error.message : "Falha na ligação ao programa de faturação.") });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[prod] request failed", message);
+    return json({ error: publicError(message || "Falha na ligação ao programa de faturação.") });
   }
 });
 
@@ -197,23 +200,52 @@ async function connect(admin: Admin, companyId: string, body: Record<string, unk
 }
 
 async function catalog(admin: Admin, companyId: string) {
+  const started = Date.now();
   const row = await requireToken(admin, companyId);
-  if ("error" in row) return row;
-  const companies = await moloniList(row.token, "companies/getAll", {});
+  if ("error" in row) {
+    console.error("[prod] catalog token", row.error);
+    return row;
+  }
   const moloniCompanyId = String(row.data.moloni_company_id ?? "");
-  if (!moloniCompanyId) return { companies: companies.map(companyOption), series: [], taxes: [], paymentMethods: [] };
-  const [series, taxes, paymentMethods] = await Promise.all([
-    moloniList(row.token, "documentSets/getAll", { company_id: moloniCompanyId }),
-    moloniList(row.token, "taxes/getAll", { company_id: moloniCompanyId }),
-    moloniList(row.token, "paymentMethods/getAll", { company_id: moloniCompanyId }),
-  ]);
-  return {
-    companies: companies.map(companyOption),
-    series: series.map((item) => ({ id: String(item.document_set_id), name: String(item.name ?? item.document_set_id) })),
-    taxes: taxes.map((item) => ({ id: String(item.tax_id), name: `${item.name ?? "IVA"} ${item.value ?? ""}%`.trim(), value: Number(item.value ?? 0) })),
-    paymentMethods: paymentMethods.map((item) => ({ id: String(item.payment_method_id), name: String(item.name ?? item.payment_method_id) })),
+  // Each list is loaded on its own: one failing list must not blank the others.
+  const jobs: Array<[string, Record<string, string>]> = [["companies/getAll", {}]];
+  if (moloniCompanyId) {
+    jobs.push(["documentSets/getAll", { company_id: moloniCompanyId }]);
+    jobs.push(["taxes/getAll", { company_id: moloniCompanyId }]);
+    jobs.push(["paymentMethods/getAll", { company_id: moloniCompanyId }]);
+  }
+  const settled = await Promise.allSettled(jobs.map(([path, fields]) => moloniList(row.token, path, fields)));
+  const lists: Record<string, Array<Record<string, any>>> = {};
+  const errors: string[] = [];
+  settled.forEach((result, index) => {
+    const path = jobs[index][0];
+    if (result.status === "fulfilled") lists[path] = result.value;
+    else {
+      const message = publicError(result.reason instanceof Error ? result.reason.message : String(result.reason));
+      console.error("[prod] catalog list failed", path, message);
+      errors.push(`${CATALOG_LABELS[path] ?? path}: ${message}`);
+      lists[path] = [];
+    }
+  });
+  const out = {
+    companies: (lists["companies/getAll"] ?? []).map(companyOption),
+    series: (lists["documentSets/getAll"] ?? []).map((item) => ({ id: String(item.document_set_id), name: String(item.name ?? item.document_set_id) })),
+    taxes: (lists["taxes/getAll"] ?? []).map((item) => ({ id: String(item.tax_id), name: `${item.name ?? "IVA"} ${item.value ?? ""}%`.trim(), value: Number(item.value ?? 0) })),
+    paymentMethods: (lists["paymentMethods/getAll"] ?? []).map((item) => ({ id: String(item.payment_method_id), name: String(item.name ?? item.payment_method_id) })),
   };
+  console.error("[prod] catalog", JSON.stringify({ company: moloniCompanyId, ms: Date.now() - started, companies: out.companies.length, series: out.series.length, taxes: out.taxes.length, payments: out.paymentMethods.length, failed: errors.length }));
+  if (moloniCompanyId && !errors.length && (!out.series.length || !out.taxes.length || !out.paymentMethods.length)) {
+    errors.push("A empresa escolhida não devolveu séries, taxas de IVA ou métodos de pagamento. Confirma no programa de faturação se estão criados.");
+  }
+  return { ...out, ...(errors.length ? { catalogErrors: errors, error: errors.join(" · ") } : {}) };
 }
+
+const CATALOG_LABELS: Record<string, string> = {
+  "companies/getAll": "Empresas",
+  "documentSets/getAll": "Séries",
+  "taxes/getAll": "Taxas de IVA",
+  "paymentMethods/getAll": "Métodos de pagamento",
+};
 
 async function save(admin: Admin, companyId: string, body: Record<string, unknown>) {
   const row = await rowOf(admin, companyId);
@@ -704,7 +736,8 @@ async function requireToken(admin: Admin, companyId: string): Promise<{ token: s
       updated_at: new Date().toISOString(),
     }).eq("company_id", companyId);
     return { token: token.access_token, data: { ...row, access_token: token.access_token } };
-  } catch {
+  } catch (error) {
+    console.error("[prod] token refresh failed", error instanceof Error ? error.message : String(error));
     await admin.from("moloni_connections").update({ access_token: null, refresh_token: null, token_expires_at: null }).eq("company_id", companyId);
     return { error: "A sessão do programa de faturação expirou. Escreve outra vez a palavra-passe para ligar." };
   }
@@ -762,11 +795,23 @@ async function moloniPost(token: string, path: string, body: URLSearchParams) {
 }
 
 async function moloniCall(token: string, path: string, body: URLSearchParams) {
-  const response = await fetch(`https://api.moloni.pt/v1/${path}/?human_errors=true&access_token=${encodeURIComponent(token)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  let response: Response;
+  try {
+    response = await fetch(`https://api.moloni.pt/v1/${path}/?human_errors=true&access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    const aborted = error instanceof DOMException && error.name === "AbortError";
+    console.error(`[prod] ${path} ${aborted ? "timeout" : "fetch failed"}`, aborted ? "20s" : String(error));
+    throw new Error(aborted ? `O programa de faturação não respondeu a tempo (${path}).` : `Não foi possível contactar o programa de faturação (${path}).`);
+  } finally {
+    clearTimeout(timer);
+  }
   const text = await response.text().catch(() => "");
   let payload: any = {};
   try { payload = text ? JSON.parse(text) : {}; } catch { payload = {}; }

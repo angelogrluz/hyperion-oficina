@@ -15,6 +15,7 @@ export function IntegrationsPanel() {
   const [status, setStatus] = useState<MoloniStatus>(empty);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
+  const [catalogBusy, setCatalogBusy] = useState(false);
   const [developerId, setDeveloperId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [username, setUsername] = useState("");
@@ -54,18 +55,36 @@ export function IntegrationsPanel() {
 
   useEffect(() => {
     if (!companyId) return;
+    let alive = true;
     void moloniStatus(companyId).then(async (next) => {
+      if (!alive) return;
       apply(next);
+      if (next.error) setNotice(next.error);
       if (!next.connected) return;
-      const catalog = await moloniCatalog(companyId);
-      if (!catalog.error) apply({ ...next, ...catalog });
+      await loadCatalog(next.moloniCompanyId ?? "", next);
     });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
-  async function loadCatalog(nextCompany = company) {
-    const result = await moloniCatalog(companyId);
-    if (result.error) { setNotice(result.error); return; }
-    apply({ ...status, ...result, moloniCompanyId: nextCompany });
+  // Lists that arrive are always shown; a failing list shows its error instead of leaving empty dropdowns silently.
+  async function loadCatalog(nextCompany = company, base: MoloniStatus = status) {
+    setCatalogBusy(true);
+    try {
+      const result = await moloniCatalog(companyId);
+      const { error, connected: _c, status: _s, ...lists } = result;
+      if (lists.companies || lists.series || lists.taxes || lists.paymentMethods) {
+        apply({ ...base, ...lists, connected: base.connected, status: base.status, moloniCompanyId: nextCompany || base.moloniCompanyId });
+      }
+      if (error) {
+        console.error("[faturação] listas:", error);
+        setNotice(`Não foi possível carregar as listas: ${error}`);
+      } else if (nextCompany && !(lists.series?.length && lists.taxes?.length && lists.paymentMethods?.length)) {
+        setNotice("A empresa escolhida não tem séries, taxas de IVA ou métodos de pagamento.");
+      }
+    } finally {
+      setCatalogBusy(false);
+    }
   }
 
   return (
@@ -133,7 +152,11 @@ export function IntegrationsPanel() {
                 const id = event.target.value;
                 setCompany(id);
                 setCompanyName(companies.find((item) => item.id === id)?.name ?? "");
-                void moloniSave(companyId, { moloni_company_id: id, moloni_company_name: companies.find((item) => item.id === id)?.name ?? "", test_mode: testMode }).then(() => loadCatalog(id));
+                setNotice("");
+                void moloniSave(companyId, { moloni_company_id: id, moloni_company_name: companies.find((item) => item.id === id)?.name ?? "", test_mode: testMode }).then((saved) => {
+                  if (saved.error) setNotice(saved.error);
+                  return loadCatalog(id);
+                });
               }}>
                 <option value="">Escolher…</option>
                 {company && !companies.some((item) => item.id === company) ? <option value={company}>{companyName || "Empresa ligada"}</option> : null}
@@ -172,6 +195,7 @@ export function IntegrationsPanel() {
             </label>
             <div className="flex flex-wrap gap-2 sm:col-span-2">
               <Button type="submit" disabled={pending} className="h-11 bg-[var(--ink)] hover:bg-[var(--graphite)]">Guardar</Button>
+              <Button type="button" variant="outline" className="h-11" disabled={catalogBusy} onClick={() => { setNotice(""); void loadCatalog(company); }}>{catalogBusy ? "A carregar listas…" : "Recarregar listas"}</Button>
               <Button type="button" variant="outline" className="h-11" onClick={() => { setPassword(""); void moloniDisconnect(companyId).then(() => { setStatus(empty); setCompanies([]); setNotice("Desligado."); }); }}>Desligar</Button>
             </div>
           </form>

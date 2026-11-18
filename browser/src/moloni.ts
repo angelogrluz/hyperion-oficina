@@ -22,6 +22,7 @@ export type MoloniStatus = {
   taxes?: Array<{ id: string; name: string; value: number }>;
   paymentMethods?: Array<{ id: string; name: string }>;
   error?: string;
+  catalogErrors?: string[];
 };
 
 function generic(message: string) {
@@ -31,8 +32,23 @@ function generic(message: string) {
 async function call(body: Record<string, unknown>): Promise<MoloniStatus> {
   const db = supabase();
   if (!db) return { connected: false, status: "desligado", error: "O servidor ainda não está configurado." };
-  const { data, error } = await db.functions.invoke("moloni", { body });
-  if (error) return { connected: false, status: "desligado", error: "A ligação ao programa de faturação ainda não está publicada no servidor." };
+  const action = String(body.action ?? "");
+  let result: { data: unknown; error: unknown };
+  try {
+    result = await Promise.race([
+      db.functions.invoke("moloni", { body }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 60_000)),
+    ]) as { data: unknown; error: unknown };
+  } catch {
+    console.error("[faturação]", action, "sem resposta em 60 s");
+    return { connected: false, status: "desligado", error: "O servidor de faturação não respondeu a tempo. Tenta outra vez." };
+  }
+  const { data, error } = result;
+  if (error) {
+    const httpStatus = (error as { context?: { status?: number } })?.context?.status;
+    console.error("[faturação]", action, "falhou", httpStatus ?? "", error);
+    return { connected: false, status: "desligado", error: `Falha ao falar com o servidor de faturação${httpStatus ? ` (HTTP ${httpStatus})` : ""}. Tenta outra vez.` };
+  }
   const payload = (data ?? { connected: false, status: "desligado" }) as MoloniStatus;
   if (payload.error) payload.error = generic(payload.error);
   return payload;
