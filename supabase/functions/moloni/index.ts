@@ -47,11 +47,16 @@ Deno.serve(async (req) => {
       return json({ connected: false, status: "desligado" });
     }
     if (action === "issue") return json(await issue(admin, companyId, body));
+    if (action === "pdf") return json(await lookupPdf(admin, companyId, body));
     return json({ error: "Ação desconhecida." });
   } catch (error) {
-    return json({ error: error instanceof Error ? error.message : "Falha na ligação à Moloni." });
+    return json({ error: publicError(error instanceof Error ? error.message : "Falha na ligação ao programa de faturação.") });
   }
 });
+
+function publicError(message: string) {
+  return message.replace(/Moloni/g, "O programa de faturação").replace(/moloni/g, "o programa de faturação");
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
@@ -203,7 +208,7 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   const endpoint = kind === "orcamento" ? "estimates/insert" : row.issue_as === "fatura_recibo" && kind !== "orcamento" ? "invoiceReceipts/insert" : "invoices/insert";
   const created = await moloniPost(ready.token, endpoint, params);
   const documentId = String(created.document_id ?? created.documentId ?? "");
-  if (!documentId) return { error: "A Moloni não devolveu o documento." };
+  if (!documentId) return { error: "O programa de faturação não devolveu o documento." };
   const info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
   const number = String(info.document_set_name && info.number ? `${info.document_set_name}/${info.number}` : info.number ?? documentId);
   let pdf: string | null = null;
@@ -220,6 +225,67 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     simulated: false,
     testMode: Boolean(row.test_mode),
   };
+}
+
+const PDF_ENDPOINTS: Record<string, string> = {
+  FT: "invoices/getAll",
+  FR: "invoiceReceipts/getAll",
+  RC: "receipts/getAll",
+  NC: "creditNotes/getAll",
+};
+
+function parseDocumentNumber(value: string) {
+  const text = value.trim();
+  const typed = text.match(/^(FT|FR|RC|NC)\s*([^/]*)\/(\d+)$/i);
+  if (typed) {
+    const type = typed[1].toUpperCase();
+    const rest = typed[2].replace(/^[\s./-]+/, "");
+    const year = (rest.match(/(\d{4})/) ?? text.match(/(\d{4})/) ?? [])[1] ?? "";
+    return { type, series: rest ? `${type}${rest}` : type, number: typed[3], year };
+  }
+  const parts = text.split("/").filter(Boolean);
+  const number = parts.length > 1 ? parts[parts.length - 1] : "";
+  const series = parts.length > 1 ? parts.slice(0, -1).join("/") : text;
+  const year = (series.match(/(\d{4})/) ?? [])[1] ?? "";
+  return { type: "", series, number, year };
+}
+
+async function pdfLink(token: string, companyId: string, documentId: string) {
+  const link = await moloniPost(token, "documents/getPDFLink", new URLSearchParams({ company_id: companyId, document_id: documentId }));
+  return typeof link.url === "string" && link.url ? link.url : "";
+}
+
+async function lookupPdf(admin: Admin, companyId: string, body: Record<string, unknown>) {
+  const ready = await requireToken(admin, companyId);
+  if ("error" in ready) return { found: false, error: ready.error };
+  const moloniCompanyId = String(ready.data.moloni_company_id ?? "");
+  if (!moloniCompanyId) return { found: false, error: "Escolhe a empresa em Integrações." };
+  const knownId = String(body.document_id ?? "").trim();
+  if (knownId) {
+    const url = await pdfLink(ready.token, moloniCompanyId, knownId).catch(() => "");
+    return url ? { found: true, documentId: knownId, url } : { found: false };
+  }
+  const parsed = parseDocumentNumber(String(body.number ?? ""));
+  if (!parsed.number) return { found: false };
+  const wantReceipt = String(body.kind ?? "fatura") === "recibo";
+  const types = wantReceipt
+    ? (parsed.type === "FR" || parsed.type === "RC" ? [parsed.type] : ["RC", "FR"])
+    : (parsed.type ? [parsed.type] : ["FT", "FR", "NC", "RC"]);
+  const sets = await moloniList(ready.token, "documentSets/getAll", { company_id: moloniCompanyId }).catch(() => []);
+  const seriesKey = parsed.series.toLowerCase().replace(/\s/g, "");
+  const set = sets.find((item) => String(item.name ?? "").toLowerCase().replace(/\s/g, "") === seriesKey);
+  for (const type of types) {
+    const fields: Record<string, string> = { company_id: moloniCompanyId, number: parsed.number, qty: "50", offset: "0" };
+    if (parsed.year) fields.year = parsed.year;
+    if (set?.document_set_id) fields.document_set_id = String(set.document_set_id);
+    const rows = await moloniList(ready.token, PDF_ENDPOINTS[type], fields).catch(() => []);
+    const hit = rows.find((item) => String(item.number ?? "") === parsed.number && (!set?.document_set_id || !item.document_set_id || String(item.document_set_id) === String(set.document_set_id)));
+    if (!hit?.document_id) continue;
+    const url = await pdfLink(ready.token, moloniCompanyId, String(hit.document_id)).catch(() => "");
+    if (!url) continue;
+    return { found: true, documentId: String(hit.document_id), url, documentType: type };
+  }
+  return { found: false };
 }
 
 function consumerNif(nif?: string, name?: string) {
@@ -282,7 +348,7 @@ async function ensureProduct(admin: Admin, companyId: string, token: string, row
 
 async function requireToken(admin: Admin, companyId: string): Promise<{ token: string; data: Record<string, any> } | { error: string }> {
   const row = await rowOf(admin, companyId);
-  if (!row?.refresh_token) return { error: "A Moloni não está ligada. Volta a escrever a palavra-passe em Integrações." };
+  if (!row?.refresh_token) return { error: "O programa de faturação não está ligado. Volta a escrever a palavra-passe em Integrações." };
   const expires = row.token_expires_at ? new Date(row.token_expires_at).getTime() : 0;
   if (row.access_token && expires > Date.now() + 60_000) return { token: row.access_token, data: row };
   try {
@@ -296,7 +362,7 @@ async function requireToken(admin: Admin, companyId: string): Promise<{ token: s
     return { token: token.access_token, data: { ...row, access_token: token.access_token } };
   } catch {
     await admin.from("moloni_connections").update({ access_token: null, refresh_token: null, token_expires_at: null }).eq("company_id", companyId);
-    return { error: "A sessão da Moloni expirou. Escreve outra vez a palavra-passe para ligar." };
+    return { error: "A sessão do programa de faturação expirou. Escreve outra vez a palavra-passe para ligar." };
   }
 }
 

@@ -96,5 +96,30 @@ export async function issueCloudDocument(input: {
   return {
     ...payload,
     providerLabel: payload.testMode ? "Rascunho de teste" : "Fatura certificada",
+    simulated: Boolean(payload.testMode) || Boolean(payload.simulated),
   };
+}
+
+export async function officialDocumentPdf(input: {
+  companyId: string;
+  number: string;
+  kind: "fatura" | "recibo";
+  documentId?: string | null;
+}): Promise<{ found: boolean; url?: string; documentId?: string; documentType?: string; error?: string }> {
+  const db = supabase();
+  if (!db || !input.companyId) return { found: false };
+  const { data, error } = await db.functions.invoke("moloni", {
+    body: {
+      action: "pdf",
+      company_id: input.companyId,
+      number: input.number,
+      kind: input.kind,
+      document_id: input.documentId || undefined,
+    },
+  });
+  if (error) return { found: false, error: "A consulta do documento ainda não está publicada. Abre a vista da aplicação." };
+  const payload = (data ?? {}) as { found?: boolean; url?: string; documentId?: string; documentType?: string; error?: string };
+  if (payload.error) return { found: false, error: generic(payload.error) };
+  if (!payload.found || !payload.url) return { found: false };
+  return payload;
 }

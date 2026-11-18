@@ -37,6 +37,8 @@ import { formatEUR, formatQty } from "@/lib/format";
 import { APPROVAL_LABEL, normalizeApproval, type Approval } from "@/lib/approval";
 import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/labels";
 import { workshopPath } from "@/lib/workshop-slug";
+import { officialDocumentPdf } from "@/browser/src/moloni";
+import { rememberOfficialDocument } from "@/browser/src/store";
 
 export type EditorArticle = {
   id: string;
@@ -140,6 +142,7 @@ export function DocumentEditor({
   quoteNumber,
   quoteUrl,
   invoiceUrl,
+  documentLookup = null,
   paid = false,
   orderHref,
   userName = "Admin",
@@ -159,6 +162,7 @@ export function DocumentEditor({
   quoteNumber?: string | null;
   quoteUrl?: string | null;
   invoiceUrl?: string | null;
+  documentLookup?: { mode: "importado" | "certificado"; companyId: string; number: string; documentId?: string | null; httpsUrl?: string | null } | null;
   paid?: boolean;
   orderHref?: string | null;
   userName?: string;
@@ -715,6 +719,28 @@ export function DocumentEditor({
 
   const selectedClient = clientList.find((item) => item.id === clientId);
 
+  async function openOfficial(kind: "fatura" | "recibo") {
+    const preview = () => { if (documentId) router.push(workshopPath(`/ordens/${documentId}/${kind}`)); };
+    if (!documentLookup?.companyId || !documentLookup.number) { preview(); return; }
+    if (kind === "fatura" && documentLookup.httpsUrl) {
+      window.open(documentLookup.httpsUrl, "_blank", "noopener");
+      return;
+    }
+    const result = await officialDocumentPdf({
+      companyId: documentLookup.companyId,
+      number: documentLookup.number,
+      kind,
+      documentId: kind === "fatura" ? documentLookup.documentId : null,
+    });
+    if (result.found && result.url) {
+      if (result.documentId && documentId) void rememberOfficialDocument(documentId, result.documentId, result.documentType ?? "", documentLookup.number);
+      window.open(result.url, "_blank", "noopener");
+      return;
+    }
+    if (result.error) toast.error(result.error);
+    preview();
+  }
+
   const sheet = mode === "order";
   if (sheet) {
     return (
@@ -960,6 +986,8 @@ export function DocumentEditor({
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
           invoiceHref={documentId ? (/^https?:\/\//i.test(invoiceUrl ?? "") ? invoiceUrl ?? undefined : workshopPath(`/ordens/${documentId}/fatura`)) : undefined}
+          onOpenInvoice={documentLookup ? () => { void openOfficial("fatura"); } : undefined}
+          onOpenReceipt={documentLookup ? () => { void openOfficial("recibo"); } : undefined}
           paid={paid}
           onMarkPaid={() => {
             if (!documentId) return;

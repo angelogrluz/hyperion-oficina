@@ -42,6 +42,8 @@ import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval
 import { resolveLineIdentity } from "@/lib/line-ref";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
 import { currentUser } from "@/lib/user-settings";
+import { officialDocumentPdf } from "@/browser/src/moloni";
+import { rememberOfficialDocument } from "@/browser/src/store";
 import { readSession } from "./shims/auth";
 import { bootCloud, cloudConfigured, readCloudUser, signOut, subscribeCloud } from "./cloud";
 import { saveClient, saveVehicle } from "./shims/records";
@@ -316,6 +318,7 @@ function OrderScreen() {
       quoteNumber={order.quoteNumber ?? null}
       quoteUrl={order.quoteUrl ?? null}
       invoiceUrl={order.invoiceUrl ?? null}
+      documentLookup={documentLookup(order)}
       initial={{
         clientId: order.clientId ?? "",
         vehicleId: order.vehicleId ?? "",
@@ -610,18 +613,77 @@ function LoginPage() {
   );
 }
 
+function documentLookup(order: { invoiceProvider?: string | null; invoiceSimulated?: boolean; invoiceNumber?: string | null; invoiceExternalId?: string | null; invoiceUrl?: string | null; originalDocumentUrl?: string | null }) {
+  const provider = (order.invoiceProvider ?? "").toLowerCase();
+  const companyId = readCloudUser()?.companyId ?? "";
+  const https = [order.originalDocumentUrl, order.invoiceUrl].find((value) => /^https?:\/\//i.test(value ?? "")) ?? null;
+  if (!order.invoiceNumber || !companyId) return null;
+  if (provider === "importado" || provider === "keymaster") {
+    return { mode: "importado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: https };
+  }
+  if (!order.invoiceSimulated && !provider.includes("teste") && !provider.includes("rascunho") && !provider.includes("simula") && provider.includes("certific")) {
+    return { mode: "certificado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: null };
+  }
+  return null;
+}
+
+function useOfficialDocument(order: { id: string; invoiceProvider?: string | null; invoiceSimulated?: boolean; invoiceNumber?: string | null; invoiceExternalId?: string | null; invoiceUrl?: string | null; originalDocumentUrl?: string | null } | undefined, kind: "orcamento" | "fatura" | "recibo") {
+  const lookup = order && kind !== "orcamento" ? documentLookup(order) : null;
+  const [phase, setPhase] = useState<"loading" | "opened" | "preview">(lookup ? "loading" : "preview");
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    if (!lookup || !order) return;
+    let alive = true;
+    if (kind === "fatura" && lookup.httpsUrl) {
+      setUrl(lookup.httpsUrl);
+      window.open(lookup.httpsUrl, "_blank", "noopener");
+      setPhase("opened");
+      return;
+    }
+    void officialDocumentPdf({
+      companyId: lookup.companyId,
+      number: lookup.number,
+      kind: kind === "recibo" ? "recibo" : "fatura",
+      documentId: kind === "fatura" ? lookup.documentId : null,
+    }).then((result) => {
+      if (!alive) return;
+      if (result.found && result.url) {
+        if (result.documentId) void rememberOfficialDocument(order.id, result.documentId, result.documentType ?? "", lookup.number);
+        setUrl(result.url);
+        window.open(result.url, "_blank", "noopener");
+        setPhase("opened");
+      } else setPhase("preview");
+    });
+    return () => { alive = false; };
+  }, [order?.id, kind, lookup?.companyId, lookup?.number, lookup?.documentId, lookup?.httpsUrl]);
+  return { phase: lookup ? phase : "preview" as const, url };
+}
+
 function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   const { id } = useParams();
   const params = useSearchParams();
   const snap = useSnap();
   const imprimir = params.get("imprimir") === "1";
+  const order = snap?.orders.find((item) => item.id === id);
+  const official = useOfficialDocument(order, kind);
   useEffect(() => {
-    if (!imprimir) return;
+    if (!imprimir || official.phase !== "preview") return;
     const timer = window.setTimeout(() => window.print(), 400);
     return () => window.clearTimeout(timer);
-  }, [imprimir]);
+  }, [imprimir, official.phase]);
   if (!snap || !id) return null;
-  const order = snap.orders.find((item) => item.id === id);
+  if (official.phase === "loading") return <p className="p-6">A consultar o documento…</p>;
+  if (official.phase === "opened") {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[var(--paper)] px-6 text-center">
+        <div>
+          <p className="text-[20px] font-semibold">O documento oficial abriu noutro separador.</p>
+          <button type="button" className="mt-4 h-11 rounded-lg bg-[var(--glow)] px-4 font-semibold text-white" onClick={() => { if (official.url) window.open(official.url, "_blank", "noopener"); }}>Abrir outra vez</button>
+          <p className="mt-4"><Link href={`/ordens/${id}`} className="text-[var(--glow)]">Voltar à folha</Link></p>
+        </div>
+      </main>
+    );
+  }
   if (!order) return <p className="p-6">Documento não encontrado.</p>;
   const client = snap.clients.find((item) => item.id === order.clientId);
   const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);

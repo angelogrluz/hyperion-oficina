@@ -108,6 +108,8 @@ export function FolhaView({
   quoteHref,
   invoiceNumber,
   invoiceHref,
+  onOpenInvoice,
+  onOpenReceipt,
   paid,
   onMarkPaid,
   suppliers,
@@ -195,6 +197,8 @@ export function FolhaView({
   quoteHref?: string;
   invoiceNumber?: string | null;
   invoiceHref?: string;
+  onOpenInvoice?: () => void;
+  onOpenReceipt?: () => void;
   paid?: boolean;
   onMarkPaid?: () => void;
   suppliers: { id: string; name: string }[];
@@ -944,10 +948,12 @@ export function FolhaView({
           </div>
           {allowClose ? <Button type="button" className="h-10 bg-[var(--glow)] text-[17px] hover:bg-[var(--glow-deep)]" disabled={locked || pending} onClick={() => onSave("concluida")}>Fechar Processo</Button> : null}
           {canInvoice && allowInvoice ? <Button type="button" data-testid="faturar" className="h-10 bg-[var(--glow)] text-[17px] hover:bg-[var(--glow-deep)]" disabled={pending} onClick={onInvoice}>Faturar</Button> : null}
-          {invoiceNumber ? <Link href={`/ordens/${documentId}/fatura?imprimir=1`} data-testid="imprimir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--glow)] text-[17px] font-semibold text-white">Imprimir fatura</Link> : null}
+          {invoiceNumber ? (onOpenInvoice ? <button type="button" data-testid="imprimir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--glow)] text-[17px] font-semibold text-white" onClick={onOpenInvoice}>Imprimir fatura</button> : <Link href={`/ordens/${documentId}/fatura?imprimir=1`} data-testid="imprimir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--glow)] text-[17px] font-semibold text-white">Imprimir fatura</Link>) : null}
           {invoiceNumber && !paid ? <Button type="button" data-testid="registar-pagamento" className="h-10 bg-[#1f9d55] text-[17px] hover:bg-[#188a48]" disabled={pending} onClick={onMarkPaid}>Registar pagamento</Button> : null}
-          {paid ? <Link href={`/ordens/${documentId}/recibo?imprimir=1`} data-testid="imprimir-recibo" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--charcoal)] text-[17px] font-semibold text-white">Imprimir recibo</Link> : null}
-          {invoiceNumber && invoiceHref ? (
+          {invoiceNumber && onOpenReceipt ? <button type="button" data-testid="imprimir-recibo" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--charcoal)] text-[17px] font-semibold text-white" onClick={onOpenReceipt}>Imprimir recibo</button> : paid ? <Link href={`/ordens/${documentId}/recibo?imprimir=1`} data-testid="imprimir-recibo" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--charcoal)] text-[17px] font-semibold text-white">Imprimir recibo</Link> : null}
+          {invoiceNumber && onOpenInvoice ? (
+            <button type="button" data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--glow)] bg-white text-[17px] font-medium text-[var(--glow)]" onClick={onOpenInvoice}>Abrir fatura</button>
+          ) : invoiceNumber && invoiceHref ? (
             /^https?:\/\//i.test(invoiceHref) ? (
               <a href={invoiceHref} target="_blank" rel="noopener noreferrer" data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--glow)] bg-white text-[17px] font-medium text-[var(--glow)]">
                 Abrir fatura

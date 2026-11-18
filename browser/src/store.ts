@@ -132,6 +132,7 @@ export type Order = {
   invoiceSimulated: boolean;
   invoiceUrl?: string | null;
   originalDocumentUrl?: string | null;
+  invoiceExternalId?: string | null;
   paymentMethod?: string | null;
   paidAt?: string | null;
   quoteNumber?: string | null;
@@ -317,6 +318,7 @@ export async function readSnapshot(): Promise<Snapshot> {
     if (cloudMemory) return cloudMemory;
     const loaded = await loadCompanyState();
     if (!loaded) throw new Error("Sem sessão na nuvem.");
+    rememberLoadedDocuments(loaded);
     cloudMemory = { workshop: workshopFromSettings(), ...loaded };
     baseSnapshot = structuredClone(cloudMemory);
     return cloudMemory;
@@ -350,6 +352,7 @@ async function persistCloud(draft: Snapshot) {
       if (!(error instanceof RevisionConflict) || attempt === 2) throw error;
       const loaded = await loadCompanyState();
       if (!loaded) throw error;
+      rememberLoadedDocuments(loaded);
       const remote = { workshop: workshopFromSettings(), ...loaded };
       current = {
         ...remote,
@@ -437,6 +440,55 @@ export async function replaceSnapshot(next: Snapshot) {
 
 function stamp() {
   return nowIso();
+}
+
+function rememberLoadedDocuments(loaded: { orders: Order[]; invoiceLogs: InvoiceLog[] }) {
+  for (const order of loaded.orders) {
+    if (order.invoiceExternalId) continue;
+    for (const log of loaded.invoiceLogs) {
+      if (log.orderId !== order.id) continue;
+      try {
+        const parsed = JSON.parse(log.responseJson) as { externalId?: string; documentId?: string };
+        const id = parsed.externalId || parsed.documentId;
+        if (id) {
+          order.invoiceExternalId = String(id);
+          break;
+        }
+      } catch {
+        /* the log is not a cached document */
+      }
+    }
+  }
+}
+
+export async function rememberOfficialDocument(orderId: string, documentId: string, documentType: string, number: string) {
+  const current = await readSnapshot();
+  const known = current.orders.find((item) => item.id === orderId)?.invoiceExternalId === documentId
+    && current.invoiceLogs.some((log) => {
+      if (log.orderId !== orderId) return false;
+      try { return String((JSON.parse(log.responseJson) as { externalId?: string }).externalId ?? "") === documentId; } catch { return false; }
+    });
+  if (known) return;
+  await update((snap) => {
+    const order = snap.orders.find((item) => item.id === orderId);
+    if (order) order.invoiceExternalId = documentId;
+    const already = snap.invoiceLogs.some((log) => {
+      if (log.orderId !== orderId) return false;
+      try { return String((JSON.parse(log.responseJson) as { externalId?: string }).externalId ?? "") === documentId; } catch { return false; }
+    });
+    if (already) return;
+    snap.invoiceLogs.push({
+      id: uid(),
+      orderId,
+      providerId: "certificado",
+      providerLabel: "Fatura certificada",
+      simulated: false,
+      documentNumber: number,
+      requestJson: "{}",
+      responseJson: JSON.stringify({ externalId: documentId, documentType }),
+      createdAt: stamp(),
+    });
+  });
 }
 
 function nextNumber(snap: Snapshot, kind: "OR" | "ORC") {
