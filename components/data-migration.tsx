@@ -8,6 +8,7 @@ import { cell, historyLineInputs, isNormalVat, looksLikeLines, money, readHistor
 import { CONSUMIDOR_FINAL } from "@/lib/consumidor";
 import {
   clientConflict,
+  forgetCloudMemory,
   normalizePersonName,
   normalizePhone,
   readSnapshot,
@@ -333,14 +334,17 @@ async function prepareHistory(docsFile: File | null, linesFile: File | null, rep
     if (!replace) numbers.add(number);
     const kmRaw = cell(row, "Km", "km");
     const km = kmRaw.trim() === "" ? (existing?.km ?? 0) : wholeKm(kmRaw);
+    const documentLink = cell(row, "Link documento", "Link do documento");
+    const originalDocumentUrl = /^https?:\/\//i.test(documentLink) ? documentLink : "";
     const id = existing && replace ? existing.id : crypto.randomUUID();
     accepted.set(key, id);
     if (replace) {
-      plan.orders.push({ id, km } as Order);
+      plan.orders.push({ id, km, originalDocumentUrl, invoiceUrl: originalDocumentUrl } as Order);
     } else plan.orders.push({
       id, number, clientId, vehicleId: vehicle?.id ?? null, dateIn: when, dateOut: when, km,
       problem: cell(row, "Tipo", "tipo"), status: "faturada", approval: "aprovado", notes: cell(row, "Observações", "Observacoes"),
       invoiceNumber: documento, invoiceProvider: "importado", invoiceIssuedAt: when, invoiceSimulated: false, quoteId: null,
+      invoiceUrl: originalDocumentUrl || null, originalDocumentUrl: originalDocumentUrl || null,
       createdAt: when, updatedAt: when,
     });
     if (vehicle && km > vehicle.km) plan.kmUpdates.push({ vehicleId: vehicle.id, km });
@@ -401,6 +405,10 @@ async function commit(preview: Preview, onProgress: (text: string) => void) {
       order.status = "faturada";
       order.km = patch.km;
       order.invoiceProvider = "importado";
+      if (/^https?:\/\//i.test(patch.originalDocumentUrl ?? "")) {
+        order.originalDocumentUrl = patch.originalDocumentUrl;
+        order.invoiceUrl = patch.originalDocumentUrl;
+      }
       order.updatedAt = new Date().toISOString();
       snap.lines = snap.lines.filter((line) => line.orderId !== order.id);
     }
@@ -413,10 +421,23 @@ async function commit(preview: Preview, onProgress: (text: string) => void) {
   onProgress("A sincronizar com o servidor…");
   try {
     await replaceSnapshot(snap);
+    forgetCloudMemory();
+    const saved = await readSnapshot();
+    if (preview.replace) {
+      const missing = preview.orders.filter((patch) => preview.lines.filter((line) => line.orderId === patch.id).length !== saved.lines.filter((line) => line.orderId === patch.id).length);
+      if (missing.length) {
+        const sample = saved.orders.find((order) => order.id === missing[0].id);
+        return { ok: false as const, error: `O servidor não confirmou as linhas${sample?.invoiceNumber ? ` de ${sample.invoiceNumber}` : ""}. Volta a gravar.` };
+      }
+    }
+    const savedCount = preview.lines.filter((line) => saved.lines.some((item) => item.id === line.id)).length;
+    if (savedCount !== preview.lines.length) {
+      return { ok: false as const, error: `O servidor confirmou ${savedCount} de ${preview.lines.length} linhas. Volta a gravar.` };
+    }
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? `${error.message} Nada foi gravado.` : "A sincronização falhou. Nada foi gravado." };
   }
-  return { ok: true as const, message: preview.replace ? `Linhas reimportadas em ${preview.fresh} obras.` : `Gravados ${preview.fresh}.` };
+  return { ok: true as const, message: preview.replace ? `Linhas reimportadas em ${preview.fresh} obras. ${preview.lineCount} linhas confirmadas no servidor.` : `Gravados ${preview.fresh}. ${preview.lineCount} linhas confirmadas no servidor.` };
 }
 
 async function exportKind(kind: Kind) {
@@ -433,7 +454,8 @@ async function exportKind(kind: Kind) {
       }, { base: 0, vat: 0, total: 0 });
       const client = snap.clients.find((item) => item.id === order.clientId);
       const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
-      return { Documento: order.invoiceNumber, Tipo: order.problem, Data: order.invoiceIssuedAt ? new Date(order.invoiceIssuedAt).toLocaleDateString("pt-PT") : "", "Nº obra": order.number, Matrícula: vehicle?.plate ?? "", "NIF cliente": client?.nif ?? "", Cliente: client?.name ?? "", Km: order.km, "Total s/IVA": totals.base, IVA: totals.vat, Total: totals.total, Observações: order.notes };
+      const link = /^https?:\/\//i.test(order.originalDocumentUrl || order.invoiceUrl || "") ? (order.originalDocumentUrl || order.invoiceUrl || "") : "";
+      return { Documento: order.invoiceNumber, Tipo: order.problem, Data: order.invoiceIssuedAt ? new Date(order.invoiceIssuedAt).toLocaleDateString("pt-PT") : "", "Nº obra": order.number, Matrícula: vehicle?.plate ?? "", "NIF cliente": client?.nif ?? "", Cliente: client?.name ?? "", Km: order.km, "Total s/IVA": totals.base, IVA: totals.vat, Total: totals.total, Observações: order.notes, "Link documento": link };
     });
     const lines = orders.flatMap((order) => snap.lines.filter((line) => line.orderId === order.id).map((line) => {
       const amounts = lineAmounts({ quantity: line.quantity, unitPrice: line.unitPrice, unitCost: 0, discountPercent: line.discountPercent ?? 0, vatRate: line.vatRate });

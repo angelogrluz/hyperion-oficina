@@ -10,6 +10,7 @@ export type OrderRow = {
   href: string;
   number: string;
   date: string;
+  sortDate?: string;
   plate: string;
   vehicle: string;
   client: string;
@@ -52,7 +53,14 @@ export function OrderListTable({ rows }: { rows: OrderRow[] }) {
       }),
     );
     return filtered.sort((a, b) => {
-      const result = sortKey === "total" ? a.total - b.total : a[sortKey].localeCompare(b[sortKey], "pt");
+      if (sortKey === "date") {
+        const byDate = (a.sortDate || a.date).localeCompare(b.sortDate || b.date) * direction;
+        if (byDate !== 0) return byDate;
+        return b.number.localeCompare(a.number, "pt", { numeric: true });
+      }
+      const result = sortKey === "total"
+        ? a.total - b.total
+        : String(a[sortKey]).localeCompare(String(b[sortKey]), "pt", { numeric: true });
       return result * direction;
     });
   }, [rows, filters, sortKey, direction]);

@@ -441,22 +441,37 @@ function num(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+async function selectCompanyRows(table: string, companyId: string) {
+  const db = supabase();
+  if (!db) return { data: [] as Row[], error: null as { message: string } | null };
+  const page = 1000;
+  const data: Row[] = [];
+  for (let from = 0; ; from += page) {
+    const result = await db.from(table).select("*").eq("company_id", companyId).order("id", { ascending: true }).range(from, from + page - 1);
+    if (result.error) return { data, error: result.error };
+    const batch = (result.data ?? []) as Row[];
+    data.push(...batch);
+    if (batch.length < page) break;
+  }
+  return { data, error: null as { message: string } | null };
+}
+
 export async function loadCompanyState() {
   const db = supabase();
   if (!db || !current) return null;
   const cid = current.companyId;
   const [clients, vehicles, articles, suppliers, orders, quotes, lines, purchases, purchaseLines, appointments, invoiceLogs, settings] = await Promise.all([
-    db.from("clients").select("*").eq("company_id", cid),
-    db.from("vehicles").select("*").eq("company_id", cid),
-    db.from("articles").select("*").eq("company_id", cid),
-    db.from("suppliers").select("*").eq("company_id", cid),
-    db.from("orders").select("*").eq("company_id", cid),
-    db.from("quotes").select("*").eq("company_id", cid),
-    db.from("doc_lines").select("*").eq("company_id", cid),
-    db.from("purchases").select("*").eq("company_id", cid),
-    db.from("purchase_lines").select("*").eq("company_id", cid),
-    db.from("appointments").select("*").eq("company_id", cid),
-    db.from("invoice_logs").select("*").eq("company_id", cid),
+    selectCompanyRows("clients", cid),
+    selectCompanyRows("vehicles", cid),
+    selectCompanyRows("articles", cid),
+    selectCompanyRows("suppliers", cid),
+    selectCompanyRows("orders", cid),
+    selectCompanyRows("quotes", cid),
+    selectCompanyRows("doc_lines", cid),
+    selectCompanyRows("purchases", cid),
+    selectCompanyRows("purchase_lines", cid),
+    selectCompanyRows("appointments", cid),
+    selectCompanyRows("invoice_logs", cid),
     db.from("company_settings").select("*").eq("company_id", cid).maybeSingle(),
   ]);
   const failed = [clients, vehicles, articles, suppliers, orders, quotes, lines, purchases, purchaseLines, appointments, invoiceLogs, settings].find((result) => result.error);
@@ -496,6 +511,7 @@ export async function loadCompanyState() {
       problem: String(row.problem ?? ""), status: String(row.status ?? "aberta"), approval: String(row.approval ?? "aguarda"), approvalAt: (row.approval_at as string | null) ?? null,
       notes: String(row.notes ?? ""), invoiceNumber: (row.invoice_number as string | null) ?? null, invoiceProvider: rawProvider(row.invoice_provider),
       invoiceIssuedAt: (row.invoice_issued_at as string | null) ?? null, invoiceSimulated: Boolean(row.invoice_simulated), invoiceUrl: (row.invoice_url as string | null) ?? null,
+      originalDocumentUrl: /^https?:\/\//i.test(String(row.invoice_url ?? "")) ? String(row.invoice_url) : null,
       paymentMethod: (row.payment_method as string | null) ?? null, paidAt: (row.paid_at as string | null) ?? null, quoteNumber: (row.quote_number as string | null) ?? null,
       quoteUrl: (row.quote_url as string | null) ?? null, quoteId: (row.quote_id as string | null) ?? null, createdAt: String(row.created_at), updatedAt: String(row.updated_at),
     })),

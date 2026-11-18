@@ -948,9 +948,15 @@ export function FolhaView({
           {invoiceNumber && !paid ? <Button type="button" data-testid="registar-pagamento" className="h-10 bg-[#1f9d55] text-[17px] hover:bg-[#188a48]" disabled={pending} onClick={onMarkPaid}>Registar pagamento</Button> : null}
           {paid ? <Link href={`/ordens/${documentId}/recibo?imprimir=1`} data-testid="imprimir-recibo" className="inline-flex h-10 items-center justify-center rounded-lg bg-[var(--charcoal)] text-[17px] font-semibold text-white">Imprimir recibo</Link> : null}
           {invoiceNumber && invoiceHref ? (
-            <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--glow)] bg-white text-[17px] font-medium text-[var(--glow)]">
-              Abrir fatura
-            </Link>
+            /^https?:\/\//i.test(invoiceHref) ? (
+              <a href={invoiceHref} target="_blank" rel="noopener noreferrer" data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--glow)] bg-white text-[17px] font-medium text-[var(--glow)]">
+                Abrir fatura
+              </a>
+            ) : (
+              <Link href={invoiceHref} data-testid="abrir-fatura" className="inline-flex h-10 items-center justify-center rounded-lg border border-[var(--glow)] bg-white text-[17px] font-medium text-[var(--glow)]">
+                Abrir fatura
+              </Link>
+            )
           ) : null}
         </div>
       </aside>

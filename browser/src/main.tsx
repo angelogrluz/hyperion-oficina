@@ -41,6 +41,7 @@ import { formatEUR, formatMediumDate, lisbonISODate, lisbonParts, lisbonTime } f
 import { normalizeApproval, APPROVAL_LABEL, type Approval } from "@/lib/approval";
 import { resolveLineIdentity } from "@/lib/line-ref";
 import { jobPresentation, orderTotal, shellTotals } from "@/lib/job-status";
+import { currentUser } from "@/lib/user-settings";
 import { readSession } from "./shims/auth";
 import { bootCloud, cloudConfigured, readCloudUser, signOut, subscribeCloud } from "./cloud";
 import { saveClient, saveVehicle } from "./shims/records";
@@ -48,6 +49,12 @@ import { clearWorkshopCache } from "@/lib/browser-cache";
 import { readSnapshot, resetDemo, subscribeSnapshot, type Snapshot } from "./store";
 import { AppUpdates } from "./updates";
 import "./styles.css";
+
+function newestFirst(dateA: string, dateB: string, numberA: string, numberB: string) {
+  const byDate = dateB.localeCompare(dateA);
+  if (byDate !== 0) return byDate;
+  return numberB.localeCompare(numberA, "pt", { numeric: true });
+}
 
 function useSnap() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
@@ -122,10 +129,11 @@ function DocumentLists({ kind }: { kind: "faturas" | "recibos" | "orcamentos" })
   if (!snap) return null;
   const title = kind === "faturas" ? "Faturas" : kind === "recibos" ? "Recibos" : "Orçamentos";
   const rows = kind === "orcamentos"
-    ? snap.quotes.map((quote) => ({ id: quote.id, href: `/ordens/${snap.orders.find((order) => order.quoteId === quote.id)?.id ?? ""}`, number: quote.number, detail: quote.problem || "Orçamento", when: quote.date }))
+    ? snap.quotes.map((quote) => ({ id: quote.id, href: `/ordens/${snap.orders.find((order) => order.quoteId === quote.id)?.id ?? ""}`, number: quote.number, detail: quote.problem || "Orçamento", when: quote.date })).sort((a, b) => newestFirst(a.when, b.when, a.number, b.number))
     : snap.orders
       .filter((order) => kind === "recibos" ? Boolean(order.paidAt) : Boolean(order.invoiceNumber))
-      .map((order) => ({ id: order.id, href: `/ordens/${order.id}/${kind === "recibos" ? "recibo" : "fatura"}`, number: kind === "recibos" ? order.invoiceNumber ?? order.number : order.invoiceNumber ?? order.number, detail: order.problem || order.number, when: order.invoiceIssuedAt || order.dateIn }));
+      .map((order) => ({ id: order.id, href: `/ordens/${order.id}/${kind === "recibos" ? "recibo" : "fatura"}`, number: kind === "recibos" ? order.invoiceNumber ?? order.number : order.invoiceNumber ?? order.number, detail: order.problem || order.number, when: order.invoiceIssuedAt || order.dateIn }))
+      .sort((a, b) => newestFirst(a.when, b.when, a.number, b.number));
   return (
     <section className="grid gap-3">
       <h1 className="text-[26px] font-semibold text-[var(--ink)]">{title}</h1>
@@ -297,7 +305,7 @@ function OrderScreen() {
       number={order.number}
       savedStatus={order.status}
       locked={order.status === "faturada"}
-      userName="Rita Almeida"
+      userName={currentUser()?.name || "Utilizador"}
       labourRate={catalog.labourRate}
       clients={catalog.clients}
       vehicles={catalog.vehicles}
@@ -336,7 +344,7 @@ function NewOrder() {
       mode="order"
       savedStatus="aberta"
       locked={false}
-      userName="Rita Almeida"
+      userName={currentUser()?.name || "Utilizador"}
       labourRate={catalog.labourRate}
       clients={catalog.clients}
       vehicles={catalog.vehicles}
@@ -362,7 +370,7 @@ function Orders() {
   const snap = useSnap();
   if (!snap) return null;
   const rows = [...snap.orders]
-    .sort((a, b) => b.dateIn.localeCompare(a.dateIn))
+    .sort((a, b) => newestFirst(a.dateIn, b.dateIn, a.invoiceNumber || a.number, b.invoiceNumber || b.number))
     .map((order) => {
       const client = snap.clients.find((item) => item.id === order.clientId);
       const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
@@ -372,6 +380,7 @@ function Orders() {
         href: `/ordens/${order.id}`,
         number: order.number,
         date: formatMediumDate(new Date(order.dateIn)),
+        sortDate: order.dateIn,
         plate: vehicle?.plate ?? "",
         vehicle: vehicle ? `${vehicle.brand} ${vehicle.model}`.trim() : "",
         client: client?.name ?? "Sem cliente",
@@ -805,7 +814,7 @@ function ClientScreen() {
   if (!snap || !id) return null;
   const client = snap.clients.find((item) => item.id === id);
   if (!client) return <p className="p-6">Cliente não encontrado.</p>;
-  const invoices = snap.orders.filter((order) => order.clientId === client.id && order.invoiceNumber).map((order) => ({
+  const invoices = snap.orders.filter((order) => order.clientId === client.id && order.invoiceNumber).sort((a, b) => newestFirst(a.invoiceIssuedAt || a.dateIn, b.invoiceIssuedAt || b.dateIn, a.invoiceNumber || a.number, b.invoiceNumber || b.number)).map((order) => ({
     id: order.id,
     number: order.invoiceNumber ?? "",
     issuedAt: order.invoiceIssuedAt || order.dateOut || order.updatedAt,

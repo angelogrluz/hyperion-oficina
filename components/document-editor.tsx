@@ -959,7 +959,7 @@ export function DocumentEditor({
           quoteNumber={quoteNumber}
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
-          invoiceHref={documentId ? workshopPath(invoiceUrl?.startsWith("/") ? invoiceUrl : `/ordens/${documentId}/fatura`) : undefined}
+          invoiceHref={documentId ? (/^https?:\/\//i.test(invoiceUrl ?? "") ? invoiceUrl ?? undefined : workshopPath(`/ordens/${documentId}/fatura`)) : undefined}
           paid={paid}
           onMarkPaid={() => {
             if (!documentId) return;

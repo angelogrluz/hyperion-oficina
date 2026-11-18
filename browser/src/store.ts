@@ -131,6 +131,7 @@ export type Order = {
   invoiceIssuedAt: string | null;
   invoiceSimulated: boolean;
   invoiceUrl?: string | null;
+  originalDocumentUrl?: string | null;
   paymentMethod?: string | null;
   paidAt?: string | null;
   quoteNumber?: string | null;
