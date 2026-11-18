@@ -55,7 +55,84 @@ Deno.serve(async (req) => {
 });
 
 function publicError(message: string) {
-  return message.replace(/Moloni/g, "O programa de faturação").replace(/moloni/g, "o programa de faturação");
+  return message
+    .replace(/\bna Moloni\b/gi, "no programa de faturação")
+    .replace(/\bda Moloni\b/gi, "do programa de faturação")
+    .replace(/\bà Moloni\b/gi, "ao programa de faturação")
+    .replace(/\bpela Moloni\b/gi, "pelo programa de faturação")
+    .replace(/\bA Moloni\b/g, "O programa de faturação")
+    .replace(/\ba Moloni\b/g, "o programa de faturação")
+    .replace(/Moloni/gi, "programa de faturação");
+}
+
+// Validation errors come back with HTTP 200 as an array of "<code> <field> [params]"
+// strings (or {code, description} objects when human_errors=true is sent).
+const FIELD_LABELS: Record<string, string> = {
+  company_id: "empresa", category_id: "categoria do artigo", type: "tipo de artigo", name: "nome",
+  reference: "referência", price: "preço", unit_id: "unidade de medida", has_stock: "controlo de stock",
+  stock: "stock", exemption_reason: "motivo de isenção de IVA", taxes: "impostos", tax_id: "taxa de IVA",
+  value: "valor", order: "ordem", cumulative: "imposto cumulativo", vat: "NIF", number: "número de cliente",
+  language_id: "idioma", address: "morada", city: "localidade", zip_code: "código postal", country_id: "país",
+  email: "e-mail", phone: "telefone", maturity_date_id: "prazo de vencimento", payment_day: "dia de pagamento",
+  discount: "desconto", credit_limit: "limite de crédito", qty_copies_document: "número de cópias",
+  sales_man_id: "vendedor", date: "data", expiration_date: "data de vencimento", document_set_id: "série",
+  customer_id: "cliente", products: "linhas", product_id: "artigo", qty: "quantidade", payments: "pagamentos",
+  payment_method_id: "método de pagamento", our_reference: "referência interna", status: "estado",
+  parent_id: "categoria-mãe", short_name: "abreviatura", summary: "descrição",
+};
+const CODE_TEXT: Record<string, string> = {
+  "1": "é obrigatório",
+  "2": "tem de ser um número válido (ID inexistente ou valor fora do intervalo)",
+  "3": "não é um e-mail válido",
+  "4": "já existe (tem de ser único)",
+  "5": "não tem um valor aceite",
+  "6": "tem de ser um URL",
+  "7": "não é um código postal válido",
+  "8": "não é um NIF português válido",
+  "9": "tem de ser uma data AAAA-MM-DD",
+  "10": "associação de documento inválida",
+  "11": "o documento não pode ser comunicado à AT",
+  "12": "tem uma data fora do intervalo permitido",
+  "13": "não é um telefone válido",
+  "14": "ordem/cumulatividade dos impostos inválida",
+  "15": "tem mais do que uma taxa de IVA",
+  "16": "acima do limite legal o cliente tem de estar identificado (nome, morada, localidade e código postal reais)",
+  "17": "atingiu o limite permitido",
+};
+
+class ProviderValidationError extends Error {}
+
+function describeField(raw: string) {
+  // e.g. "products", "products.0.taxes.0.tax_id", "products[0][taxes]"
+  const parts = raw.split(/[.\[\]]+/).filter(Boolean);
+  const line = parts.length > 1 && parts[0] === "products" && /^\d+$/.test(parts[1]) ? ` (linha ${Number(parts[1]) + 1})` : "";
+  const last = [...parts].reverse().find((part) => !/^\d+$/.test(part)) ?? raw;
+  return `${FIELD_LABELS[last] ?? last}${line}`;
+}
+
+function validationMessages(payload: unknown): string[] | null {
+  if (!Array.isArray(payload) || !payload.length) return null;
+  const out: string[] = [];
+  for (const item of payload) {
+    let code = "";
+    if (typeof item === "string") code = item;
+    else if (item && typeof item === "object" && typeof (item as Record<string, unknown>).code === "string") code = String((item as Record<string, unknown>).code);
+    else return null;
+    const match = code.trim().match(/^(\d+)\s+(\S+)(.*)$/);
+    if (!match) return null;
+    const [, num, field] = match;
+    out.push(`${describeField(field)} ${CODE_TEXT[num] ?? "não é válido"} [${code.trim()}]`);
+  }
+  return out;
+}
+
+function validationError(path: string, payload: unknown, sent?: URLSearchParams) {
+  const messages = validationMessages(payload);
+  if (!messages) return null;
+  const sentKeys = sent ? [...new Set([...sent.keys()].map((key) => key.replace(/\[\d+\]/g, "[]")))].join(",") : "";
+  const detail = JSON.stringify(payload).slice(0, 1500);
+  console.error(`[prod] ${path} validation`, detail, sentKeys ? `sent=${sentKeys}` : "");
+  return new ProviderValidationError(`O programa de faturação recusou o pedido (${path}): ${messages.join("; ")}.`);
 }
 
 function json(body: unknown, status = 200) {
@@ -168,8 +245,8 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   if (!lines.length) return { error: "O documento não tem linhas." };
   const nif = consumerNif(customer.nif, customer.name);
   const customerId = await ensureCustomer(ready.token, String(row.moloni_company_id), { ...customer, nif });
-  const productId = await ensureProduct(admin, companyId, ready.token, row);
   const taxes = await moloniList(ready.token, "taxes/getAll", { company_id: String(row.moloni_company_id) });
+  const productId = await ensureProduct(admin, companyId, ready.token, row, taxes);
   const today = new Date().toISOString().slice(0, 10);
   const params = new URLSearchParams();
   params.set("company_id", String(row.moloni_company_id));
@@ -181,7 +258,8 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   params.set("status", row.test_mode ? "0" : "1");
   lines.forEach((line, index) => {
     const rate = Number(line.vatRate ?? 23);
-    const tax = taxes.find((item) => Number(item.value) === rate) ?? taxes.find((item) => String(item.tax_id) === String(row.tax_id));
+    // 0 % lines must not fall back to the default (23 %) tax; they go out with an exemption reason only.
+    const tax = taxes.find((item) => Number(item.value) === rate) ?? (rate === 0 ? undefined : taxes.find((item) => String(item.tax_id) === String(row.tax_id)));
     params.set(`products[${index}][product_id]`, productId);
     params.set(`products[${index}][name]`, String(line.description ?? "Serviço"));
     params.set(`products[${index}][summary]`, String(line.description ?? ""));
@@ -189,11 +267,12 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     params.set(`products[${index}][price]`, String(line.unitPrice ?? 0));
     params.set(`products[${index}][discount]`, "0");
     params.set(`products[${index}][order]`, String(index));
-    if (rate === 0) params.set(`products[${index}][exemption_reason]`, "M99");
+    if (rate === 0 || !tax) params.set(`products[${index}][exemption_reason]`, "M99");
     if (tax) {
       params.set(`products[${index}][taxes][0][tax_id]`, String(tax.tax_id));
       params.set(`products[${index}][taxes][0][value]`, String(tax.value ?? rate));
       params.set(`products[${index}][taxes][0][order]`, "0");
+      params.set(`products[${index}][taxes][0][cumulative]`, "0");
     }
   });
   if (kind !== "orcamento") {
@@ -449,32 +528,88 @@ async function ensureCustomer(token: string, companyId: string, customer: Record
     qty_copies_document: "1",
     sales_man_id: "0",
   }));
-  if (!created.customer_id) throw new Error("Não foi possível criar o cliente na Moloni.");
+  if (!created.customer_id) {
+    console.error("[prod] customers/insert no customer_id", JSON.stringify(created).slice(0, 500));
+    throw new Error("O programa de faturação não devolveu o cliente criado.");
+  }
   return String(created.customer_id);
 }
 
-async function ensureProduct(admin: Admin, companyId: string, token: string, row: Record<string, unknown>) {
+async function ensureProduct(admin: Admin, companyId: string, token: string, row: Record<string, unknown>, taxes: Array<Record<string, any>>) {
   if (row.product_id) return String(row.product_id);
-  const found = await moloniList(token, "products/getByReference", { company_id: String(row.moloni_company_id), reference: "OFICINAPLAN" });
+  const moloniCompanyId = String(row.moloni_company_id);
+  const found = await moloniList(token, "products/getByReference", { company_id: moloniCompanyId, reference: "OFICINAPLAN", exact: "1" });
   const existing = found.find((item) => item.product_id);
   if (existing?.product_id) {
     await admin.from("moloni_connections").update({ product_id: String(existing.product_id) }).eq("company_id", companyId);
     return String(existing.product_id);
   }
-  const created = await moloniPost(token, "products/insert", new URLSearchParams({
-    company_id: String(row.moloni_company_id),
-    category_id: "1",
+  const categoryId = await ensureCategory(token, moloniCompanyId);
+  const unitId = await ensureUnit(token, moloniCompanyId);
+  const tax = taxes.find((item) => String(item.tax_id) === String(row.tax_id) && Number(item.value) > 0)
+    ?? taxes.find((item) => Number(item.value) === 23)
+    ?? taxes.find((item) => Number(item.value) > 0);
+  const params = new URLSearchParams({
+    company_id: moloniCompanyId,
+    category_id: categoryId,
     type: "2",
     name: "Serviço de oficina",
+    summary: "",
     reference: "OFICINAPLAN",
+    ean: "",
     price: "0",
-    unit_id: "1",
+    unit_id: unitId,
     has_stock: "0",
     stock: "0",
-  }));
-  if (!created.product_id) throw new Error("Não foi possível criar o artigo genérico na Moloni.");
+    at_product_category: "S",
+  });
+  if (tax) {
+    params.set("taxes[0][tax_id]", String(tax.tax_id));
+    params.set("taxes[0][value]", String(tax.value ?? 23));
+    params.set("taxes[0][order]", "0");
+    params.set("taxes[0][cumulative]", "0");
+    params.set("exemption_reason", "");
+  } else {
+    params.set("exemption_reason", "M99");
+  }
+  console.log("[prod] insert", JSON.stringify({ category: categoryId, unit: unitId, tax: tax ? String(tax.tax_id) : "", taxValue: tax?.value ?? null }));
+  let created: Record<string, any>;
+  try {
+    created = await moloniPost(token, "products/insert", params);
+  } catch (error) {
+    // The reference may already exist (e.g. created by hand); reuse it instead of failing.
+    const again = await moloniList(token, "products/getByReference", { company_id: moloniCompanyId, reference: "OFICINAPLAN" }).catch(() => []);
+    const hit = again.find((item) => item.product_id);
+    if (!hit?.product_id) throw error;
+    created = hit;
+  }
+  if (!created.product_id) {
+    console.error("[prod] insert no product_id", JSON.stringify(created).slice(0, 500));
+    throw new Error("O programa de faturação não devolveu o artigo genérico criado.");
+  }
   await admin.from("moloni_connections").update({ product_id: String(created.product_id) }).eq("company_id", companyId);
   return String(created.product_id);
+}
+
+async function ensureCategory(token: string, moloniCompanyId: string) {
+  const list = await moloniList(token, "productCategories/getAll", { company_id: moloniCompanyId, parent_id: "0" });
+  const pick = list.find((item) => /servi|oficina|geral/i.test(String(item.name ?? ""))) ?? list.find((item) => item.category_id);
+  if (pick?.category_id) return String(pick.category_id);
+  const created = await moloniPost(token, "productCategories/insert", new URLSearchParams({
+    company_id: moloniCompanyId, parent_id: "0", name: "Serviços de oficina", description: "", pos_enabled: "0",
+  }));
+  if (!created.category_id) throw new Error("O programa de faturação não devolveu a categoria de artigos criada.");
+  return String(created.category_id);
+}
+
+async function ensureUnit(token: string, moloniCompanyId: string) {
+  const list = await moloniList(token, "measurementUnits/getAll", { company_id: moloniCompanyId });
+  const pick = list.find((item) => /^(un|uni|unid|unidade)s?\.?$/i.test(String(item.short_name ?? "")) || /^unidade/i.test(String(item.name ?? "")))
+    ?? list.find((item) => item.unit_id);
+  if (pick?.unit_id) return String(pick.unit_id);
+  const created = await moloniPost(token, "measurementUnits/insert", new URLSearchParams({ company_id: moloniCompanyId, name: "Unidade", short_name: "Un." }));
+  if (!created.unit_id) throw new Error("O programa de faturação não devolveu a unidade de medida criada.");
+  return String(created.unit_id);
 }
 
 async function requireToken(admin: Admin, companyId: string): Promise<{ token: string; data: Record<string, any> } | { error: string }> {
@@ -519,13 +654,16 @@ async function refreshGrant(developerId: string, clientSecret: string, refreshTo
 async function readToken(response: Response) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || payload.error || !payload.access_token) {
-    throw new Error(payload.error_description || payload.error || "A Moloni recusou a ligação. Confirma o Developer ID, o segredo e a palavra-passe.");
+    throw new Error(payload.error_description || payload.error || "O programa de faturação recusou a ligação. Confirma o Developer ID, o segredo e a palavra-passe.");
   }
   return { access_token: String(payload.access_token), refresh_token: String(payload.refresh_token ?? ""), expires_in: Number(payload.expires_in ?? 3600) };
 }
 
 async function moloniList(token: string, path: string, fields: Record<string, string>) {
-  const payload = await moloniCall(token, path, new URLSearchParams(fields));
+  const body = new URLSearchParams(fields);
+  const payload = await moloniCall(token, path, body);
+  const invalid = validationError(path, payload, body);
+  if (invalid) throw invalid;
   const list = Array.isArray(payload) ? payload : payload && typeof payload === "object" ? [payload] : [];
   const error = list.find((item) => item && (item.error || item.error_description) && !item.company_id && !item.document_id && !item.customer_id && !item.product_id && !item.tax_id && !item.payment_method_id && !item.document_set_id);
   if (error && list.length === 1) throw new Error(String(error.error_description || error.error));
@@ -534,6 +672,8 @@ async function moloniList(token: string, path: string, fields: Record<string, st
 
 async function moloniPost(token: string, path: string, body: URLSearchParams) {
   const payload = await moloniCall(token, path, body);
+  const invalid = validationError(path, payload, body);
+  if (invalid) throw invalid;
   if (Array.isArray(payload)) {
     const error = payload.find((item) => item && (item.error || item.error_description));
     if (error && !error.document_id && !error.customer_id && !error.product_id) throw new Error(String(error.error_description || error.error));
@@ -544,13 +684,19 @@ async function moloniPost(token: string, path: string, body: URLSearchParams) {
 }
 
 async function moloniCall(token: string, path: string, body: URLSearchParams) {
-  const response = await fetch(`https://api.moloni.pt/v1/${path}/?access_token=${encodeURIComponent(token)}`, {
+  const response = await fetch(`https://api.moloni.pt/v1/${path}/?human_errors=true&access_token=${encodeURIComponent(token)}`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error("A Moloni recusou o pedido.");
+  const text = await response.text().catch(() => "");
+  let payload: any = {};
+  try { payload = text ? JSON.parse(text) : {}; } catch { payload = {}; }
+  if (!response.ok) {
+    console.error(`[prod] ${path} http ${response.status}`, text.slice(0, 500));
+    throw new Error(`O programa de faturação recusou o pedido (${path}, HTTP ${response.status}).`);
+  }
+  if (text && !text.trim().startsWith("[") && !text.trim().startsWith("{")) console.error(`[prod] ${path} non-json`, text.slice(0, 300));
   return payload;
 }
 
