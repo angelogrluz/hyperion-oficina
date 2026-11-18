@@ -285,11 +285,39 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     }
   }
   const endpoint = kind === "orcamento" ? "estimates/insert" : row.issue_as === "fatura_recibo" && kind !== "orcamento" ? "invoiceReceipts/insert" : "invoices/insert";
-  const created = await moloniPost(ready.token, endpoint, params);
-  const documentId = String(created.document_id ?? created.documentId ?? "");
+  // Idempotency: an earlier attempt may have created the document and then failed to save it here.
+  // Look it up by our_reference (the obra number) before creating anything new.
+  const reference = String(body.order_number ?? "").trim();
+  const total = Number(body.total ?? 0);
+  let documentId = "";
+  let reused = false;
+  if (reference) {
+    const prior = await findPriorDocument(ready.token, String(row.moloni_company_id), kind, reference);
+    if (prior) {
+      const sameTotal = Math.abs(Number(prior.net_value ?? 0) - total) <= 0.05;
+      const draft = Number(prior.status ?? 0) === 0;
+      console.log("[issue] prior", JSON.stringify({ reference, id: prior.document_id, endpoint: prior._endpoint, status: prior.status, number: prior.number, net: prior.net_value, total, sameTotal }));
+      if (sameTotal) {
+        documentId = String(prior.document_id);
+        reused = true;
+      } else if (draft) {
+        // Our own unfinished draft for this obra with old values: remove it and create a fresh one.
+        await moloniPost(ready.token, String(prior._endpoint).replace("/getAll", "/delete"), new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: String(prior.document_id) }));
+        console.log("[issue] deleted stale draft", prior.document_id);
+      } else {
+        return { error: `Já existe no programa de faturação um documento final para a obra ${reference} (${formatNumber(prior, String(prior.document_id))}) com um total diferente (${Number(prior.net_value ?? 0).toFixed(2)} €). Não emiti outro para não duplicar: confirma esse documento antes de voltar a faturar.` };
+      }
+    }
+  }
+  if (!documentId) {
+    const created = await moloniPost(ready.token, endpoint, params);
+    documentId = String(created.document_id ?? created.documentId ?? "");
+  }
   if (!documentId) return { error: "O programa de faturação não devolveu o documento." };
   const info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
-  const number = String(info.document_set_name && info.number ? `${info.document_set_name}/${info.number}` : info.number ?? documentId);
+  const number = formatNumber(info, documentId);
+  const isDraft = Number(info.status ?? (row.test_mode ? 0 : 1)) === 0;
+  console.log("[issue] done", JSON.stringify({ reference, documentId, number, reused, isDraft }));
   let pdf: string | null = null;
   if (!row.test_mode) {
     const link = await moloniPost(ready.token, "documents/getPDFLink", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
@@ -303,7 +331,41 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     providerLabel: row.test_mode ? "Moloni (rascunho de teste)" : "Moloni",
     simulated: false,
     testMode: Boolean(row.test_mode),
+    draft: isDraft,
+    reused,
   };
+}
+
+function setNameOf(item: Record<string, any>) {
+  return String(item?.document_set?.name ?? item?.document_set_name ?? "").trim();
+}
+
+// Same shape as the imported history ("FT2026/204"). Drafts have no number yet (0), so they get a
+// unique placeholder that names the external id; the real number is read again from the official PDF later.
+function formatNumber(info: Record<string, any>, documentId: string) {
+  const saft = String(info?.document_type?.saft_code ?? "").trim().toUpperCase();
+  const set = setNameOf(info);
+  const series = set && saft && !set.toUpperCase().startsWith(saft) ? `${saft}${set}` : set || saft;
+  const number = Number(info?.number ?? 0);
+  if (!number || Number(info?.status ?? 1) === 0) return `Rascunho ${series || "documento"} #${documentId}`.replace(/\s+/g, " ");
+  return series ? `${series}/${number}` : String(number);
+}
+
+async function findPriorDocument(token: string, companyId: string, kind: string, reference: string) {
+  const endpoints = kind === "orcamento" ? ["estimates/getAll"] : ["invoices/getAll", "invoiceReceipts/getAll"];
+  const year = String(new Date().getFullYear());
+  for (const endpoint of endpoints) {
+    const rows = await moloniList(token, endpoint, { company_id: companyId, our_reference: reference, year }).catch((error) => {
+      console.log("[issue] prior-lookup-failed", endpoint, publicError(error instanceof Error ? error.message : "erro"));
+      return [] as Array<Record<string, any>>;
+    });
+    // Only documents we created for this obra; ignore cancelled ones (status other than draft/closed).
+    const hit = rows
+      .filter((item) => String(item.our_reference ?? "").trim() === reference && [0, 1].includes(Number(item.status ?? 0)))
+      .sort((a, b) => Number(b.document_id) - Number(a.document_id))[0];
+    if (hit) return { ...hit, _endpoint: endpoint };
+  }
+  return null;
 }
 
 const PDF_ENDPOINTS: Record<string, string> = {
@@ -341,10 +403,10 @@ function compact(value: string) {
 function numberMatches(row: Record<string, unknown>, parsed: { type: string; series: string; number: string; year: string }) {
   // Strict: same document set (series) AND same number. Never accept a document from another series.
   const raw = String(row.number ?? "").trim();
-  const setName = String(row.document_set_name ?? "").trim();
+  const setName = setNameOf(row);
   if (!raw || !setName) return false;
   if (raw !== parsed.number) return false;
-  return compact(setName) === compact(parsed.series);
+  return compact(setName) === compact(parsed.series) || (parsed.type !== "" && compact(`${parsed.type}${setName}`) === compact(parsed.series));
 }
 
 function linkedTo(row: Record<string, unknown>, documentId: string) {
@@ -365,7 +427,7 @@ function linkedTo(row: Record<string, unknown>, documentId: string) {
 async function queryDocuments(token: string, endpoint: string, fields: Record<string, string>) {
   try {
     const rows = await moloniList(token, endpoint, fields);
-    console.log("[pdf] query", endpoint, JSON.stringify({ year: fields.year ?? "", set: fields.document_set_id ?? "", number: fields.number ?? "", offset: fields.offset ?? "0", count: rows.length, sample: rows.slice(0, 3).map((item) => ({ id: item.document_id, number: item.number, set: item.document_set_name })) }));
+    console.log("[pdf] query", endpoint, JSON.stringify({ year: fields.year ?? "", set: fields.document_set_id ?? "", number: fields.number ?? "", offset: fields.offset ?? "0", count: rows.length, sample: rows.slice(0, 3).map((item) => ({ id: item.document_id, number: item.number, set: setNameOf(item) })) }));
     return rows;
   } catch (error) {
     console.log("[pdf] query-failed", endpoint, publicError(error instanceof Error ? error.message : "erro"));
@@ -446,7 +508,7 @@ async function lookupPdf(admin: Admin, companyId: string, body: Record<string, u
       console.log("[pdf] cached", knownId, Boolean(url));
       return url ? { found: true, reason: "ok", documentId: knownId, url } : { found: false, reason: "no_pdf" };
     }
-    console.log("[pdf] cached-mismatch", knownId, String(one.document_set_name ?? ""), String(one.number ?? ""));
+    console.log("[pdf] cached-mismatch", knownId, setNameOf(one), String(one.number ?? ""));
   }
   console.log("[pdf] parsed", JSON.stringify(parsed));
   if (!parsed.number) return { found: false, reason: "no_number" };
@@ -476,7 +538,7 @@ async function lookupPdf(admin: Admin, companyId: string, body: Record<string, u
       const hit = await searchDocuments(ready.token, moloniCompanyId, type, { ...parsed, type: parsed.type || type }, setIds);
       if (!hit?.document_id) continue;
       const url = await pdfLink(ready.token, moloniCompanyId, String(hit.document_id)).catch(() => "");
-      console.log("[pdf] hit", type, hit.document_id, hit.number, hit.document_set_name, Boolean(url));
+      console.log("[pdf] hit", type, hit.document_id, hit.number, setNameOf(hit), Boolean(url));
       if (!url) return { found: false, reason: "no_pdf", documentId: String(hit.document_id), documentType: type };
       return { found: true, reason: "ok", documentId: String(hit.document_id), url, documentType: type };
     }

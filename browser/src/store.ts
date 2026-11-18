@@ -1094,24 +1094,27 @@ export async function issueQuoteRecord(orderId: string) {
     };
   }
   const year = lisbonParts().year;
-  const serverQuote = await serverNumber("ORCDOC");
-  const sequence = serverQuote ? 1 : nextDocumentSequence(snap, year, "ORC");
   let issued;
   try {
-    const payload = moloniPayload(bundle, sequence, year);
+    const payload = moloniPayload(bundle, nextDocumentSequence(snap, year, "ORC"), year);
     const cloudUser = readCloudUser();
     const remote = cloudUser?.companyId
       ? await issueCloudDocument({
         companyId: cloudUser.companyId,
         kind: "orcamento",
+        orderId,
         orderNumber: payload.orderNumber,
         total: payload.total,
         customer: payload.customer,
         lines: payload.lines,
       })
       : null;
-    issued = remote ?? await issueMoloniQuote(payload);
-    if (issued.simulated && serverQuote) issued = { ...issued, documentNumber: serverQuote };
+    if (remote) issued = remote;
+    else {
+      const serverQuote = await serverNumber("ORCDOC");
+      issued = await issueMoloniQuote({ ...payload, sequence: serverQuote ? 1 : payload.sequence });
+      if (issued.simulated && serverQuote) issued = { ...issued, documentNumber: serverQuote };
+    }
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "O programa de faturação recusou o orçamento." };
   }
@@ -1140,16 +1143,17 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
   if (bundle.order.status !== "concluida") return { ok: false as const, error: "Só é possível faturar uma ordem concluída." };
   if (bundle.lines.length === 0) return { ok: false as const, error: "A ordem não tem linhas para faturar." };
   const year = lisbonParts().year;
-  const serverInvoice = await serverNumber("FT");
-  const sequence = serverInvoice ? 1 : nextDocumentSequence(snap, year, "FT");
   let issued;
   try {
-    const payload = moloniPayload(bundle, sequence, year);
+    // The connected invoicing program assigns the number itself; only claim an internal FT number
+    // when there is no connected program (simulated invoice), and only after nothing else failed.
+    const payload = moloniPayload(bundle, nextDocumentSequence(snap, year, "FT"), year);
     const cloudUser = readCloudUser();
     const remote = cloudUser?.companyId
       ? await issueCloudDocument({
         companyId: cloudUser.companyId,
         kind: "fatura",
+        orderId,
         orderNumber: payload.orderNumber,
         paymentMethod,
         total: payload.total,
@@ -1157,8 +1161,12 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
         lines: payload.lines,
       })
       : null;
-    issued = remote ?? await issueMoloniInvoice({ ...payload, paymentMethod });
-    if (issued.simulated && serverInvoice) issued = { ...issued, documentNumber: serverInvoice };
+    if (remote) issued = remote;
+    else {
+      const serverInvoice = await serverNumber("FT");
+      issued = await issueMoloniInvoice({ ...payload, sequence: serverInvoice ? 1 : payload.sequence, paymentMethod });
+      if (issued.simulated && serverInvoice) issued = { ...issued, documentNumber: serverInvoice };
+    }
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "O programa de faturação recusou a fatura." };
   }
@@ -1167,8 +1175,10 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
     await update((current) => {
       const saved = current.orders.find((item) => item.id === orderId);
       if (!saved || saved.status !== "concluida") throw new Error("A ordem mudou de estado. Atualize a página.");
-      if (current.orders.some((item) => item.invoiceNumber === issued.documentNumber)) {
-        throw new Error("Esse número de documento já existe. Tente faturar outra vez.");
+      const clash = current.orders.find((item) => item.id !== orderId && item.invoiceNumber === issued.documentNumber);
+      if (clash) {
+        console.warn("[faturar] número repetido", issued.documentNumber, "já usado na obra", clash.number, clash.id);
+        throw new Error(`O número ${issued.documentNumber} já está gravado na obra ${clash.number}. A fatura não foi gravada nesta obra; avisa o suporte antes de tentar outra vez.`);
       }
       saved.status = "faturada";
       saved.invoiceNumber = issued.documentNumber;
@@ -1176,6 +1186,7 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
       saved.invoiceIssuedAt = new Date().toISOString();
       saved.invoiceSimulated = issued.simulated;
       saved.invoiceUrl = url;
+      if (issued.externalId) saved.invoiceExternalId = String(issued.externalId);
       saved.paymentMethod = paymentMethod;
       saved.dateOut = saved.dateOut ?? dateOnly(lisbonParts().iso).toISOString();
       saved.updatedAt = stamp();

@@ -67,6 +67,7 @@ export function moloniDisconnect(companyId: string) {
 export async function issueCloudDocument(input: {
   companyId: string;
   kind: "fatura" | "orcamento";
+  orderId?: string;
   orderNumber: string;
   paymentMethod?: string;
   total: number;
@@ -83,6 +84,7 @@ export async function issueCloudDocument(input: {
       action: "issue",
       company_id: input.companyId,
       kind: input.kind,
+      order_id: input.orderId,
       order_number: input.orderNumber,
       payment_method: input.paymentMethod,
       total: input.total,
