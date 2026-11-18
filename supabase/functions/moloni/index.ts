@@ -344,7 +344,9 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     const discount = Math.min(100, Math.max(0, Number(line.discountPercent ?? 0) || 0));
     params.set(`products[${index}][product_id]`, lineProductIds[index]);
     params.set(`products[${index}][name]`, String(line.description ?? "").trim() || "Serviço");
-    params.set(`products[${index}][summary]`, "");
+    // The PDF prints the line summary in italics and, when it is empty, falls back to the article's summary
+    // (which the program fills with the article name). A non-breaking space is non-empty but prints nothing.
+    params.set(`products[${index}][summary]`, BLANK_SUMMARY);
     params.set(`products[${index}][qty]`, String(line.quantity ?? 1));
     params.set(`products[${index}][price]`, String(net));
     params.set(`products[${index}][discount]`, String(discount));
@@ -409,7 +411,7 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   let info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: companyKey, document_id: documentId })).catch(() => ({} as Record<string, any>));
   // A fiscal document must never differ from what the app shows: compare to the cent before closing it.
   const documentTotal = Number(info.net_value ?? NaN);
-  console.error("[prod] issue totals", JSON.stringify({ reference, documentId, app: total, expected, program: { net: info.net_value, gross: info.gross_value, taxes: info.taxes_value, discount: info.comercial_discount_value }, status: info.status, lines: Array.isArray(info.products) ? info.products.map((item: Record<string, any>) => ({ ref: item.reference, name: String(item.name ?? "").slice(0, 40), summary: String(item.summary ?? "").slice(0, 40), price: item.price })) : null }));
+  console.error("[prod] issue totals", JSON.stringify({ reference, documentId, app: total, expected, program: { net: info.net_value, gross: info.gross_value, taxes: info.taxes_value, discount: info.comercial_discount_value }, status: info.status, lines: Array.isArray(info.products) ? info.products.map((item: Record<string, any>) => ({ ref: item.reference, name: String(item.name ?? "").slice(0, 40), summary: encodeURIComponent(String(item.summary ?? "")).slice(0, 40), price: item.price })) : null }));
   if (!Number.isFinite(documentTotal) || Math.abs(documentTotal - total) > 0.004) {
     const stillDraft = Number(info.status ?? 0) === 0;
     if (stillDraft) {
@@ -900,6 +902,8 @@ function lineReference(ref: string, kind: string) {
   return kind === "peca" ? "PECA" : "MO";
 }
 
+const BLANK_SUMMARY = "\u00A0";
+
 function neutralProductName(reference: string, kind: string) {
   if (kind === "mao_de_obra" || reference === "MO") return "Mão de obra";
   if (kind === "servico_externo") return "Serviço externo";
@@ -918,7 +922,8 @@ class LineProducts {
     try {
       const item = await moloniPost(this.token, "products/getOne", new URLSearchParams({ company_id: this.companyId, product_id: productId }));
       const wanted = neutralProductName(reference, kind === "peca" && Number(item.type) === 2 ? "servico" : kind);
-      if (String(item.name ?? "") === wanted && !String(item.summary ?? "").trim()) return;
+      const before = { name: String(item.name ?? ""), summary: String(item.summary ?? "") };
+      if (before.name === wanted && before.summary === BLANK_SUMMARY) return;
       if (String(item.reference ?? "").toUpperCase() !== reference) return;
       const params = new URLSearchParams({
         company_id: this.companyId,
@@ -926,7 +931,7 @@ class LineProducts {
         category_id: String(item.category_id ?? ""),
         type: String(item.type ?? 2),
         name: wanted,
-        summary: "",
+        summary: BLANK_SUMMARY,
         reference: String(item.reference ?? reference),
         ean: String(item.ean ?? ""),
         price: String(item.price ?? 0),
@@ -943,8 +948,9 @@ class LineProducts {
         params.set(`taxes[${index}][order]`, String(tax.order ?? index));
         params.set(`taxes[${index}][cumulative]`, String(tax.cumulative ?? 0));
       });
-      await moloniPost(this.token, "products/update", params);
-      console.error("[prod] article renamed", reference, wanted);
+      const response = await moloniPost(this.token, "products/update", params);
+      const after = await moloniPost(this.token, "products/getOne", new URLSearchParams({ company_id: this.companyId, product_id: productId })).catch(() => ({} as Record<string, any>));
+      console.error("[prod] article cleaned", reference, JSON.stringify({ before: { name: before.name.slice(0, 40), summary: before.summary.slice(0, 40) }, after: { name: String(after.name ?? "").slice(0, 40), summary: JSON.stringify(String(after.summary ?? "")).slice(0, 40) }, valid: response.valid ?? null }));
     } catch (error) {
       console.error("[prod] article rename failed", reference, error instanceof Error ? error.message : String(error));
     }
@@ -973,7 +979,7 @@ class LineProducts {
       type: service ? "2" : "1",
       // Neutral article name: each line's own text goes in the line name, never in the article.
       name: neutralProductName(reference, kind),
-      summary: "",
+      summary: BLANK_SUMMARY,
       reference,
       ean: "",
       price: "0",
