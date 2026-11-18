@@ -234,7 +234,6 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
   const [show, setShow] = useState(false);
   const [username, setUsername] = useState("");
   const [secret, setSecret] = useState("");
-  const staffPin = username.trim().toLowerCase() !== "admin";
   useEffect(() => {
     setActiveSlug(slug);
     let gone = false;
@@ -254,11 +253,6 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
             setPending(true);
             setError("");
             setInfo("");
-            if (staffPin && !/^\d{4}$/.test(secret)) {
-              setPending(false);
-              setError("O PIN tem de ter 4 dígitos.");
-              return;
-            }
             void signInWithUsername(slug, username.trim(), secret).then(async (result) => {
               if ("error" in result && result.error) { setPending(false); setError(result.error); return; }
               const user = "user" in result ? result.user : undefined;
@@ -290,19 +284,12 @@ export function BrandedLogin({ slug, notice }: { slug: string; notice?: string }
           <label className="grid gap-1 text-[15px] font-medium">Utilizador
             <Input name="username" required autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} className="h-12 border-[var(--line)] text-[17px]" />
           </label>
-          <label className="grid gap-1 text-[15px] font-medium">{staffPin ? "PIN" : "Palavra-passe"}
+          <label className="grid gap-1 text-[15px] font-medium">PIN ou palavra-passe
             <span className="relative">
-              <Input name="password" type={show ? "text" : "password"} required autoComplete="current-password" inputMode={staffPin ? "numeric" : "text"} maxLength={staffPin ? 4 : undefined} value={secret} onChange={(event) => setSecret(staffPin ? event.target.value.replace(/\D/g, "").slice(0, 4) : event.target.value)} className="h-12 border-[var(--line)] pr-16 text-[17px]" />
+              <Input name="password" type={show ? "text" : "password"} required autoComplete="current-password" value={secret} onChange={(event) => setSecret(event.target.value)} className="h-12 border-[var(--line)] pr-16 text-[17px]" />
               <button type="button" className="absolute top-1/2 right-3 -translate-y-1/2 text-[14px] font-semibold text-[var(--glow-deep)]" onClick={() => setShow((value) => !value)}>{show ? "Ocultar" : "Mostrar"}</button>
             </span>
           </label>
-          {staffPin ? (
-            <div data-testid="login-teclado" className="grid grid-cols-3 gap-2">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "←", "0", "C"].map((key) => (
-                <button key={key} type="button" className="h-12 rounded-xl bg-[var(--mist)] text-[20px] font-semibold" onClick={() => setSecret((value) => key === "C" ? "" : key === "←" ? value.slice(0, -1) : (value + key).slice(0, 4))}>{key}</button>
-              ))}
-            </div>
-          ) : null}
           {error ? <p className="text-[15px] text-[#9c4036]" role="alert">{error}</p> : null}
           {info ? <p className="text-[15px] text-[var(--glow-deep)]">{info}</p> : null}
           <Button type="submit" disabled={pending} className="h-12 bg-[var(--ink)] text-[17px] hover:bg-[var(--graphite)]">{pending ? "A entrar…" : "Entrar"}</Button>
