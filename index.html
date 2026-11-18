@@ -23,9 +23,14 @@
         if (redirect && redirect.indexOf(location.origin) === 0) {
           history.replaceState(null, "", redirect);
         }
+        var url = new URL(location.href);
+        if (!url.searchParams.has("r") && !url.searchParams.has("v")) return;
+        url.searchParams.delete("r");
+        url.searchParams.delete("v");
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-BVX1CCt5.js"></script>
+    <script type="module" crossorigin src="/assets/index-B013gqyd.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-OdnSHKtd.css">
   </head>
   <body>
