@@ -1,3 +1,4 @@
+import { toLineKind } from "@/lib/line-kinds";
 import { lineAmounts, sumTotals } from "@/lib/domain";
 import { lisbonISODate } from "@/lib/format";
 import type { InvoiceDraft, InvoiceParty } from "@/lib/invoice/types";
@@ -55,7 +56,7 @@ export function buildInvoiceDraft(input: {
       discountPercent: line.discountPercent ?? 0,
     });
     return {
-      kind: line.kind === "mao_de_obra" ? ("mao_de_obra" as const) : ("peca" as const),
+      kind: toLineKind(line.kind),
       ref: line.article?.ref ?? null,
       description: line.description,
       quantity: line.quantity,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { readCloudUser } from "@/browser/src/cloud";
-import { moloniCatalog, moloniConnect, moloniDisconnect, moloniSave, moloniStatus, type MoloniStatus } from "@/browser/src/moloni";
+import { moloniCatalog, moloniConnect, moloniDiagnose, moloniDisconnect, moloniSave, moloniStatus, type MoloniStatus } from "@/browser/src/moloni";
 import { SHEET_PAYMENTS } from "@/lib/moloni/service";
 import { LookupCards } from "@/components/lookup-cards";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,9 @@ export function IntegrationsPanel() {
   const [status, setStatus] = useState<MoloniStatus>(empty);
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState(false);
+  const [diagnose, setDiagnose] = useState("");
+  const [diagnoseBusy, setDiagnoseBusy] = useState(false);
+  const [diagnoseOther, setDiagnoseOther] = useState("");
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [developerId, setDeveloperId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -200,6 +203,26 @@ export function IntegrationsPanel() {
             </div>
           </form>
         )}
+        {status.connected && !status.needsPassword ? (
+          <details className="rounded-lg border border-[var(--line)] p-3 text-[15px]">
+            <summary className="cursor-pointer font-medium">Definições de impressão dos documentos (só leitura)</summary>
+            <p className="mt-2 text-[var(--muted-text)]">Mostra como o programa de faturação está configurado para imprimir (por exemplo, preços unitários com ou sem IVA). Não altera nada.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <select className="h-10 rounded-lg border border-[var(--line)] bg-white px-2" value={diagnoseOther} onChange={(event) => setDiagnoseOther(event.target.value)}>
+                <option value="">Só a empresa ligada</option>
+                {companies.filter((item) => item.id !== company).map((item) => <option key={item.id} value={item.id}>Comparar com {item.name}</option>)}
+              </select>
+              <Button type="button" variant="outline" className="h-10" disabled={diagnoseBusy} onClick={() => {
+                setDiagnoseBusy(true);
+                void moloniDiagnose(companyId, diagnoseOther).then((result) => {
+                  setDiagnoseBusy(false);
+                  setDiagnose(result.error ? result.error : JSON.stringify(result.report, null, 2));
+                });
+              }}>{diagnoseBusy ? "A ler…" : "Ler definições"}</Button>
+            </div>
+            {diagnose ? <pre data-testid="diagnostico-faturacao" className="mt-2 max-h-96 overflow-auto rounded bg-[var(--mist)] p-2 text-[12px] whitespace-pre-wrap">{diagnose}</pre> : null}
+          </details>
+        ) : null}
         {status.connected && status.needsPassword ? (
           <form className="grid gap-2" onSubmit={(event) => {
             event.preventDefault();

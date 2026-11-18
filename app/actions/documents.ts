@@ -18,7 +18,7 @@ function refresh() {
 }
 
 const lineSchema = z.object({
-  kind: z.enum(["mao_de_obra", "peca"]),
+  kind: z.enum(["mao_de_obra", "peca", "servico", "servico_externo"]),
   description: z.string().trim().min(1, "Cada linha precisa de descrição.").max(200),
   quantity: z.number().positive("A quantidade tem de ser superior a zero."),
   unitPrice: z.number().min(0, "Preço inválido."),

@@ -48,6 +48,10 @@ Deno.serve(async (req) => {
       return json({ connected: false, status: "desligado" });
     }
     if (action === "issue") return json(await issue(admin, companyId, body));
+    if (action === "diagnose") {
+      if (!ADMIN.has(membership.role)) return json({ error: "Só o administrador pode ver estas definições." });
+      return json(await diagnose(admin, companyId, body));
+    }
     if (action === "pdf") {
       const found = await lookupPdf(admin, companyId, body);
       // as=pdf: return the official PDF itself (bytes), never the program's public download page.
@@ -405,7 +409,7 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   let info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: companyKey, document_id: documentId })).catch(() => ({} as Record<string, any>));
   // A fiscal document must never differ from what the app shows: compare to the cent before closing it.
   const documentTotal = Number(info.net_value ?? NaN);
-  console.error("[prod] issue totals", JSON.stringify({ reference, documentId, app: total, expected, program: { net: info.net_value, gross: info.gross_value, taxes: info.taxes_value, discount: info.comercial_discount_value }, status: info.status }));
+  console.error("[prod] issue totals", JSON.stringify({ reference, documentId, app: total, expected, program: { net: info.net_value, gross: info.gross_value, taxes: info.taxes_value, discount: info.comercial_discount_value }, status: info.status, lines: Array.isArray(info.products) ? info.products.map((item: Record<string, any>) => ({ ref: item.reference, name: String(item.name ?? "").slice(0, 40), summary: String(item.summary ?? "").slice(0, 40), price: item.price })) : null }));
   if (!Number.isFinite(documentTotal) || Math.abs(documentTotal - total) > 0.004) {
     const stillDraft = Number(info.status ?? 0) === 0;
     if (stillDraft) {
@@ -446,6 +450,43 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     draft: isDraft,
     reused,
   };
+}
+
+// READ-ONLY: shows how the program is set to print documents (e.g. unit prices with or without IVA),
+// for the connected company and, if asked, another company of the same account. Changes nothing.
+async function diagnose(admin: Admin, companyId: string, body: Record<string, unknown>) {
+  const ready = await requireToken(admin, companyId);
+  if ("error" in ready) return ready;
+  const interesting = /price|pre[cç]o|tax|vat|iva|pdf|decimal|show|layout|model|template|round|print|value|imposto/i;
+  // Never show the program's name or links in the app.
+  const clean = (text: string) => text.replace(/https?:\/\/\S+/gi, "(ligação)").replace(/moloni/gi, "programa");
+  const pick = (item: Record<string, any>) => {
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(item ?? {})) {
+      if (value !== null && typeof value === "object") {
+        if (interesting.test(key)) out[key] = clean(JSON.stringify(value).slice(0, 400));
+        continue;
+      }
+      if (interesting.test(key) || ["name", "company_id", "document_set_id", "document_model_id"].includes(key)) out[key] = typeof value === "string" ? clean(value) : value;
+    }
+    return out;
+  };
+  const companies = await moloniList(ready.token, "companies/getAll", {}).catch(() => [] as Array<Record<string, any>>);
+  const ids = [String(ready.data.moloni_company_id ?? ""), String(body.other_company_id ?? "")].filter(Boolean);
+  const report: Array<Record<string, unknown>> = [];
+  for (const id of [...new Set(ids)]) {
+    const one = await moloniPost(ready.token, "companies/getOne", new URLSearchParams({ company_id: id })).catch((error) => ({ error: publicError(error instanceof Error ? error.message : "erro") }));
+    const sets = await moloniList(ready.token, "documentSets/getAll", { company_id: id }).catch(() => [] as Array<Record<string, any>>);
+    const models = await moloniList(ready.token, "documentModels/getAll", { company_id: id }).catch(() => [] as Array<Record<string, any>>);
+    report.push({
+      company: String(companies.find((item) => String(item.company_id) === id)?.name ?? id),
+      settings: pick(one as Record<string, any>),
+      series: sets.map((item) => pick(item)),
+      models: models.map((item) => pick(item)),
+    });
+  }
+  console.error("[prod] diagnose", JSON.stringify(report).slice(0, 3000));
+  return { report, companies: companies.map((item) => ({ id: String(item.company_id), name: String(item.name ?? "") })) };
 }
 
 function eur(value: number) {
@@ -859,11 +900,55 @@ function lineReference(ref: string, kind: string) {
   return kind === "peca" ? "PECA" : "MO";
 }
 
+function neutralProductName(reference: string, kind: string) {
+  if (kind === "mao_de_obra" || reference === "MO") return "Mão de obra";
+  if (kind === "servico_externo") return "Serviço externo";
+  if (kind === "servico") return "Serviço";
+  return reference || "Peça";
+}
+
 class LineProducts {
   private cache = new Map<string, string>();
   private category = "";
   private unit = "";
   constructor(private token: string, private companyId: string, private taxes: Array<Record<string, any>>, private row: Record<string, unknown>) {}
+
+  // Articles created by older versions took the first line's text as name: rename them (best effort).
+  async neutralise(productId: string, reference: string, kind: string) {
+    try {
+      const item = await moloniPost(this.token, "products/getOne", new URLSearchParams({ company_id: this.companyId, product_id: productId }));
+      const wanted = neutralProductName(reference, kind === "peca" && Number(item.type) === 2 ? "servico" : kind);
+      if (String(item.name ?? "") === wanted && !String(item.summary ?? "").trim()) return;
+      if (String(item.reference ?? "").toUpperCase() !== reference) return;
+      const params = new URLSearchParams({
+        company_id: this.companyId,
+        product_id: productId,
+        category_id: String(item.category_id ?? ""),
+        type: String(item.type ?? 2),
+        name: wanted,
+        summary: "",
+        reference: String(item.reference ?? reference),
+        ean: String(item.ean ?? ""),
+        price: String(item.price ?? 0),
+        unit_id: String(item.unit_id ?? ""),
+        has_stock: String(item.has_stock ?? 0),
+        stock: String(item.stock ?? 0),
+        exemption_reason: String(item.exemption_reason ?? ""),
+        at_product_category: String(item.at_product_category ?? (Number(item.type) === 1 ? "M" : "S")),
+      });
+      const taxes = Array.isArray(item.taxes) ? item.taxes : [];
+      taxes.forEach((tax: Record<string, any>, index: number) => {
+        params.set(`taxes[${index}][tax_id]`, String(tax.tax_id ?? tax.tax?.tax_id ?? ""));
+        params.set(`taxes[${index}][value]`, String(tax.value ?? tax.tax?.value ?? 0));
+        params.set(`taxes[${index}][order]`, String(tax.order ?? index));
+        params.set(`taxes[${index}][cumulative]`, String(tax.cumulative ?? 0));
+      });
+      await moloniPost(this.token, "products/update", params);
+      console.error("[prod] article renamed", reference, wanted);
+    } catch (error) {
+      console.error("[prod] article rename failed", reference, error instanceof Error ? error.message : String(error));
+    }
+  }
 
   async idFor(ref: string, kind: string, description: string) {
     const reference = lineReference(ref, kind);
@@ -872,6 +957,7 @@ class LineProducts {
     const found = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference, exact: "1" }).catch(() => [] as Array<Record<string, any>>);
     const hit = found.find((item) => String(item.reference ?? "").toUpperCase() === reference && item.product_id) ?? found.find((item) => item.product_id);
     if (hit?.product_id) {
+      await this.neutralise(String(hit.product_id), reference, kind);
       this.cache.set(reference, String(hit.product_id));
       return String(hit.product_id);
     }
@@ -885,7 +971,8 @@ class LineProducts {
       company_id: this.companyId,
       category_id: this.category,
       type: service ? "2" : "1",
-      name: (description.trim() || (service ? "Mão de obra" : "Peça")).slice(0, 100),
+      // Neutral article name: each line's own text goes in the line name, never in the article.
+      name: neutralProductName(reference, kind),
       summary: "",
       reference,
       ean: "",

@@ -1,3 +1,4 @@
+import { toLineKind } from "@/lib/line-kinds";
 import { prisma } from "@/lib/db";
 import { lisbonParts } from "@/lib/format";
 
@@ -67,7 +68,7 @@ export function editorLines(
 ) {
   return lines.map((line) => ({
     key: line.id,
-    kind: line.kind === "mao_de_obra" ? ("mao_de_obra" as const) : ("peca" as const),
+    kind: toLineKind(line.kind),
     description: line.description,
     quantity: String(line.quantity).replace(".", ","),
     unitPrice: String(line.unitPrice).replace(".", ","),

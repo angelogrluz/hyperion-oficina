@@ -88,6 +88,15 @@ export function moloniSave(companyId: string, input: Record<string, unknown>) {
   return call({ action: "save", company_id: companyId, ...input });
 }
 
+/** Read-only: how documents are set to print (connected company and, optionally, another of the account). */
+export async function moloniDiagnose(companyId: string, otherCompanyId?: string) {
+  const db = supabase();
+  if (!db) return { error: "Sem sessão." } as { error?: string; report?: unknown; companies?: Array<{ id: string; name: string }> };
+  const { data, error } = await db.functions.invoke("moloni", { body: { action: "diagnose", company_id: companyId, other_company_id: otherCompanyId || undefined } });
+  if (error) return { error: "Não foi possível ler as definições." };
+  return data as { error?: string; report?: unknown; companies?: Array<{ id: string; name: string }> };
+}
+
 export function moloniDisconnect(companyId: string) {
   return call({ action: "disconnect", company_id: companyId });
 }

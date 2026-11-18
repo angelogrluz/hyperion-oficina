@@ -12,7 +12,7 @@ export function resolveLineIdentity(
   const linked = line.articleId ? articles.find((item) => item.id === line.articleId) : undefined;
   if (stored) return { ref: stored, articleId: linked?.id ?? line.articleId ?? null };
   if (linked) return { ref: linked.ref, articleId: linked.id };
-  if (line.kind === "mao_de_obra") return { ref: "", articleId: line.articleId ?? null };
+  if (line.kind !== "peca") return { ref: "", articleId: line.articleId ?? null };
   const description = normalizeArticleDescription(line.description);
   if (description.length < 2) return { ref: "", articleId: line.articleId ?? null };
   const sameArticle = articles.filter((item) => normalizeArticleDescription(item.description) === description);

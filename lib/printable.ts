@@ -1,3 +1,4 @@
+import { toLineKind } from "@/lib/line-kinds";
 import { lineAmounts, sumTotals } from "@/lib/domain";
 import { formatMediumDate } from "@/lib/format";
 import { orderStatusLabel, quoteStatusLabel } from "@/lib/labels";
@@ -75,7 +76,7 @@ function toLines(lines: LineLike[]): PrintableLine[] {
       discountPercent: line.discountPercent,
     });
     return {
-      kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
+      kind: toLineKind(line.kind),
       ref: line.article?.ref ?? null,
       description: line.description,
       quantity: line.quantity,

@@ -1,3 +1,4 @@
+import { toLineKind } from "@/lib/line-kinds";
 import { StrictMode, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams, type Location } from "react-router-dom";
@@ -263,7 +264,7 @@ function linesFor(snap: Snapshot, orderId: string) {
       const identity = resolveLineIdentity(line, snap.articles, snap.purchaseLines);
       return {
         key: line.id,
-        kind: line.kind === "mao_de_obra" ? "mao_de_obra" as const : "peca" as const,
+        kind: toLineKind(line.kind),
         description: line.description,
         quantity: String(line.quantity).replace(".", ","),
         unitPrice: String(line.unitPrice).replace(".", ","),
@@ -788,7 +789,7 @@ function SheetPrint() {
       } : null}
       problem={order.problem}
       lines={raw.map((line, index) => ({
-        kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
+        kind: toLineKind(line.kind),
         description: line.description,
         ref: resolveLineIdentity(line, snap.articles, snap.purchaseLines).ref || null,
         quantity: line.quantity,

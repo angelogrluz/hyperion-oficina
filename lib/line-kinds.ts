@@ -30,3 +30,9 @@ export function guessLineKind(input: { ref: string; description: string; hasArti
   if (/desloca[cç]|alinhamento|diagn[oó]stico|servi[cç]o/.test(text)) return "servico";
   return ref ? "peca" : "mao_de_obra";
 }
+
+/** Reads a stored kind; unknown values are parts. Never collapses services into parts. */
+export function toLineKind(kind: unknown): LineKind {
+  const value = String(kind ?? "");
+  return LINE_KINDS.some((item) => item.value === value) ? (value as LineKind) : "peca";
+}

@@ -1,3 +1,4 @@
+import { toLineKind } from "@/lib/line-kinds";
 import { openDB, type IDBPDatabase } from "idb";
 import {
   defaultMargin,
@@ -1019,7 +1020,7 @@ export async function convertQuoteRecord(id: string) {
         snap,
         { orderId: created.id },
         source.map((line) => ({
-          kind: line.kind === "mao_de_obra" ? "mao_de_obra" : "peca",
+          kind: toLineKind(line.kind),
           description: line.description,
           quantity: line.quantity,
           unitPrice: line.unitPrice,

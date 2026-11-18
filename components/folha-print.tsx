@@ -1,5 +1,7 @@
 "use client";
 
+import { lineKindLabel } from "@/lib/line-kinds";
+
 import { useEffect, useSyncExternalStore } from "react";
 import { CompanyBlock, CompanyFooter } from "@/components/company-block";
 import { PrintButton } from "@/components/print-button";
@@ -150,7 +152,7 @@ export function FolhaPrint({
                   <td className="py-1">
                     {line.ref ? <span className="mr-2 font-mono text-[10px]">{line.ref}</span> : null}
                     {line.description}
-                    <span className="ml-2 text-[10px] text-neutral-500">{line.kind === "mao_de_obra" ? "mão de obra" : "peça"}</span>
+                    <span className="ml-2 text-[10px] text-neutral-500">{lineKindLabel(line.kind).toLowerCase()}</span>
                   </td>
                   <td className="py-1 text-right tabular-nums">
                     {formatQty(line.quantity)}{line.kind === "mao_de_obra" ? " h" : ""}
