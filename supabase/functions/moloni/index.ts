@@ -331,8 +331,8 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   const demoAccount = isDemoCompany(row);
   // Always created as a draft first: the program's own total is checked against the obra before it becomes final.
   params.set("status", "0");
-  const lineProductIds: string[] = [];
-  for (const line of lines) lineProductIds.push(await products.idFor(String(line.ref ?? ""), String(line.kind ?? ""), String(line.description ?? "")));
+  const lineProducts: Array<{ id: string; name: string }> = [];
+  for (const line of lines) lineProducts.push(await products.idFor(String(line.ref ?? ""), String(line.kind ?? ""), String(line.description ?? "")));
   const sentPrices: number[] = [];
   lines.forEach((line, index) => {
     const rate = Number(line.vatRate ?? 23);
@@ -342,10 +342,10 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     const net = Math.round(Number(line.unitPrice ?? 0) * 100000) / 100000;
     sentPrices.push(net);
     const discount = Math.min(100, Math.max(0, Number(line.discountPercent ?? 0) || 0));
-    params.set(`products[${index}][product_id]`, lineProductIds[index]);
-    params.set(`products[${index}][name]`, String(line.description ?? "").trim() || "Serviço");
-    // The PDF prints the line summary in italics and, when it is empty, falls back to the article's summary
-    // (which the program fills with the article name). A non-breaking space is non-empty but prints nothing.
+    params.set(`products[${index}][product_id]`, lineProducts[index].id);
+    // Exactly the article's name: the PDF prints the article name in italics only when it differs from the line.
+    params.set(`products[${index}][name]`, lineProducts[index].name);
+    // Blank line summary (kept; FT2026/34 proved the italic text is the article name, not the summary).
     params.set(`products[${index}][summary]`, BLANK_SUMMARY);
     params.set(`products[${index}][qty]`, String(line.quantity ?? 1));
     params.set(`products[${index}][price]`, String(net));
@@ -902,6 +902,18 @@ function lineReference(ref: string, kind: string) {
   return kind === "peca" ? "PECA" : "MO";
 }
 
+function lineText(value: string) {
+  return value.replace(/\s+/g, " ").trim().slice(0, 200);
+}
+
+function sameText(a: string, b: string) {
+  return lineText(a).toUpperCase() === lineText(b).toUpperCase();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 const BLANK_SUMMARY = "\u00A0";
 
 function neutralProductName(reference: string, kind: string) {
@@ -912,60 +924,48 @@ function neutralProductName(reference: string, kind: string) {
 }
 
 class LineProducts {
-  private cache = new Map<string, string>();
+  private cache = new Map<string, { id: string; name: string }>();
   private category = "";
   private unit = "";
   constructor(private token: string, private companyId: string, private taxes: Array<Record<string, any>>, private row: Record<string, unknown>) {}
 
-  // Articles created by older versions took the first line's text as name: rename them (best effort).
-  async neutralise(productId: string, reference: string, kind: string) {
-    try {
-      const item = await moloniPost(this.token, "products/getOne", new URLSearchParams({ company_id: this.companyId, product_id: productId }));
-      const wanted = neutralProductName(reference, kind === "peca" && Number(item.type) === 2 ? "servico" : kind);
-      const before = { name: String(item.name ?? ""), summary: String(item.summary ?? "") };
-      if (before.name === wanted && before.summary === BLANK_SUMMARY) return;
-      if (String(item.reference ?? "").toUpperCase() !== reference) return;
-      const params = new URLSearchParams({
-        company_id: this.companyId,
-        product_id: productId,
-        category_id: String(item.category_id ?? ""),
-        type: String(item.type ?? 2),
-        name: wanted,
-        summary: BLANK_SUMMARY,
-        reference: String(item.reference ?? reference),
-        ean: String(item.ean ?? ""),
-        price: String(item.price ?? 0),
-        unit_id: String(item.unit_id ?? ""),
-        has_stock: String(item.has_stock ?? 0),
-        stock: String(item.stock ?? 0),
-        exemption_reason: String(item.exemption_reason ?? ""),
-        at_product_category: String(item.at_product_category ?? (Number(item.type) === 1 ? "M" : "S")),
-      });
-      const taxes = Array.isArray(item.taxes) ? item.taxes : [];
-      taxes.forEach((tax: Record<string, any>, index: number) => {
-        params.set(`taxes[${index}][tax_id]`, String(tax.tax_id ?? tax.tax?.tax_id ?? ""));
-        params.set(`taxes[${index}][value]`, String(tax.value ?? tax.tax?.value ?? 0));
-        params.set(`taxes[${index}][order]`, String(tax.order ?? index));
-        params.set(`taxes[${index}][cumulative]`, String(tax.cumulative ?? 0));
-      });
-      const response = await moloniPost(this.token, "products/update", params);
-      const after = await moloniPost(this.token, "products/getOne", new URLSearchParams({ company_id: this.companyId, product_id: productId })).catch(() => ({} as Record<string, any>));
-      console.error("[prod] article cleaned", reference, JSON.stringify({ before: { name: before.name.slice(0, 40), summary: before.summary.slice(0, 40) }, after: { name: String(after.name ?? "").slice(0, 40), summary: JSON.stringify(String(after.summary ?? "")).slice(0, 40) }, valid: response.valid ?? null }));
-    } catch (error) {
-      console.error("[prod] article rename failed", reference, error instanceof Error ? error.message : String(error));
-    }
+  // The PDF prints the ARTICLE's name in italics under the line whenever it differs from the line's own text
+  // (FT2026/34: clean exactly where article name == line text). Article names cannot be changed once used in a
+  // document (products/update answers valid but keeps the old name), so each line uses an article whose name IS
+  // the line text: the reference itself when free or already named like that, else REF-2, REF-3, … reused by name.
+  private async candidates(reference: string, name: string) {
+    const exact = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference, exact: "1" }).catch(() => [] as Array<Record<string, any>>);
+    const own = exact.find((item) => String(item.reference ?? "").toUpperCase() === reference && item.product_id);
+    // Same text apart from case/spacing (e.g. «EcoLub» vs «ECOLUB»): reuse it and print the article's spelling.
+    if (own && sameText(String(own.name ?? ""), name)) return { id: String(own.product_id), name: String(own.name).trim(), taken: true };
+    const variant = new RegExp(`^${escapeRegExp(reference)}-\\d+$`);
+    const byName = await moloniList(this.token, "products/getByName", { company_id: this.companyId, name, exact: "1", qty: "50" }).catch(() => [] as Array<Record<string, any>>);
+    const same = byName.find((item) => item.product_id && sameText(String(item.name ?? ""), name) && variant.test(String(item.reference ?? "").toUpperCase()));
+    if (same) return { id: String(same.product_id), name: String(same.name).trim(), taken: true };
+    return { id: "", name, taken: Boolean(own) };
   }
 
-  async idFor(ref: string, kind: string, description: string) {
-    const reference = lineReference(ref, kind);
-    const known = this.cache.get(reference);
+  private async variants(reference: string) {
+    const base = reference.slice(0, 26);
+    const listed = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference: base, qty: "50" }).catch(() => [] as Array<Record<string, any>>);
+    const used = new Set(listed.map((item) => String(item.reference ?? "").toUpperCase()));
+    const free: string[] = [];
+    for (let n = 2; n < 1000 && free.length < 4; n += 1) if (!used.has(`${base}-${n}`)) free.push(`${base}-${n}`);
+    return free;
+  }
+
+  // Returns the article for this line and the exact text the line must carry (identical to the article name).
+  async idFor(ref: string, kind: string, description: string): Promise<{ id: string; name: string }> {
+    const base = lineReference(ref, kind);
+    const text = lineText(description) || neutralProductName(base, kind);
+    const key = `${base}\u0000${text.toUpperCase()}`;
+    const known = this.cache.get(key);
     if (known) return known;
-    const found = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference, exact: "1" }).catch(() => [] as Array<Record<string, any>>);
-    const hit = found.find((item) => String(item.reference ?? "").toUpperCase() === reference && item.product_id) ?? found.find((item) => item.product_id);
-    if (hit?.product_id) {
-      await this.neutralise(String(hit.product_id), reference, kind);
-      this.cache.set(reference, String(hit.product_id));
-      return String(hit.product_id);
+    const found = await this.candidates(base, text);
+    if (found.id) {
+      const hit = { id: found.id, name: found.name };
+      this.cache.set(key, hit);
+      return hit;
     }
     if (!this.category) this.category = await ensureCategory(this.token, this.companyId);
     if (!this.unit) this.unit = await ensureUnit(this.token, this.companyId);
@@ -973,46 +973,57 @@ class LineProducts {
     const tax = this.taxes.find((item) => String(item.tax_id) === String(this.row.tax_id) && Number(item.value) > 0)
       ?? this.taxes.find((item) => Number(item.value) === 23)
       ?? this.taxes.find((item) => Number(item.value) > 0);
-    const params = new URLSearchParams({
-      company_id: this.companyId,
-      category_id: this.category,
-      type: service ? "2" : "1",
-      // Neutral article name: each line's own text goes in the line name, never in the article.
-      name: neutralProductName(reference, kind),
-      summary: BLANK_SUMMARY,
-      reference,
-      ean: "",
-      price: "0",
-      unit_id: this.unit,
-      has_stock: "0",
-      stock: "0",
-      at_product_category: service ? "S" : "M",
-    });
-    if (tax) {
-      params.set("taxes[0][tax_id]", String(tax.tax_id));
-      params.set("taxes[0][value]", String(tax.value ?? 23));
-      params.set("taxes[0][order]", "0");
-      params.set("taxes[0][cumulative]", "0");
-      params.set("exemption_reason", "");
-    } else {
-      params.set("exemption_reason", "M99");
+    const references = found.taken ? await this.variants(base) : [base];
+    let lastError: unknown = null;
+    for (const reference of references) {
+      const params = new URLSearchParams({
+        company_id: this.companyId,
+        category_id: this.category,
+        type: service ? "2" : "1",
+        // Article name = the line's own text, so the PDF has nothing different to print under it.
+        name: text,
+        summary: BLANK_SUMMARY,
+        reference,
+        ean: "",
+        price: "0",
+        unit_id: this.unit,
+        has_stock: "0",
+        stock: "0",
+        at_product_category: service ? "S" : "M",
+      });
+      if (tax) {
+        params.set("taxes[0][tax_id]", String(tax.tax_id));
+        params.set("taxes[0][value]", String(tax.value ?? 23));
+        params.set("taxes[0][order]", "0");
+        params.set("taxes[0][cumulative]", "0");
+        params.set("exemption_reason", "");
+      } else {
+        params.set("exemption_reason", "M99");
+      }
+      try {
+        const created = await moloniPost(this.token, "products/insert", params);
+        if (!created.product_id) {
+          console.error("[prod] line product insert no product_id", reference, JSON.stringify(created).slice(0, 300));
+          throw new Error("O programa de faturação não devolveu o artigo criado.");
+        }
+        console.error("[prod] line product created", reference, service ? "servico" : "peca", text.slice(0, 40));
+        const hit = { id: String(created.product_id), name: text };
+        this.cache.set(key, hit);
+        return hit;
+      } catch (error) {
+        lastError = error;
+        // A concurrent attempt may have created it: reuse when it now exists with this name.
+        const again = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference, exact: "1" }).catch(() => [] as Array<Record<string, any>>);
+        const retry = again.find((item) => item.product_id && sameText(String(item.name ?? ""), text));
+        if (retry?.product_id) {
+          const hit = { id: String(retry.product_id), name: String(retry.name).trim() };
+          this.cache.set(key, hit);
+          return hit;
+        }
+        console.error("[prod] line product insert failed", reference, error instanceof Error ? error.message.slice(0, 200) : String(error));
+      }
     }
-    let created: Record<string, any>;
-    try {
-      created = await moloniPost(this.token, "products/insert", params);
-    } catch (error) {
-      const again = await moloniList(this.token, "products/getByReference", { company_id: this.companyId, reference }).catch(() => []);
-      const retry = again.find((item) => item.product_id);
-      if (!retry?.product_id) throw error;
-      created = retry;
-    }
-    if (!created.product_id) {
-      console.error("[prod] line product insert no product_id", reference, JSON.stringify(created).slice(0, 300));
-      throw new Error("O programa de faturação não devolveu o artigo criado.");
-    }
-    console.error("[prod] line product created", reference, service ? "servico" : "peca");
-    this.cache.set(reference, String(created.product_id));
-    return String(created.product_id);
+    throw lastError instanceof Error ? lastError : new Error("Não foi possível criar o artigo da linha no programa de faturação.");
   }
 }
 
