@@ -408,7 +408,7 @@ export function FolhaView({
               <p className="truncate text-[17px] font-semibold">{number ?? "Nova"}</p>
               {statusLabel ? <span className="rounded bg-[#1f4b3a] px-1.5 py-0.5 text-[12px] font-semibold text-white">{statusLabel}</span> : null}
               {imported ? <span className="rounded border border-[var(--glow)] px-1.5 py-0.5 text-[12px] font-semibold text-[var(--glow)]">Importado</span> : null}
-              {approval ? <ApprovalBadge approval={approval} at={approvalAt} /> : null}
+              {approval && statusLabel !== "Faturada" ? <ApprovalBadge approval={approval} at={approvalAt} /> : null}
             </div>
           </div>
         </div>
