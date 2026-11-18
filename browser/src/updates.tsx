@@ -2,15 +2,50 @@ import { useEffect, useState } from "react";
 import { flushSaves, hasUnsaved, subscribeUnsaved } from "@/lib/unsaved";
 
 const LOADED_VERSION = __APP_VERSION__;
+const RELOAD_KEY = "oficinaplan-reload";
+const RELOAD_WINDOW_MS = 10 * 60 * 1000;
 
 type RemoteVersion = { id?: string };
+type ReloadAttempt = { version: string; at: number; count: number };
 
-async function reloadForVersion(version: string) {
+function readAttempt(): ReloadAttempt | null {
+  try {
+    const raw = sessionStorage.getItem(RELOAD_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ReloadAttempt;
+    if (!parsed?.version || typeof parsed.at !== "number") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function triedRecently(version: string) {
+  const attempt = readAttempt();
+  if (!attempt || attempt.version !== version || attempt.count < 1) return false;
+  return Date.now() - attempt.at < RELOAD_WINDOW_MS;
+}
+
+function markTried(version: string) {
+  const previous = readAttempt();
+  const same = previous?.version === version && Date.now() - previous.at < RELOAD_WINDOW_MS;
+  sessionStorage.setItem(RELOAD_KEY, JSON.stringify({
+    version,
+    at: Date.now(),
+    count: same && previous ? previous.count + 1 : 1,
+  }));
+}
+
+async function reloadForVersion(version: string, manual = false) {
+  if (!manual && triedRecently(version)) return false;
   const saved = await flushSaves();
-  if (!saved) return;
+  if (!saved) return false;
+  markTried(version);
   const url = new URL(window.location.href);
+  url.searchParams.delete("r");
   url.searchParams.set("v", version);
   window.location.replace(url.toString());
+  return true;
 }
 
 async function fetchRemoteVersion() {
@@ -40,8 +75,8 @@ export function AppUpdates() {
             if (!stopped && id === LOADED_VERSION) setRemote(null);
             return;
           }
-          if (!hasUnsaved()) {
-            reloadForVersion(id);
+          if (!hasUnsaved() && !triedRecently(id)) {
+            void reloadForVersion(id);
             return;
           }
           setRemote(id);
@@ -65,14 +100,14 @@ export function AppUpdates() {
   }, []);
 
   useEffect(() => {
-    if (remote && !unsaved) reloadForVersion(remote);
+    if (remote && !unsaved && !triedRecently(remote)) void reloadForVersion(remote);
   }, [remote, unsaved]);
 
-  if (!remote || !unsaved) return null;
+  if (!remote || (!unsaved && !triedRecently(remote))) return null;
   return (
     <div className="fixed top-2 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--charcoal)] px-3 py-1.5 text-[17px] text-white shadow-lg">
       <span>Nova versão disponível –</span>
-      <button type="button" className="cursor-pointer font-semibold text-[var(--glow)]" onClick={() => reloadForVersion(remote)}>
+      <button type="button" className="cursor-pointer font-semibold text-[var(--glow)]" onClick={() => reloadForVersion(remote, true)}>
         Atualizar
       </button>
     </div>

@@ -23,6 +23,11 @@
         if (redirect && redirect.indexOf(location.origin) === 0) {
           history.replaceState(null, "", redirect);
         }
+        var url = new URL(location.href);
+        if (!url.searchParams.has("r") && !url.searchParams.has("v")) return;
+        url.searchParams.delete("r");
+        url.searchParams.delete("v");
+        history.replaceState(null, "", url.pathname + url.search + url.hash);
       })();
     </script>
   </head>

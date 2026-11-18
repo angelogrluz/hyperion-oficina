@@ -17,8 +17,10 @@ writeFileSync(
   <head>
     <meta charset="utf-8" />
     <title>OficinaPlan</title>
-    <script>sessionStorage.redirect = location.href;</script>
-    <meta http-equiv="refresh" content="0;URL='/'" />
+    <script>
+      sessionStorage.redirect = location.href;
+      location.replace("/?r=" + Date.now());
+    </script>
   </head>
   <body></body>
 </html>
