@@ -255,7 +255,9 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   params.set("document_set_id", String(documentSet));
   params.set("customer_id", customerId);
   params.set("our_reference", String(body.order_number ?? ""));
-  params.set("status", row.test_mode ? "0" : "1");
+  const testMode = row.test_mode !== false;
+  const demoAccount = isDemoCompany(row);
+  params.set("status", testMode ? "0" : "1");
   lines.forEach((line, index) => {
     const rate = Number(line.vatRate ?? 23);
     // 0 % lines must not fall back to the default (23 %) tax; they go out with an exemption reason only.
@@ -292,7 +294,7 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   let documentId = "";
   let reused = false;
   if (reference) {
-    const prior = await findPriorDocument(ready.token, String(row.moloni_company_id), kind, reference);
+    const prior = await findPriorDocument(ready.token, String(row.moloni_company_id), kind, reference, nif);
     if (prior) {
       const sameTotal = Math.abs(Number(prior.net_value ?? 0) - total) <= 0.05;
       const draft = Number(prior.status ?? 0) === 0;
@@ -315,11 +317,13 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   }
   if (!documentId) return { error: "O programa de faturação não devolveu o documento." };
   const info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
-  const number = formatNumber(info, documentId);
-  const isDraft = Number(info.status ?? (row.test_mode ? 0 : 1)) === 0;
-  console.log("[issue] done", JSON.stringify({ reference, documentId, number, reused, isDraft }));
+  const isDraft = Number(info.status ?? (testMode ? 0 : 1)) === 0;
+  // Numbers from a demo/test company are not AT documents and live in the same "FT2026/N" space as the
+  // imported history, so they are stored with a «Teste» prefix and can never collide with it.
+  const number = `${demoAccount ? "Teste " : ""}${formatNumber(info, documentId)}`;
+  console.log("[issue] done", JSON.stringify({ reference, documentId, number, reused, isDraft, testMode, demoAccount }));
   let pdf: string | null = null;
-  if (!row.test_mode) {
+  if (!isDraft) {
     const link = await moloniPost(ready.token, "documents/getPDFLink", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
     pdf = typeof link.url === "string" ? link.url : null;
   }
@@ -328,12 +332,19 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     externalId: documentId,
     url: pdf,
     providerId: "moloni",
-    providerLabel: row.test_mode ? "Moloni (rascunho de teste)" : "Moloni",
+    providerLabel: demoAccount ? "Conta de teste" : testMode ? "Rascunho de teste" : "Fatura certificada",
     simulated: false,
-    testMode: Boolean(row.test_mode),
+    testMode,
+    demoAccount,
+    externalStatus: isDraft ? "rascunho" : "final",
     draft: isDraft,
     reused,
   };
+}
+
+function isDemoCompany(row: Record<string, unknown>) {
+  const name = String(row.moloni_company_name ?? "");
+  return /\b(demo|demonstra|teste?s?|test|exemplo|sandbox|fict[ií]cia)/i.test(name);
 }
 
 function setNameOf(item: Record<string, any>) {
@@ -351,7 +362,7 @@ function formatNumber(info: Record<string, any>, documentId: string) {
   return series ? `${series}/${number}` : String(number);
 }
 
-async function findPriorDocument(token: string, companyId: string, kind: string, reference: string) {
+async function findPriorDocument(token: string, companyId: string, kind: string, reference: string, nif: string) {
   const endpoints = kind === "orcamento" ? ["estimates/getAll"] : ["invoices/getAll", "invoiceReceipts/getAll"];
   const year = String(new Date().getFullYear());
   for (const endpoint of endpoints) {
@@ -361,7 +372,9 @@ async function findPriorDocument(token: string, companyId: string, kind: string,
     });
     // Only documents we created for this obra; ignore cancelled ones (status other than draft/closed).
     const hit = rows
-      .filter((item) => String(item.our_reference ?? "").trim() === reference && [0, 1].includes(Number(item.status ?? 0)))
+      .filter((item) => String(item.our_reference ?? "").trim() === reference
+        && String(item.entity_vat ?? "").replace(/\D/g, "") === nif.replace(/\D/g, "")
+        && [0, 1].includes(Number(item.status ?? 0)))
       .sort((a, b) => Number(b.document_id) - Number(a.document_id))[0];
     if (hit) return { ...hit, _endpoint: endpoint };
   }
@@ -376,7 +389,7 @@ const PDF_ENDPOINTS: Record<string, string> = {
 };
 
 function parseDocumentNumber(value: string) {
-  const text = value.trim();
+  const text = value.trim().replace(/^teste\s+/i, "");
   const typed = text.match(/^(FT|FR|RC|NC)\s*([^/]*)\/(\d+)$/i);
   if (typed) {
     const type = typed[1].toUpperCase();

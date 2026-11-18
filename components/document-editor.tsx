@@ -1148,6 +1148,8 @@ export function DocumentEditor({
                       }
                       writeInvoiceDialog(key, null);
                       toast.success(`Fatura ${result.documentNumber}`);
+                      const warning = "warning" in result ? (result as { warning?: string | null }).warning : null;
+                      if (warning) toast.warning(warning, { duration: 15000 });
                     } catch (failure) {
                       fail(failure instanceof Error && failure.message ? failure.message : "Não foi possível emitir a fatura.");
                     }

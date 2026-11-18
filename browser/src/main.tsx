@@ -621,6 +621,10 @@ function documentLookup(order: { invoiceProvider?: string | null; invoiceSimulat
   if (provider === "importado" || provider === "keymaster") {
     return { mode: "importado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: https };
   }
+  if (provider.includes("conta de teste")) {
+    // Final document in a demo/test company: open its own PDF (no fiscal value).
+    return { mode: "certificado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: null };
+  }
   if (!order.invoiceSimulated && !provider.includes("teste") && !provider.includes("rascunho") && !provider.includes("simula") && provider.includes("certific")) {
     return { mode: "certificado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: null };
   }
@@ -730,7 +734,7 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
   doc.relatedNumber = kind === "fatura" ? order.quoteNumber || "—" : "—";
   doc.number = number;
   const origin = (order.invoiceProvider ?? "").toLowerCase();
-  doc.statusLabel = order.invoiceSimulated ? "Simulação (sem validade fiscal)" : origin.includes("rascunho") ? "Rascunho de teste" : origin === "keymaster" || origin === "importado" ? "Importado" : "Fatura certificada";
+  doc.statusLabel = origin.includes("conta de teste") ? "Conta de teste (sem validade fiscal)" : order.invoiceSimulated ? "Simulação (sem validade fiscal)" : origin.includes("rascunho") ? "Rascunho de teste" : origin === "keymaster" || origin === "importado" ? "Importado" : "Fatura certificada";
   doc.paymentMethod = kind === "fatura" ? order.paymentMethod ?? null : null;
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">

@@ -1171,14 +1171,21 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
     return { ok: false as const, error: error instanceof Error ? error.message : "O programa de faturação recusou a fatura." };
   }
   const url = issued.url ?? `/ordens/${orderId}/fatura`;
+  let warning: string | null = null;
   try {
     await update((current) => {
       const saved = current.orders.find((item) => item.id === orderId);
       if (!saved || saved.status !== "concluida") throw new Error("A ordem mudou de estado. Atualize a página.");
+      warning = null;
       const clash = current.orders.find((item) => item.id !== orderId && item.invoiceNumber === issued.documentNumber);
       if (clash) {
         console.warn("[faturar] número repetido", issued.documentNumber, "já usado na obra", clash.number, clash.id);
-        throw new Error(`O número ${issued.documentNumber} já está gravado na obra ${clash.number}. A fatura não foi gravada nesta obra; avisa o suporte antes de tentar outra vez.`);
+        // The external document already exists: never lose it because of imported history.
+        // Only a clash with another document issued here (not imported) is a real duplicate.
+        if (!isImportedOrder(clash)) {
+          throw new Error(`O número ${issued.documentNumber} já está gravado na obra ${clash.number}. A fatura não foi gravada nesta obra; avisa o suporte antes de tentar outra vez.`);
+        }
+        warning = `Fatura gravada nesta obra, mas o número ${issued.documentNumber} também existe no histórico importado (obra ${clash.number}). Confirma no programa de faturação qual é a conta ligada.`;
       }
       saved.status = "faturada";
       saved.invoiceNumber = issued.documentNumber;
@@ -1197,7 +1204,7 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
         providerLabel: issued.providerLabel,
         simulated: issued.simulated,
         documentNumber: issued.documentNumber,
-        requestJson: JSON.stringify({ paymentMethod, customer: bundle.client.nif }),
+        requestJson: JSON.stringify({ paymentMethod, customer: bundle.client.nif, ...(warning ? { conflict: { number: issued.documentNumber, withOrder: clash?.id, withObra: clash?.number } } : {}) }),
         responseJson: JSON.stringify(issued),
         createdAt: stamp(),
       });
@@ -1205,7 +1212,11 @@ export async function issueInvoiceRecord(orderId: string, paymentMethod = "Trans
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : "Não foi possível gravar a fatura." };
   }
-  return { ok: true as const, documentNumber: issued.documentNumber, provider: issued.providerLabel, url };
+  return { ok: true as const, documentNumber: issued.documentNumber, provider: issued.providerLabel, url, warning: warning as string | null };
+}
+
+function isImportedOrder(order: Order) {
+  return /import/i.test(order.invoiceProvider ?? "");
 }
 
 type PurchaseInput = {

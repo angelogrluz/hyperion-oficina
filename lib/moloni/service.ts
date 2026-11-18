@@ -33,6 +33,7 @@ type IssueBase = {
 export function billingLabel(value: string | null | undefined) {
   if (!value) return value ?? "";
   const text = value.toLowerCase();
+  if (text.includes("conta de teste")) return "Conta de teste";
   if (text.includes("simula")) return "Simulação (sem validade fiscal)";
   if (text.includes("rascunho") || text.includes("teste")) return "Rascunho de teste";
   if (text.includes("moloni")) return "Fatura certificada";

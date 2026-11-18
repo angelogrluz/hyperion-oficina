@@ -93,12 +93,13 @@ export async function issueCloudDocument(input: {
     },
   });
   if (error) throw new Error("Não foi possível falar com o programa de faturação.");
-  const payload = data as (MoloniIssued & { error?: string; testMode?: boolean }) | null;
+  const payload = data as (MoloniIssued & { error?: string; testMode?: boolean; demoAccount?: boolean }) | null;
   if (!payload || payload.error) throw new Error(generic(payload?.error || "O programa de faturação recusou o documento."));
   return {
     ...payload,
-    providerLabel: payload.testMode ? "Rascunho de teste" : "Fatura certificada",
-    simulated: Boolean(payload.testMode) || Boolean(payload.simulated),
+    providerLabel: payload.demoAccount ? "Conta de teste" : payload.testMode ? "Rascunho de teste" : "Fatura certificada",
+    // Documents from a demo/test company or test drafts have no fiscal value.
+    simulated: Boolean(payload.demoAccount) || Boolean(payload.testMode) || Boolean(payload.simulated),
   };
 }
 
