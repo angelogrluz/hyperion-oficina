@@ -279,7 +279,7 @@ function linesFor(snap: Snapshot, orderId: string) {
 }
 
 function syntheticLines() {
-  const row = (key: string, kind: "mao_de_obra" | "peca", description: string, quantity: string, unitPrice: string, unitCost: string, ref: string) => ({
+  const row = (key: string, kind: "mao_de_obra" | "peca" | "servico" | "servico_externo", description: string, quantity: string, unitPrice: string, unitCost: string, ref: string) => ({
     key, kind, description, quantity, unitPrice, unitCost, discount: "0", vatRate: "23", note: "", articleId: null, ref,
   });
   return [

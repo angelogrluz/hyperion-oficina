@@ -163,10 +163,20 @@ export type LineTotals = {
   margin: number;
 };
 
+/** Unit prices keep up to 6 decimals (like Keymaster: 12,265 · 40,077465). */
+export function roundPrice(value: number) {
+  return Math.round((value + Number.EPSILON) * 1e6) / 1e6;
+}
+
+/**
+ * Same rounding as the invoicing program, so the app total is the invoice total to the cent:
+ * line base = qty × price × (1 − disc) (not rounded), line IVA = round(base × rate, 2),
+ * document base = round(Σ bases, 2), IVA = Σ line IVA, total = base + IVA.
+ */
 export function lineAmounts(line: MoneyLine): LineTotals {
   const discount = Math.min(100, Math.max(0, line.discountPercent ?? 0));
   const netUnit = line.unitPrice * (1 - discount / 100);
-  const base = round2(line.quantity * netUnit);
+  const base = roundPrice(line.quantity * netUnit);
   const vat = round2(base * (line.vatRate / 100));
   return {
     base,
@@ -177,18 +187,18 @@ export function lineAmounts(line: MoneyLine): LineTotals {
 }
 
 export function sumTotals(lines: MoneyLine[]): LineTotals {
-  return lines.reduce<LineTotals>(
-    (acc, line) => {
-      const totals = lineAmounts(line);
-      return {
-        base: round2(acc.base + totals.base),
-        vat: round2(acc.vat + totals.vat),
-        total: round2(acc.total + totals.total),
-        margin: round2(acc.margin + totals.margin),
-      };
-    },
-    { base: 0, vat: 0, total: 0, margin: 0 },
-  );
+  let base = 0;
+  let vat = 0;
+  let margin = 0;
+  for (const line of lines) {
+    const totals = lineAmounts(line);
+    base += totals.base;
+    vat += totals.vat;
+    margin += totals.margin;
+  }
+  const roundedBase = round2(base);
+  const roundedVat = round2(vat);
+  return { base: roundedBase, vat: roundedVat, total: round2(roundedBase + roundedVat), margin: round2(margin) };
 }
 
 export function nextCost(oldQty: number, oldCost: number, addQty: number, addCost: number) {

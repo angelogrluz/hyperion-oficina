@@ -9,7 +9,7 @@ export type InvoiceParty = {
 };
 
 export type InvoiceDraftLine = {
-  kind: "mao_de_obra" | "peca";
+  kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   ref: string | null;
   description: string;
   quantity: number;

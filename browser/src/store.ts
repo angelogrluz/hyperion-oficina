@@ -16,6 +16,7 @@ import {
   platesMatch,
   normalizeRef,
   round2,
+  roundPrice,
   salePrice,
   stockDelta,
 } from "@/lib/domain";
@@ -31,6 +32,7 @@ import { mockMoloniAdapter } from "@/lib/invoice/mock-moloni";
 import { assignDocumentNumber, cloudActive, cloudConfigured, loadCompanyState, RevisionConflict, saveCompanyState } from "./cloud";
 import { mergeById } from "@/lib/snapshot-merge";
 import { nextObraNumber } from "@/lib/obra-number";
+import { buildInvoiceLines } from "@/lib/invoice-payload";
 
 export type Client = {
   id: string;
@@ -773,7 +775,7 @@ export async function deleteSupplierRecord(id: string) {
 }
 
 type IncomingLine = {
-  kind: "mao_de_obra" | "peca";
+  kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   description: string;
   quantity: number;
   unitPrice: number;
@@ -793,8 +795,8 @@ function pushLines(snap: Snapshot, parent: { orderId?: string; quoteId?: string 
       kind: line.kind,
       description: line.description,
       quantity: line.quantity,
-      unitPrice: round2(line.unitPrice),
-      unitCost: line.kind === "mao_de_obra" ? 0 : round2(line.unitCost),
+      unitPrice: roundPrice(line.unitPrice),
+      unitCost: line.kind === "mao_de_obra" ? 0 : roundPrice(line.unitCost),
       discountPercent: round2(line.discountPercent ?? 0),
       vatRate: line.vatRate,
       internalNote: line.internalNote ?? "",
@@ -1054,11 +1056,17 @@ function orderBundle(snap: Snapshot, orderId: string) {
 }
 
 function moloniPayload(bundle: NonNullable<ReturnType<typeof orderBundle>>, sequence: number, year: number) {
-  const discountOf = (line: { discountPercent?: number }) => Math.min(100, Math.max(0, Number(line.discountPercent ?? 0) || 0));
-  const totals = bundle.lines.reduce(
-    (sum, line) => sum + line.quantity * line.unitPrice * (1 - discountOf(line) / 100) * (1 + line.vatRate / 100),
-    0,
-  );
+  // Same lines and rounding as the obra screen: the invoice total must be exactly the obra total.
+  const built = buildInvoiceLines(bundle.lines.map((line) => ({
+    description: line.description,
+    quantity: line.quantity,
+    unitPrice: line.unitPrice,
+    discountPercent: line.discountPercent ?? 0,
+    vatRate: line.vatRate,
+    kind: line.kind,
+    ref: line.ref,
+    articleRef: line.article?.ref ?? null,
+  })));
   return {
     orderId: bundle.order.id,
     orderNumber: bundle.order.number,
@@ -1073,18 +1081,10 @@ function moloniPayload(bundle: NonNullable<ReturnType<typeof orderBundle>>, sequ
       email: bundle.client.email,
       phone: bundle.client.phone,
     },
-    // unitPrice is WITHOUT IVA; ref/kind give each line its own article (reference) on the official PDF.
-    lines: bundle.lines.map((line) => ({
-      description: line.description,
-      quantity: line.quantity,
-      unitPrice: line.unitPrice,
-      discountPercent: discountOf(line),
-      vatRate: line.vatRate,
-      ref: line.ref || line.article?.ref || "",
-      kind: line.kind,
-      total: line.quantity * line.unitPrice * (1 - discountOf(line) / 100),
-    })),
-    total: totals,
+    lines: built.lines,
+    base: built.base,
+    vat: built.vat,
+    total: built.total,
   };
 }
 

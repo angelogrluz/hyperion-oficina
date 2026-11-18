@@ -17,14 +17,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApprovalBadge } from "@/components/approval-badge";
 import { type Approval } from "@/lib/approval";
 import { readSymptoms, subscribeSymptoms, writeSymptoms, type SymptomItem } from "@/lib/browser-cache";
-import { defaultMargin, includesSearch, isOilArticle, lineAmounts, marginFromCost, normalizeArticleDescription, parseDecimal, prefillUnitCost, round2, salePrice } from "@/lib/domain";
+import { LINE_KINDS, lineKindLabel } from "@/lib/line-kinds";
+import { defaultMargin, includesSearch, isOilArticle, lineAmounts, marginFromCost, normalizeArticleDescription, parseDecimal, prefillUnitCost, round2, roundPrice, salePrice } from "@/lib/domain";
 import { formatEUR } from "@/lib/format";
 import type { StockLink } from "@/lib/stock-entry";
 import type { EditorArticle, EditorClient } from "@/components/document-editor";
 
 type SheetLine = {
   key: string;
-  kind: "mao_de_obra" | "peca";
+  kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   description: string;
   quantity: string;
   unitPrice: string;
@@ -37,7 +38,7 @@ type SheetLine = {
   stockEntry?: StockLink | null;
 };
 
-const EMPTY_DRAFT = { description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "", kind: "" as "" | "mao_de_obra" | "peca" };
+const EMPTY_DRAFT = { description: "", ref: "", quantity: "1", unitPrice: "", vatRate: "", kind: "" as "" | "mao_de_obra" | "peca" | "servico" | "servico_externo" };
 const VAT_CHOICES = ["23", "13", "6", "0"];
 
 const TABS = ["Folha de obra", "Consumíveis", "Checklist de Verificação", "Notas"] as const;
@@ -180,7 +181,7 @@ export function FolhaView({
     unitCost?: string;
     vatRate?: string;
     articleId?: string | null;
-    kind?: "mao_de_obra" | "peca" | "";
+    kind?: "mao_de_obra" | "peca" | "servico" | "servico_externo" | "";
   }) => void;
   onPlate: (value: string) => void;
   onBrand: (value: string) => void;
@@ -515,7 +516,7 @@ export function FolhaView({
     const vatRate = parseDecimal(line.vatRate) ?? 0;
     const amounts = lineAmounts({ quantity, unitPrice, unitCost, vatRate, discountPercent });
     const article = articles.find((item) => item.id === line.articleId);
-    const family = line.kind === "mao_de_obra" ? "Mão de obra" : article?.family || "Peça";
+    const family = line.kind === "peca" ? article?.family || "Peça" : lineKindLabel(line.kind);
     const netUnit = unitPrice * (1 - Math.min(100, Math.max(0, discountPercent)) / 100);
     const margin = netUnit > 0 ? round2(((netUnit - unitCost) / netUnit) * 100) : 0;
     const markup = marginFromCost(unitCost, unitPrice);
@@ -532,6 +533,8 @@ export function FolhaView({
   const lucro = round2(computed.reduce((sum, row) => sum + row.amounts.margin, 0));
   const mo = round2(computed.filter((row) => row.line.kind === "mao_de_obra").reduce((sum, row) => sum + row.amounts.base, 0));
   const produtos = round2(computed.filter((row) => row.line.kind === "peca").reduce((sum, row) => sum + row.amounts.base, 0));
+  const servicos = round2(computed.filter((row) => row.line.kind === "servico").reduce((sum, row) => sum + row.amounts.base, 0));
+  const externos = round2(computed.filter((row) => row.line.kind === "servico_externo").reduce((sum, row) => sum + row.amounts.base, 0));
   const desc = round2(computed.reduce((sum, row) => sum + (row.quantity * row.unitPrice - row.amounts.base), 0));
   const iva = round2(computed.reduce((sum, row) => sum + row.amounts.vat, 0));
   const base = round2(computed.reduce((sum, row) => sum + row.amounts.base, 0));
@@ -659,7 +662,9 @@ export function FolhaView({
               <span>PVP {formatEUR(pvp)}</span>
               <span>Lucro {formatEUR(lucro)}</span>
               <span>MO {formatEUR(mo)}</span>
-              <span>Produtos {formatEUR(produtos)}</span>
+              <span>Peças {formatEUR(produtos)}</span>
+              {servicos ? <span>Serviços {formatEUR(servicos)}</span> : null}
+              {externos ? <span>Serv. externos {formatEUR(externos)}</span> : null}
               <span>Desc. {formatEUR(desc)}</span>
               <span>IVA {formatEUR(iva)}</span>
             </div>
@@ -754,8 +759,9 @@ export function FolhaView({
                           onChange={(event) => onLine(row.line.key, { kind: event.target.value as SheetLine["kind"] })}
                           className="h-8 w-full min-w-0 bg-transparent text-[15px] outline-none"
                         >
-                          <option value="mao_de_obra">Mão de obra</option>
-                          <option value="peca">{row.line.kind === "peca" ? row.family : "Peça"}</option>
+                          {LINE_KINDS.map((item) => (
+                            <option key={item.value} value={item.value}>{item.value === "peca" && row.line.kind === "peca" ? row.family : item.label}</option>
+                          ))}
                         </select>
                       </td>
                       <td className="border-b border-[#eaeaf2] px-1 py-0.5" title={row.line.description}><WrapCell value={row.line.description} disabled={locked} label="Descrição" onChange={(value) => onLine(row.line.key, { description: value })} /></td>
@@ -805,7 +811,7 @@ export function FolhaView({
                       {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 py-0.5">
                         <NumberCell value={parseDecimal(row.line.discount) ?? 0} disabled={locked || !can("precos.alterar")} label="Desconto" testId="line-discount" onCommit={(discount) => onLine(row.line.key, { discount: moneyInput(discount) })} />
                       </td> : null}
-                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.base)}</td> : null}
+                      {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{lineBase(row.amounts.base)}</td> : null}
                       {showCosts ? <td className="overflow-hidden border-b border-[#eaeaf2] bg-[#e1e2e5] px-0.5 py-0.5 text-right tabular-nums">{formatEUR(row.amounts.total)}</td> : null}
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-center"><span className="inline-grid size-5 place-items-center rounded-full bg-[#6971f9] text-[12px] text-white">●</span></td>
                       <td className="overflow-hidden border-b border-[#eaeaf2] px-0.5 text-right tabular-nums">{row.stock}</td>
@@ -835,8 +841,7 @@ export function FolhaView({
                     <td className="px-1 py-1">
                       <select aria-label="Família da nova linha" data-testid="new-line-kind" value={draft.kind} disabled={locked} onChange={(event) => setDraft((current) => ({ ...current, kind: event.target.value as typeof current.kind }))} className="h-8 w-full min-w-0 bg-transparent text-[15px] text-[var(--steel)] outline-none">
                         <option value="">Novo (auto)</option>
-                        <option value="mao_de_obra">Mão de obra</option>
-                        <option value="peca">Peça</option>
+                        {LINE_KINDS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                       </select>
                     </td>
                     <td className="px-1 py-1">
@@ -1329,7 +1334,7 @@ function NumberCell({
   testId: string;
   onCommit: (value: number) => void;
 }) {
-  const formatted = pt2(value);
+  const formatted = precise(value);
   const [draft, setDraft] = useState<string | null>(null);
   return (
     <input
@@ -1358,7 +1363,16 @@ function NumberCell({
 }
 
 function moneyInput(value: number) {
-  return pt2(value);
+  // Keeps the precision typed (12,265 · 40,077465): unit prices are not rounded to cents.
+  return precise(value);
+}
+
+function precise(value: number) {
+  return roundPrice(value).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 6, useGrouping: false });
+}
+
+function lineBase(value: number) {
+  return `${roundPrice(value).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 4 })} €`;
 }
 
 function pt2(value: number) {

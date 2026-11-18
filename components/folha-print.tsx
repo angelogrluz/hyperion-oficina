@@ -7,7 +7,7 @@ import { readSymptoms, subscribeSymptoms } from "@/lib/browser-cache";
 import { formatEUR, formatQty } from "@/lib/format";
 
 export type FolhaPrintLine = {
-  kind: "mao_de_obra" | "peca";
+  kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   description: string;
   ref?: string | null;
   quantity: number;

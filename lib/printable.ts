@@ -3,7 +3,7 @@ import { formatMediumDate } from "@/lib/format";
 import { orderStatusLabel, quoteStatusLabel } from "@/lib/labels";
 
 export type PrintableLine = {
-  kind: "mao_de_obra" | "peca";
+  kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   ref: string | null;
   description: string;
   quantity: number;

@@ -41,6 +41,7 @@ import { FUELS, ORDER_STATUSES, QUOTE_STATUSES, orderStatusLabel } from "@/lib/l
 import { workshopPath } from "@/lib/workshop-slug";
 import { officialDocumentPdf, pdfTab } from "@/browser/src/moloni";
 import { readCloudUser } from "@/browser/src/cloud";
+import { guessLineKind } from "@/lib/line-kinds";
 import { billingSummary, refreshBillingState, useBillingState } from "@/browser/src/billing-status";
 import { rememberOfficialDocument } from "@/browser/src/store";
 
@@ -87,7 +88,7 @@ export type EditorVehicle = {
 
 type Line = {
   key: string;
-  kind: "mao_de_obra" | "peca";
+  kind: "mao_de_obra" | "peca" | "servico" | "servico_externo";
   description: string;
   quantity: string;
   unitPrice: string;
@@ -747,7 +748,7 @@ export function DocumentEditor({
     unitCost?: string;
     vatRate?: string;
     articleId?: string | null;
-    kind?: "mao_de_obra" | "peca" | "";
+    kind?: "mao_de_obra" | "peca" | "servico" | "servico_externo" | "";
   }) {
     touch();
     const article = draft.articleId
@@ -771,7 +772,7 @@ export function DocumentEditor({
           }
         : {
             key: crypto.randomUUID(),
-            kind: (draft.kind || (draft.ref.trim() ? "peca" : "mao_de_obra")) as "peca" | "mao_de_obra",
+            kind: draft.kind || guessLineKind({ ref: draft.ref, description: draft.description, hasArticle: false }),
             description: draft.description,
             quantity: draft.quantity || "1",
             unitPrice: draft.unitPrice.trim() ? draft.unitPrice : draft.ref.trim() ? num(labourRate) : (labourUnitPrice(draft.description) == null ? "" : num(labourUnitPrice(draft.description) ?? 0)),

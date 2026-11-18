@@ -325,7 +325,8 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   params.set("our_reference", String(body.order_number ?? ""));
   const testMode = row.test_mode !== false;
   const demoAccount = isDemoCompany(row);
-  params.set("status", testMode ? "0" : "1");
+  // Always created as a draft first: the program's own total is checked against the obra before it becomes final.
+  params.set("status", "0");
   const lineProductIds: string[] = [];
   for (const line of lines) lineProductIds.push(await products.idFor(String(line.ref ?? ""), String(line.kind ?? ""), String(line.description ?? "")));
   const sentPrices: number[] = [];
@@ -370,12 +371,17 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
   // Look it up by our_reference (the obra number) before creating anything new.
   const reference = String(body.order_number ?? "").trim();
   const total = Number(body.total ?? 0);
+  const expected = expectedTotals(lines);
+  if (Math.abs(expected.total - total) > 0.004) {
+    console.error("[prod] issue total mismatch (app)", JSON.stringify({ expected, total }));
+    return { error: `O total das linhas (${eur(expected.total)}) não bate com o total da obra (${eur(total)}). Grava a obra e tenta outra vez; nada foi emitido.` };
+  }
   let documentId = "";
   let reused = false;
   if (reference) {
     const prior = await findPriorDocument(ready.token, String(row.moloni_company_id), kind, reference, nif);
     if (prior) {
-      const sameTotal = Math.abs(Number(prior.net_value ?? 0) - total) <= 0.05;
+      const sameTotal = Math.abs(Number(prior.net_value ?? 0) - total) <= 0.004;
       const draft = Number(prior.status ?? 0) === 0;
       console.log("[issue] prior", JSON.stringify({ reference, id: prior.document_id, endpoint: prior._endpoint, status: prior.status, number: prior.number, net: prior.net_value, total, sameTotal }));
       if (sameTotal) {
@@ -395,7 +401,32 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     documentId = String(created.document_id ?? created.documentId ?? "");
   }
   if (!documentId) return { error: "O programa de faturação não devolveu o documento." };
-  const info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: String(row.moloni_company_id), document_id: documentId })).catch(() => ({}));
+  const companyKey = String(row.moloni_company_id);
+  let info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: companyKey, document_id: documentId })).catch(() => ({} as Record<string, any>));
+  // A fiscal document must never differ from what the app shows: compare to the cent before closing it.
+  const documentTotal = Number(info.net_value ?? NaN);
+  console.error("[prod] issue totals", JSON.stringify({ reference, documentId, app: total, expected, program: { net: info.net_value, gross: info.gross_value, taxes: info.taxes_value, discount: info.comercial_discount_value }, status: info.status }));
+  if (!Number.isFinite(documentTotal) || Math.abs(documentTotal - total) > 0.004) {
+    const stillDraft = Number(info.status ?? 0) === 0;
+    if (stillDraft) {
+      await moloniPost(ready.token, endpoint.replace("/insert", "/delete"), new URLSearchParams({ company_id: companyKey, document_id: documentId })).catch((error) => {
+        console.error("[prod] draft delete failed", error instanceof Error ? error.message : String(error));
+      });
+    }
+    return {
+      error: Number.isFinite(documentTotal)
+        ? `O programa de faturação calculou ${eur(documentTotal)} e a obra mostra ${eur(total)}. A fatura não foi emitida${stillDraft ? " (o rascunho foi apagado)" : ""}. Avisa o suporte com o número da obra.`
+        : "Não consegui confirmar o total do documento no programa de faturação. A fatura não foi emitida.",
+    };
+  }
+  if (!testMode && Number(info.status ?? 0) === 0) {
+    // Totals match: close the draft (it becomes the certified, numbered document).
+    const close = new URLSearchParams(params);
+    close.set("document_id", documentId);
+    close.set("status", "1");
+    await moloniPost(ready.token, endpoint.replace("/insert", "/update"), close);
+    info = await moloniPost(ready.token, "documents/getOne", new URLSearchParams({ company_id: companyKey, document_id: documentId })).catch(() => info);
+  }
   const isDraft = Number(info.status ?? (testMode ? 0 : 1)) === 0;
   // Numbers from a demo/test company are not AT documents and live in the same "FT2026/N" space as the
   // imported history, so they are stored with a «Teste» prefix and can never collide with it.
@@ -415,6 +446,28 @@ async function issue(admin: Admin, companyId: string, body: Record<string, unkno
     draft: isDraft,
     reused,
   };
+}
+
+function eur(value: number) {
+  return `${value.toFixed(2).replace(".", ",")} €`;
+}
+
+// Same rounding as the app (lib/domain lineAmounts/sumTotals): line base not rounded, IVA rounded per line,
+// document base = round(Σ base, 2), total = base + Σ IVA.
+function expectedTotals(lines: Array<Record<string, number | string>>) {
+  const r2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
+  const r6 = (value: number) => Math.round((value + Number.EPSILON) * 1e6) / 1e6;
+  let base = 0;
+  let vat = 0;
+  for (const line of lines) {
+    const discount = Math.min(100, Math.max(0, Number(line.discountPercent ?? 0) || 0));
+    const lineBase = r6(Number(line.quantity ?? 0) * Number(line.unitPrice ?? 0) * (1 - discount / 100));
+    base += lineBase;
+    vat += r2(lineBase * (Number(line.vatRate ?? 23) / 100));
+  }
+  const roundedBase = r2(base);
+  const roundedVat = r2(vat);
+  return { base: roundedBase, vat: roundedVat, total: r2(roundedBase + roundedVat) };
 }
 
 async function companyNameOf(token: string, moloniCompanyId: string) {
