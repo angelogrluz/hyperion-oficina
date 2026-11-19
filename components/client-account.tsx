@@ -16,7 +16,7 @@ type Invoice = {
 
 function shareText(invoice: Invoice, kind: "fatura" | "recibo") {
   const title = kind === "fatura" ? "2.ª via da fatura" : "2.ª via do recibo";
-  return `${title} ${invoice.number} de ${formatMediumDate(new Date(invoice.issuedAt))}, ${formatEUR(invoice.total)}. Cópia interna, não certificada.`;
+  return `${title} ${invoice.number} de ${formatMediumDate(new Date(invoice.issuedAt))}, ${formatEUR(invoice.total)}.`;
 }
 
 export function ClientAccount({ client, invoices }: { client: { id: string; name: string; nif: string; phone: string; email: string }; invoices: Invoice[] }) {

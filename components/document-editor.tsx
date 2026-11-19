@@ -907,30 +907,41 @@ export function DocumentEditor({
 
   const selectedClient = clientList.find((item) => item.id === clientId);
 
+  // Invoices and receipts are always the official PDF from the invoicing account; never an internal copy.
   async function openOfficial(kind: "fatura" | "recibo") {
-    const preview = () => { if (documentId) router.push(workshopPath(`/ordens/${documentId}/${kind}`)); };
-    if (!documentLookup?.companyId || !documentLookup.number) { preview(); return; }
+    const failed = kind === "recibo"
+      ? "Não foi possível abrir o recibo oficial. O programa de faturação pode estar indisponível. Tenta outra vez daqui a pouco."
+      : "Não foi possível abrir a fatura oficial. O programa de faturação pode estar indisponível. Tenta outra vez daqui a pouco.";
+    const retry = { action: { label: "Tentar outra vez", onClick: () => { void openOfficial(kind); } }, duration: 15000 };
+    if (!documentLookup?.number) {
+      toast.error(kind === "recibo" ? "Este recibo não tem documento oficial." : "Esta fatura foi simulada sem programa de faturação ligado e não tem documento oficial.");
+      return;
+    }
     if (kind === "fatura" && documentLookup.httpsUrl) {
       window.open(documentLookup.httpsUrl, "_blank", "noopener");
       return;
     }
+    if (!documentLookup.companyId) {
+      toast.error(failed, retry);
+      return;
+    }
     const tab = pdfTab();
-    const loading = toast.loading("A obter o PDF oficial…");
+    const loading = toast.loading(kind === "recibo" ? "A obter o recibo oficial…" : "A obter a fatura oficial…");
     const result = await officialDocumentPdf({
       companyId: documentLookup.companyId,
       number: documentLookup.number,
       kind,
       documentId: kind === "fatura" ? documentLookup.documentId : null,
       invoiceDocumentId: kind === "recibo" ? documentLookup.documentId : null,
-    }).finally(() => toast.dismiss(loading));
+    }).catch(() => ({ found: false as const, url: undefined, documentId: undefined, documentType: undefined }))
+      .finally(() => toast.dismiss(loading));
     if (result.found && result.url) {
       if (result.documentId && documentId) void rememberOfficialDocument(documentId, result.documentId, result.documentType ?? "", documentLookup.number);
       tab.show(result.url);
       return;
     }
     tab.close();
-    if (result.error) toast.error(result.error);
-    preview();
+    toast.error(failed, retry);
   }
 
   const sheet = mode === "order";
@@ -1181,8 +1192,8 @@ export function DocumentEditor({
           quoteHref={documentId ? (quoteUrl || `/ordens/${documentId}/orcamento`) : undefined}
           invoiceNumber={invoice?.number ?? null}
           invoiceHref={documentId ? (/^https?:\/\//i.test(invoiceUrl ?? "") && ["importado", "keymaster"].includes((invoice?.provider ?? "").toLowerCase()) ? invoiceUrl ?? undefined : workshopPath(`/ordens/${documentId}/fatura`)) : undefined}
-          onOpenInvoice={documentLookup ? () => { void openOfficial("fatura"); } : undefined}
-          onOpenReceipt={documentLookup ? () => { void openOfficial("recibo"); } : undefined}
+          onOpenInvoice={invoice ? () => { void openOfficial("fatura"); } : undefined}
+          onOpenReceipt={invoice && (paid || (invoice.provider ?? "").toLowerCase() === "importado") ? () => { void openOfficial("recibo"); } : undefined}
           paid={paid}
           onMarkPaid={() => {
             if (!documentId) return;

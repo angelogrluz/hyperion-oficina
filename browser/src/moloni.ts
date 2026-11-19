@@ -135,8 +135,9 @@ export async function issueCloudDocument(input: {
   return {
     ...payload,
     providerLabel: payload.demoAccount ? "Conta de teste" : payload.testMode ? "Rascunho de teste" : "Fatura certificada",
-    // Documents from a demo/test company or test drafts have no fiscal value.
-    simulated: Boolean(payload.demoAccount) || Boolean(payload.testMode) || Boolean(payload.simulated),
+    // A document created in the connected account is never a simulation, even in a demo («conta de teste»)
+    // company or as a test draft: its official PDF exists there. «simulated» is only for local mock invoices.
+    simulated: false,
   };
 }
 

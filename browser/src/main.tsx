@@ -1,5 +1,5 @@
 import { toLineKind } from "@/lib/line-kinds";
-import { StrictMode, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { StrictMode, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams, type Location } from "react-router-dom";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -616,41 +616,55 @@ function LoginPage() {
   );
 }
 
-function documentLookup(order: { invoiceProvider?: string | null; invoiceSimulated?: boolean; invoiceNumber?: string | null; invoiceExternalId?: string | null; invoiceUrl?: string | null; originalDocumentUrl?: string | null }) {
+type OfficialOrder = { id?: string; invoiceProvider?: string | null; invoiceSimulated?: boolean; invoiceNumber?: string | null; invoiceExternalId?: string | null; invoiceUrl?: string | null; originalDocumentUrl?: string | null };
+
+/** A local mock invoice (no invoicing account was connected): there is no official document to fetch. */
+function isLocalSimulation(order: OfficialOrder) {
+  const provider = (order.invoiceProvider ?? "").toLowerCase();
+  if (String(order.invoiceExternalId ?? "").startsWith("sim_")) return true;
+  if (provider.includes("simula")) return true;
+  const fromAccount = provider === "importado" || provider === "keymaster" || provider.includes("teste") || provider.includes("rascunho") || provider.includes("certific");
+  return Boolean(order.invoiceSimulated) && !fromAccount && !order.invoiceExternalId;
+}
+
+/**
+ * Every invoiced order with a number is fetched from the connected invoicing account (certified, demo
+ * «conta de teste», drafts and imported history alike). `invoiceSimulated` is ignored here: older versions
+ * set it for demo-account documents, which are real documents in that account.
+ */
+function documentLookup(order: OfficialOrder) {
+  if (!order.invoiceNumber || isLocalSimulation(order)) return null;
   const provider = (order.invoiceProvider ?? "").toLowerCase();
   const companyId = readCloudUser()?.companyId ?? "";
   const https = [order.originalDocumentUrl, order.invoiceUrl].find((value) => /^https?:\/\//i.test(value ?? "")) ?? null;
-  if (!order.invoiceNumber || !companyId) return null;
-  if (provider === "importado" || provider === "keymaster") {
-    return { mode: "importado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: https };
-  }
-  if (provider.includes("conta de teste")) {
-    // Final document in a demo/test company: open its own PDF (no fiscal value).
-    return { mode: "certificado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: null };
-  }
-  if (!order.invoiceSimulated && !provider.includes("teste") && !provider.includes("rascunho") && !provider.includes("simula") && provider.includes("certific")) {
-    return { mode: "certificado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: null };
-  }
-  return null;
+  const imported = provider === "importado" || provider === "keymaster";
+  return { mode: imported ? "importado" as const : "certificado" as const, companyId, number: order.invoiceNumber, documentId: order.invoiceExternalId ?? null, httpsUrl: imported ? https : null };
 }
 
-function useOfficialDocument(order: { id: string; invoiceProvider?: string | null; invoiceSimulated?: boolean; invoiceNumber?: string | null; invoiceExternalId?: string | null; invoiceUrl?: string | null; originalDocumentUrl?: string | null } | undefined, kind: "orcamento" | "fatura" | "recibo") {
-  const lookup = order && kind !== "orcamento" ? documentLookup(order) : null;
-  const [phase, setPhase] = useState<"loading" | "opened" | "preview">(lookup ? "loading" : "preview");
+const OFFICIAL_FAILED = "Não foi possível abrir a fatura oficial. O programa de faturação pode estar indisponível. Tenta outra vez daqui a pouco.";
+
+function useOfficialDocument(order: (OfficialOrder & { id: string }) | undefined, kind: "fatura" | "recibo", enabled: boolean) {
+  const lookup = order && enabled ? documentLookup(order) : null;
+  const [phase, setPhase] = useState<"loading" | "ready" | "failed">("loading");
   const [url, setUrl] = useState("");
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!lookup || !order) return;
     let alive = true;
+    setPhase("loading");
     if (kind === "fatura" && lookup.httpsUrl) {
       setUrl(lookup.httpsUrl);
-      window.open(lookup.httpsUrl, "_blank", "noopener");
-      setPhase("opened");
+      setPhase("ready");
+      return;
+    }
+    if (!lookup.companyId) {
+      setPhase("failed");
       return;
     }
     void officialDocumentPdf({
       companyId: lookup.companyId,
       number: lookup.number,
-      kind: kind === "recibo" ? "recibo" : "fatura",
+      kind,
       documentId: kind === "fatura" ? lookup.documentId : null,
       invoiceDocumentId: kind === "recibo" ? lookup.documentId : null,
     }).then((result) => {
@@ -658,47 +672,117 @@ function useOfficialDocument(order: { id: string; invoiceProvider?: string | nul
       if (result.found && result.url) {
         if (result.documentId) void rememberOfficialDocument(order.id, result.documentId, result.documentType ?? "", lookup.number);
         setUrl(result.url);
-        openDocumentUrl(result.url);
-        setPhase("opened");
-      } else setPhase("preview");
-    });
+        setPhase("ready");
+      } else setPhase("failed");
+    }).catch(() => { if (alive) setPhase("failed"); });
     return () => { alive = false; };
-  }, [order?.id, kind, lookup?.companyId, lookup?.number, lookup?.documentId, lookup?.httpsUrl]);
-  return { phase: lookup ? phase : "preview" as const, url };
+  }, [order?.id, kind, lookup?.companyId, lookup?.number, lookup?.documentId, lookup?.httpsUrl, attempt]);
+  return { lookup, phase, url, retry: () => setAttempt((value) => value + 1) };
 }
 
-function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
+function OfficialDocumentView({ kind }: { kind: "fatura" | "recibo" }) {
   const { id } = useParams();
   const params = useSearchParams();
   const snap = useSnap();
   const imprimir = params.get("imprimir") === "1";
   const order = snap?.orders.find((item) => item.id === id);
-  const official = useOfficialDocument(order, kind);
-  useEffect(() => {
-    if (!imprimir || official.phase !== "preview") return;
-    const timer = window.setTimeout(() => window.print(), 400);
-    return () => window.clearTimeout(timer);
-  }, [imprimir, official.phase]);
+  const importedOrder = ["importado", "keymaster"].includes((order?.invoiceProvider ?? "").toLowerCase());
+  const receiptBlocked = kind === "recibo" && order && !order.paidAt && !importedOrder;
+  const official = useOfficialDocument(order, kind, Boolean(order?.invoiceNumber) && !receiptBlocked);
+  const frame = useRef<HTMLIFrameElement | null>(null);
+  const printed = useRef(false);
+  const label = kind === "recibo" ? "recibo" : "fatura";
+  function printOfficial() {
+    const target = frame.current?.contentWindow;
+    if (target && official.url.startsWith("blob:")) {
+      try { target.focus(); target.print(); return; } catch { /* fall back to a new tab */ }
+    }
+    if (official.url) openDocumentUrl(official.url);
+  }
   if (!snap || !id) return null;
-  if (official.phase === "loading") return <p className="p-6">A consultar o documento…</p>;
-  if (official.phase === "opened") {
+  if (!order) return <p className="p-6">Documento não encontrado.</p>;
+  const back = <Link href={`/ordens/${order.id}`} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</Link>;
+  const message = (text: string, retry?: () => void) => (
+    <main className="grid min-h-screen place-items-center bg-[var(--paper)] px-6 text-center">
+      <div className="max-w-lg">
+        <p className="text-[19px] font-semibold text-[var(--ink)]">{text}</p>
+        {retry ? <button type="button" data-testid="tentar-outra-vez" className="mt-4 h-11 rounded-lg bg-[var(--glow)] px-4 font-semibold text-white" onClick={retry}>Tentar outra vez</button> : null}
+        <p className="mt-4">{back}</p>
+      </div>
+    </main>
+  );
+  if (receiptBlocked) return message("Este recibo só fica disponível depois do pagamento.");
+  if (!order.invoiceNumber) return message("Esta fatura ainda não foi emitida.");
+  if (!official.lookup) return message(`Esta ${label} foi simulada sem programa de faturação ligado e não tem documento oficial.`);
+  if (official.phase === "loading") {
     return (
       <main className="grid min-h-screen place-items-center bg-[var(--paper)] px-6 text-center">
         <div>
-          <p className="text-[20px] font-semibold">O documento oficial abriu noutro separador.</p>
-          <button type="button" className="mt-4 h-11 rounded-lg bg-[var(--glow)] px-4 font-semibold text-white" onClick={() => { if (official.url) openDocumentUrl(official.url); }}>Abrir outra vez</button>
-          <p className="mt-4"><Link href={`/ordens/${id}`} className="text-[var(--glow)]">Voltar à folha</Link></p>
+          <span className="mx-auto mb-3 block size-8 animate-spin rounded-full border-4 border-[var(--glow)] border-t-transparent" aria-hidden="true" />
+          <p className="text-[18px] font-semibold">A obter {kind === "recibo" ? "o recibo oficial" : "a fatura oficial"} {order.invoiceNumber}…</p>
+          <p className="mt-4">{back}</p>
         </div>
       </main>
     );
   }
+  if (official.phase === "failed") {
+    return message(kind === "recibo" ? OFFICIAL_FAILED.replace("a fatura oficial", "o recibo oficial") : OFFICIAL_FAILED, official.retry);
+  }
+  return (
+    <main className="flex min-h-screen flex-col bg-stone-200">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 px-4 py-2">
+        {back}
+        <span className="flex gap-2">
+          <button type="button" className="h-9 rounded-lg border border-[var(--glow)] bg-white px-3 text-[15px] font-medium text-[var(--glow)]" onClick={() => openDocumentUrl(official.url)}>Abrir noutro separador</button>
+          <button type="button" data-testid="imprimir-oficial" className="h-9 rounded-lg bg-[var(--glow)] px-3 text-[15px] font-semibold text-white" onClick={printOfficial}>Imprimir</button>
+        </span>
+      </div>
+      {official.url.startsWith("blob:") ? (
+        <iframe
+          ref={frame}
+          title={`${label} ${order.invoiceNumber}`}
+          src={official.url}
+          className="w-full flex-1 border-0 bg-white"
+          style={{ minHeight: "calc(100vh - 3.5rem)" }}
+          onLoad={() => {
+            if (!imprimir || printed.current) return;
+            printed.current = true;
+            window.setTimeout(printOfficial, 600);
+          }}
+        />
+      ) : (
+        <div className="grid flex-1 place-items-center p-6 text-center">
+          <button type="button" className="h-11 rounded-lg bg-[var(--glow)] px-4 font-semibold text-white" onClick={() => openDocumentUrl(official.url)}>Abrir a fatura oficial</button>
+        </div>
+      )}
+    </main>
+  );
+}
+
+function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
+  // Invoices and receipts always come from the invoicing account; only the estimate is rendered here.
+  if (kind !== "orcamento") return <OfficialDocumentView kind={kind} />;
+  return <QuoteView />;
+}
+
+function QuoteView() {
+  const kind = "orcamento" as const;
+  const { id } = useParams();
+  const params = useSearchParams();
+  const snap = useSnap();
+  const imprimir = params.get("imprimir") === "1";
+  const order = snap?.orders.find((item) => item.id === id);
+  useEffect(() => {
+    if (!imprimir) return;
+    const timer = window.setTimeout(() => window.print(), 400);
+    return () => window.clearTimeout(timer);
+  }, [imprimir]);
+  if (!snap || !id) return null;
   if (!order) return <p className="p-6">Documento não encontrado.</p>;
   const client = snap.clients.find((item) => item.id === order.clientId);
   const vehicle = snap.vehicles.find((item) => item.id === order.vehicleId);
   if (!client || !vehicle) return <p className="p-6">Indique o cliente e a viatura antes de abrir o documento.</p>;
-  const importedOrder = ["importado", "keymaster"].includes((order.invoiceProvider ?? "").toLowerCase());
-  if (kind === "recibo" && !order.paidAt && !importedOrder) return <p className="p-6">Este recibo só fica disponível depois do pagamento.</p>;
-  const number = kind === "orcamento" ? order.quoteNumber : order.invoiceNumber;
+  const number = order.quoteNumber;
   if (!number) return <p className="p-6">Este documento ainda não foi emitido.</p>;
   const lines = snap.lines
     .filter((line) => line.orderId === order.id)
@@ -724,30 +808,25 @@ function BillingView({ kind }: { kind: "orcamento" | "fatura" | "recibo" }) {
     km: order.km,
     problem: order.problem,
     notes: order.notes,
-    invoiceNumber: kind === "fatura" ? order.invoiceNumber ?? null : null,
+    invoiceNumber: null,
     invoiceProvider: order.invoiceProvider,
-    invoiceSimulated: order.invoiceSimulated,
+    invoiceSimulated: false,
     client,
     vehicle,
     lines,
   });
-  doc.title = kind === "orcamento" ? "Orçamento" : kind === "recibo" ? "Recibo" : "Fatura";
+  doc.title = "Orçamento";
   doc.kind = kind === "orcamento" ? "quote" : "order";
   doc.sheetNumber = order.number;
-  doc.relatedNumber = kind === "fatura" ? order.quoteNumber || "—" : "—";
+  doc.relatedNumber = "—";
   doc.number = number;
-  const origin = (order.invoiceProvider ?? "").toLowerCase();
-  doc.statusLabel = origin.includes("conta de teste") ? "Conta de teste (sem validade fiscal)" : order.invoiceSimulated ? "Simulação (sem validade fiscal)" : origin.includes("rascunho") ? "Rascunho de teste" : origin === "keymaster" || origin === "importado" ? "Importado" : "Fatura certificada";
-  doc.paymentMethod = kind === "fatura" ? order.paymentMethod ?? null : null;
+  doc.paymentMethod = null;
   return (
     <main className="min-h-screen bg-stone-200 px-4 py-6 print:bg-white print:p-0">
       <div className="no-print mx-auto mb-4 flex max-w-[210mm] items-center justify-between gap-3">
         <Link href={`/ordens/${order.id}`} className="text-sm font-medium text-[var(--glow)]">Voltar à folha</Link>
         <PrintButton />
       </div>
-      {order.invoiceSimulated ? <p className="no-print mx-auto mb-3 max-w-[210mm] rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950">
-        Simulação (sem validade fiscal). O documento não foi comunicado à Autoridade Tributária.
-      </p> : null}
       <DocumentPaper doc={doc} />
     </main>
   );
